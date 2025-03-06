@@ -12,3 +12,32 @@ Key Features:
 
 ## Flow Chart
 ![image](https://github.com/user-attachments/assets/316bcd5e-0195-4650-91d4-9f7e2c8b5d7a)
+
+## How to run
+
+This project was bootstrapped with [Expo](https://expo.dev/).
+
+## 🚀 Getting Started
+
+### Install dependencies:
+Navigate to the project root directory and install dependencies:
+
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+```
+
+### Start the Development Server
+
+```bash
+npx expo start --clear
+```
+
+### Run on a Device or Emulator
+
+- **Android:** Press `a` in the terminal to open on an Android emulator.
+- **iOS:** Press `i` to open in an iOS simulator (macOS only).
+- **Web:** Press `w` to open in a web browser.
