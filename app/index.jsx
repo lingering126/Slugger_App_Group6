@@ -64,30 +64,6 @@ export default function App() {
           <Text style={styles.buttonText}>Log bonus</Text>
         </TouchableOpacity>
       </View>
-
-      {/* 底部导航栏 */}
-      <View style={styles.navBar}>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="home" type="feather" color="#fff" />
-          <Text style={styles.navText}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="user" type="feather" color="#fff" />
-          <Text style={styles.navText}>Profile</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="users" type="feather" color="#fff" />
-          <Text style={styles.navText}>Team</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="bar-chart" type="feather" color="#fff" />
-          <Text style={styles.navText}>Analytics</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="more-horizontal" type="feather" color="#fff" />
-          <Text style={styles.navText}>More</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
