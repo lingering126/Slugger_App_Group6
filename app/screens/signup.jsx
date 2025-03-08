@@ -31,7 +31,7 @@ export default function SignupScreen() {
         style={styles.keyboardAvoidingView}
       >
         <View style={styles.contentContainer}>
-          <Text style={styles.title}>Enter details</Text>
+          <Text style={styles.title}>Sign up with your email</Text>
           
           <View style={styles.inputContainer}>
             <TextInput

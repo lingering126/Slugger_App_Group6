@@ -30,7 +30,7 @@ export default function LoginScreen() {
         style={styles.keyboardAvoidingView}
       >
         <View style={styles.contentContainer}>
-          <Text style={styles.title}>Enter details</Text>
+          <Text style={styles.title}>Log in with your email</Text>
           
           <View style={styles.inputContainer}>
             <TextInput
