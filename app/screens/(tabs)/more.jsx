@@ -1,9 +1,11 @@
 import { View, Text, StyleSheet } from "react-native";
 
-export default function TeamScreen() {
+export default function MoreScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>This is the Team Page</Text>
+      <View style={styles.content}>
+        <Text style={styles.text}>This is the More Page</Text>
+      </View>
     </View>
   );
 }
@@ -11,11 +13,14 @@ export default function TeamScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#E8F0F2",
+  },
+  content: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#E8F0F2",
   },
   text: {
     fontSize: 20,
   },
-});
+}); 
