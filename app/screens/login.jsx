@@ -1,21 +1,49 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+
+const API_URL = 'http://your-backend-url.com/api';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = () => {
-    // Implement login logic here
-    console.log('Login with:', email, password);
-    
-    // In a real app, you would validate credentials and set authentication state
-    // For demo purposes, we'll just navigate to the home screen
-    
-    // Navigate to home screen after successful login
-    router.replace('/screens/(tabs)/home');
+  const handleLogin = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      if (!email || !password) {
+        setError('Please fill in all fields');
+        setLoading(false);
+        return;
+      }
+      
+      const response = await axios.post(`${API_URL}/auth/login`, {
+        email,
+        password
+      });
+      
+      // Store token
+      await AsyncStorage.setItem('token', response.data.token);
+      await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+      
+      setLoading(false);
+      // Navigate to home screen after successful login
+      router.replace('/screens/(tabs)/home');
+    } catch (error) {
+      setLoading(false);
+      if (error.response) {
+        setError(error.response.data.message);
+      } else {
+        setError('Network error. Please try again.');
+      }
+    }
   };
 
   const navigateToSignup = () => {
@@ -31,6 +59,8 @@ export default function LoginScreen() {
       >
         <View style={styles.contentContainer}>
           <Text style={styles.title}>Log in with your email</Text>
+          
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
           
           <View style={styles.inputContainer}>
             <TextInput
@@ -52,8 +82,16 @@ export default function LoginScreen() {
           </View>
           
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
-              <Text style={styles.buttonText}>Log in</Text>
+            <TouchableOpacity 
+              style={styles.button} 
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Log in</Text>
+              )}
             </TouchableOpacity>
             
             <View style={styles.signupContainer}>
@@ -135,4 +173,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textDecorationLine: 'underline',
   },
+  errorText: {
+    color: 'red',
+    marginBottom: 10,
+    textAlign: 'center'
+  }
 }); 
