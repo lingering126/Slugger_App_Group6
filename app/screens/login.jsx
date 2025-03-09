@@ -1,17 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { getApiUrl, checkServerConnection } from '../utils';
 
-const API_URL = 'http://your-backend-url.com/api';
+// Get the appropriate API URL based on the environment
+const API_URLS = getApiUrl();
+let WORKING_URL = null;
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [serverStatus, setServerStatus] = useState('checking');
   const router = useRouter();
+
+  // Check if the server is reachable
+  useEffect(() => {
+    const checkServer = async () => {
+      try {
+        console.log('Checking server connection...');
+        
+        // Use the utility function to check server connection
+        const connectionStatus = await checkServerConnection(API_URLS);
+        console.log('Server connection status:', connectionStatus);
+        
+        if (connectionStatus.status === 'online') {
+          setServerStatus('online');
+          // If we got a working URL back, use it
+          if (connectionStatus.url) {
+            console.log('Using working API URL:', connectionStatus.url);
+            WORKING_URL = connectionStatus.url;
+          }
+        } else {
+          setServerStatus('offline');
+          setError(connectionStatus.message);
+        }
+      } catch (error) {
+        console.error('Server check failed:', error.message);
+        setServerStatus('offline');
+        setError('Cannot connect to server. Please check your network connection and server status.');
+      }
+    };
+    
+    checkServer();
+  }, []);
 
   const handleLogin = async () => {
     try {
@@ -24,25 +58,81 @@ export default function LoginScreen() {
         return;
       }
       
-      const response = await axios.post(`${API_URL}/auth/login`, {
-        email,
-        password
-      });
+      // Use the working URL if available, otherwise try all URLs
+      const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
+      console.log('Attempting login with:', email);
+      console.log('Using API URL:', apiUrl);
       
-      // Store token
-      await AsyncStorage.setItem('token', response.data.token);
-      await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+      // Create an abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.log('Login request timed out after 15 seconds');
+        setError('Request timed out. Server might be unavailable.');
+        setLoading(false);
+      }, 15000);
       
-      setLoading(false);
-      // Navigate to home screen after successful login
-      router.replace('/screens/(tabs)/home');
-    } catch (error) {
-      setLoading(false);
-      if (error.response) {
-        setError(error.response.data.message);
-      } else {
-        setError('Network error. Please try again.');
+      try {
+        const response = await fetch(`${apiUrl}/auth/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password
+          }),
+          signal: controller.signal
+        });
+        
+        // Clear the timeout since we got a response
+        clearTimeout(timeoutId);
+        
+        console.log('Login response status:', response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.log('Login error data:', errorData);
+          setError(errorData.message || 'Login failed');
+          setLoading(false);
+          return;
+        }
+        
+        const data = await response.json();
+        console.log('Login successful');
+        
+        // Store token
+        await AsyncStorage.setItem('token', data.token);
+        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+        
+        setLoading(false);
+        // Navigate to home screen after successful login
+        router.replace('/screens/(tabs)/home');
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
       }
+    } catch (error) {
+      console.log('Login error:', error.message);
+      setLoading(false);
+      
+      if (error.name === 'AbortError') {
+        setError('Request timed out. Please try again.');
+      } else if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
+        setError('Network error. Please check your connection and try again.');
+        // Try to find another working URL
+        const connectionStatus = await checkServerConnection(API_URLS);
+        if (connectionStatus.status === 'online' && connectionStatus.url) {
+          WORKING_URL = connectionStatus.url;
+          setError('Found a new server connection. Please try again.');
+        } else {
+          setServerStatus('offline');
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
+      
+      console.log('Error details:', error);
     }
   };
 
@@ -59,6 +149,41 @@ export default function LoginScreen() {
       >
         <View style={styles.contentContainer}>
           <Text style={styles.title}>Log in with your email</Text>
+          
+          {serverStatus === 'offline' && (
+            <View style={styles.serverStatusContainer}>
+              <Text style={styles.errorText}>Server connection failed</Text>
+              <TouchableOpacity 
+                style={styles.retryButton}
+                onPress={async () => {
+                  setServerStatus('checking');
+                  setError('');
+                  
+                  try {
+                    console.log('Retrying server connection...');
+                    const connectionStatus = await checkServerConnection(API_URLS);
+                    
+                    if (connectionStatus.status === 'online') {
+                      setServerStatus('online');
+                      if (connectionStatus.url) {
+                        WORKING_URL = connectionStatus.url;
+                        console.log('Found working URL:', WORKING_URL);
+                      }
+                    } else {
+                      setServerStatus('offline');
+                      setError(connectionStatus.message);
+                    }
+                  } catch (error) {
+                    console.error('Retry failed:', error);
+                    setServerStatus('offline');
+                    setError('Cannot connect to server. Please check your network connection and server status.');
+                  }
+                }}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           
@@ -85,7 +210,7 @@ export default function LoginScreen() {
             <TouchableOpacity 
               style={styles.button} 
               onPress={handleLogin}
-              disabled={loading}
+              disabled={loading || serverStatus === 'offline'}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -177,5 +302,21 @@ const styles = StyleSheet.create({
     color: 'red',
     marginBottom: 10,
     textAlign: 'center'
+  },
+  serverStatusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#6c63ff',
+    padding: 10,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   }
 }); 
