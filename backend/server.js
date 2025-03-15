@@ -3,12 +3,24 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 // Load environment variables
 dotenv.config();
 
 // Create Express app
 const app = express();
+
+// Configure Nodemailer with Mailtrap
+const transporter = nodemailer.createTransport({
+  host: process.env.MAIL_HOST,
+  port: parseInt(process.env.MAIL_PORT),
+  auth: {
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS
+  }
+});
 
 // CORS configuration
 const corsOptions = {
@@ -51,7 +63,15 @@ const userSchema = new mongoose.Schema({
   },
   isVerified: {
     type: Boolean,
-    default: true // Auto-verify for testing
+    default: false // Changed to false to require verification
+  },
+  verificationToken: {
+    type: String,
+    default: null
+  },
+  verificationTokenExpires: {
+    type: Date,
+    default: null
   },
   createdAt: {
     type: Date,
@@ -103,6 +123,10 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
     
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
       // Check if user already exists in MongoDB
@@ -116,7 +140,9 @@ app.post('/api/auth/signup', async (req, res) => {
       const newUser = new User({
         email,
         password, // In production, hash the password
-        isVerified: true // Auto-verify for testing
+        isVerified: false,
+        verificationToken,
+        verificationTokenExpires
       });
       
       await newUser.save();
@@ -133,17 +159,174 @@ app.post('/api/auth/signup', async (req, res) => {
         id: Date.now().toString(),
         email,
         password,
-        isVerified: true
+        isVerified: false,
+        verificationToken,
+        verificationTokenExpires
       };
       
       inMemoryUsers.push(newUser);
       console.log('User registered in memory:', email);
     }
     
+    // Send verification email
+    const verificationUrl = `${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}`;
+    
+    const mailOptions = {
+      from: process.env.MAIL_FROM,
+      to: email,
+      subject: 'Verify your Slugger account',
+      html: `
+        <h1>Welcome to Slugger!</h1>
+        <p>Thank you for signing up. Please verify your email address by clicking the link below:</p>
+        <a href="${verificationUrl}">Verify Email</a>
+        <p>This link will expire in 24 hours.</p>
+        <p>If you did not sign up for Slugger, please ignore this email.</p>
+      `
+    };
+    
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log('Verification email sent to:', email);
+    } catch (emailError) {
+      console.error('Error sending verification email:', emailError);
+      // Continue with registration even if email fails
+    }
+    
     console.log('Signup successful for:', email);
-    res.status(201).json({ message: 'User registered successfully. You can now log in.' });
+    res.status(201).json({ 
+      message: 'User registered successfully. Please check your email to verify your account.',
+      requiresVerification: true
+    });
   } catch (error) {
     console.error('Signup error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Email verification endpoint
+app.get('/api/auth/verify-email', async (req, res) => {
+  try {
+    const { token, email } = req.query;
+    
+    if (!token || !email) {
+      return res.status(400).json({ message: 'Invalid verification link' });
+    }
+    
+    let user;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      // Find user in MongoDB
+      user = await User.findOne({ 
+        email, 
+        verificationToken: token,
+        verificationTokenExpires: { $gt: new Date() }
+      });
+      
+      if (user) {
+        user.isVerified = true;
+        user.verificationToken = null;
+        user.verificationTokenExpires = null;
+        await user.save();
+      }
+    } else {
+      // Fallback to in-memory storage
+      const userIndex = inMemoryUsers.findIndex(u => 
+        u.email === email && 
+        u.verificationToken === token && 
+        new Date(u.verificationTokenExpires) > new Date()
+      );
+      
+      if (userIndex !== -1) {
+        inMemoryUsers[userIndex].isVerified = true;
+        inMemoryUsers[userIndex].verificationToken = null;
+        inMemoryUsers[userIndex].verificationTokenExpires = null;
+        user = inMemoryUsers[userIndex];
+      }
+    }
+    
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired verification link' });
+    }
+    
+    // Redirect to frontend with success message
+    res.redirect(`${process.env.FRONTEND_URL}/screens/login?verified=true`);
+  } catch (error) {
+    console.error('Verification error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Resend verification email
+app.post('/api/auth/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+    
+    let user;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      // Find user in MongoDB
+      user = await User.findOne({ email });
+      
+      if (user && !user.isVerified) {
+        // Generate new verification token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        
+        user.verificationToken = verificationToken;
+        user.verificationTokenExpires = verificationTokenExpires;
+        await user.save();
+      }
+    } else {
+      // Fallback to in-memory storage
+      const userIndex = inMemoryUsers.findIndex(u => u.email === email && !u.isVerified);
+      
+      if (userIndex !== -1) {
+        // Generate new verification token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        
+        inMemoryUsers[userIndex].verificationToken = verificationToken;
+        inMemoryUsers[userIndex].verificationTokenExpires = verificationTokenExpires;
+        user = inMemoryUsers[userIndex];
+      }
+    }
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found or already verified' });
+    }
+    
+    // Send verification email
+    const verificationUrl = `${process.env.FRONTEND_URL}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`;
+    
+    const mailOptions = {
+      from: process.env.MAIL_FROM, //link to .env
+      to: email,
+      subject: 'Verify your Slugger account',
+      html: `
+        <h1>Welcome to Slugger!</h1>
+        <p>Thank you for signing up. Please verify your email address by clicking the link below:</p>
+        <a href="${verificationUrl}">Verify Email</a>
+        <p>This link will expire in 24 hours.</p>
+        <p>If you did not sign up for Slugger, please ignore this email.</p>
+      `
+    };
+    
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log('Verification email resent to:', email);
+      res.status(200).json({ message: 'Verification email sent. Please check your inbox.' });
+    } catch (emailError) {
+      console.error('Error sending verification email:', emailError);
+      res.status(500).json({ message: 'Failed to send verification email' });
+    }
+  } catch (error) {
+    console.error('Resend verification error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -175,6 +358,16 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user) {
       console.log('User not found');
       return res.status(400).json({ message: 'Invalid email or password' });
+    }
+    
+    // Check if user is verified
+    if (!user.isVerified) {
+      console.log('User not verified');
+      return res.status(403).json({ 
+        message: 'Please verify your email before logging in',
+        requiresVerification: true,
+        email: email
+      });
     }
     
     // Check password (in production, compare hashed passwords)
