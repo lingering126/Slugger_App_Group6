@@ -246,10 +246,44 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Add a simple IP test endpoint
+app.get('/ip', (req, res) => {
+  const os = require('os');
+  const networkInterfaces = os.networkInterfaces();
+  const serverIPs = [];
+  
+  for (const [name, interfaces] of Object.entries(networkInterfaces)) {
+    for (const iface of interfaces) {
+      if (!iface.internal) {
+        serverIPs.push({
+          interface: name,
+          ip: iface.address,
+          family: `IPv${iface.family}`
+        });
+      }
+    }
+  }
+  
+  res.status(200).json({
+    client: {
+      ip: req.ip,
+      headers: {
+        'user-agent': req.headers['user-agent'],
+        'host': req.headers.host
+      }
+    },
+    server: {
+      ips: serverIPs,
+      timestamp: new Date().toISOString()
+    }
+  });
+});
+
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}/api`);
+  console.log(`Server also available at http://0.0.0.0:${PORT}/api (all interfaces)`);
   console.log(`MongoDB connection string: ${process.env.MONGODB_URI.replace(/\/\/(.+?)@/, '//***@')}`);
 });

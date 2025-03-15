@@ -141,6 +141,11 @@ export default function LoginScreen() {
     router.replace('/screens/signup');
   };
 
+  // Add navigation to connection test screen
+  const goToConnectionTest = () => {
+    router.push('/screens/connection-test');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -151,41 +156,20 @@ export default function LoginScreen() {
           <Text style={styles.title}>Log in with your email</Text>
           
           {serverStatus === 'offline' && (
-            <View style={styles.serverStatusContainer}>
-              <Text style={styles.errorText}>Server connection failed</Text>
-              <TouchableOpacity 
-                style={styles.retryButton}
-                onPress={async () => {
-                  setServerStatus('checking');
-                  setError('');
-                  
-                  try {
-                    console.log('Retrying server connection...');
-                    const connectionStatus = await checkServerConnection(API_URLS);
-                    
-                    if (connectionStatus.status === 'online') {
-                      setServerStatus('online');
-                      if (connectionStatus.url) {
-                        WORKING_URL = connectionStatus.url;
-                        console.log('Found working URL:', WORKING_URL);
-                      }
-                    } else {
-                      setServerStatus('offline');
-                      setError(connectionStatus.message);
-                    }
-                  } catch (error) {
-                    console.error('Retry failed:', error);
-                    setServerStatus('offline');
-                    setError('Cannot connect to server. Please check your network connection and server status.');
-                  }
-                }}
-              >
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
           
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {serverStatus === 'offline' && (
+            <TouchableOpacity style={styles.testButton} onPress={goToConnectionTest}>
+              <Text style={styles.testButtonText}>Run Connection Test</Text>
+            </TouchableOpacity>
+          )}
+          
+          {error && serverStatus !== 'offline' && (
+            <Text style={styles.errorText}>{error}</Text>
+          )}
           
           <View style={styles.inputContainer}>
             <TextInput
@@ -303,20 +287,22 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'center'
   },
-  serverStatusContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  errorContainer: {
+    marginBottom: 10,
+    padding: 10,
+    backgroundColor: '#ffebee',
+    borderRadius: 5,
+  },
+  testButton: {
+    backgroundColor: '#6c63ff',
+    padding: 12,
+    borderRadius: 5,
     alignItems: 'center',
     marginBottom: 20,
   },
-  retryButton: {
-    backgroundColor: '#6c63ff',
-    padding: 10,
-    borderRadius: 5,
-  },
-  retryButtonText: {
+  testButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   }
 }); 

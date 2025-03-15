@@ -15,7 +15,9 @@ try {
 export const getApiUrl = () => {
   // For development on physical device, try multiple IP addresses
   const possibleIPs = [
-    '192.168.31.250', // Your actual IP address
+    // Try all common subnet patterns
+    '192.168.31.251', // Current IP address
+    '192.168.31.250', // Previous IP address
     '10.0.2.2',       // Android emulator
     'localhost',      // iOS simulator
     '127.0.0.1',      // Localhost alternative
@@ -23,15 +25,85 @@ export const getApiUrl = () => {
     '192.168.0.100',  // Common home network IP
     '172.20.10.2',    // Common hotspot IP
     '172.20.10.3',    // Common hotspot IP
+    // Additional IPs to try
+    '192.168.31.1',   // Common router IP
+    '192.168.1.1',    // Common router IP
+    '192.168.0.1',    // Common router IP
+    '192.168.43.1',   // Common Android hotspot IP
+    '172.20.10.1',    // Common iPhone hotspot IP
+    // Try direct IP with different ports
+    '192.168.31.251:5000',
+    '192.168.31.250:5000',
+    // Try with explicit protocol
+    'http://192.168.31.251:5000',
+    'http://192.168.31.250:5000',
   ];
   
-  // Create URLs for all possible IPs
-  const allUrls = possibleIPs.map(ip => `http://${ip}:5000/api`);
+  // Create URLs for all possible IPs, handling those that already have port or protocol
+  const allUrls = possibleIPs.map(ip => {
+    if (ip.includes('://')) {
+      return `${ip}/api`;
+    } else if (ip.includes(':')) {
+      return `http://${ip}/api`;
+    } else {
+      return `http://${ip}:5000/api`;
+    }
+  });
   
   console.log('Generated API URLs to try:', allUrls);
   
   // Return all URLs to try
   return allUrls;
+};
+
+// Add a direct connection test function
+export const testDirectConnection = async () => {
+  const urls = [
+    'http://192.168.31.251:5000/ip',
+    'http://192.168.31.250:5000/ip',
+    'http://192.168.31.1:5000/ip',
+    'http://192.168.1.1:5000/ip',
+    'http://172.20.10.1:5000/ip',
+    'http://172.20.10.2:5000/ip',
+    'http://172.20.10.3:5000/ip',
+  ];
+  
+  const results = {};
+  
+  for (const url of urls) {
+    try {
+      console.log(`Testing direct connection to: ${url}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Success connecting to ${url}:`, data);
+        results[url] = { success: true, data };
+        // If we found a working URL, store it globally
+        global.workingApiUrl = url.replace('/ip', '/api');
+      } else {
+        console.log(`Failed with status ${response.status} for ${url}`);
+        results[url] = { success: false, status: response.status };
+      }
+    } catch (error) {
+      console.log(`Error connecting to ${url}:`, error.message);
+      results[url] = { success: false, error: error.message };
+    }
+  }
+  
+  console.log('Connection test results:', results);
+  return results;
 };
 
 // Helper function to check if the server is reachable
@@ -56,9 +128,9 @@ export const checkServerConnection = async (apiUrls) => {
       try {
         console.log('Trying to connect to:', url);
         
-        // Use a shorter timeout for faster checking
+        // Use a longer timeout for better chances of connection
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // Increased from 2000ms to 5000ms
         
         const response = await fetch(url.replace('/api', '/health'), {
           method: 'GET',
@@ -79,9 +151,11 @@ export const checkServerConnection = async (apiUrls) => {
             message: 'Server is reachable',
             url: url
           };
+        } else {
+          console.log('Server responded with status:', response.status, response.statusText);
         }
       } catch (error) {
-        console.log('Failed to connect to:', url, error.message);
+        console.log('Failed to connect to:', url, 'Error:', error.message, 'Type:', error.name, 'Stack:', error.stack);
         // Continue to the next URL
       }
     }

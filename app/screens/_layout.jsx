@@ -12,6 +12,9 @@ export default function ScreensLayout() {
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="signup" options={{ headerShown: false }} />
       
+      {/* Utility screens */}
+      <Stack.Screen name="connection-test" options={{ headerShown: true, title: 'Connection Test' }} />
+      
       {/* Main app screens - using nested tabs */}
       <Stack.Screen 
         name="(tabs)" 
