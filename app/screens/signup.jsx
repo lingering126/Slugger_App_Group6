@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
+import { FontAwesome } from '@expo/vector-icons';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
@@ -14,6 +15,10 @@ export default function SignupScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState('checking');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
   const router = useRouter();
 
   // Check if the server is reachable
@@ -65,6 +70,21 @@ export default function SignupScreen() {
         return;
       }
       
+      // Simple email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
+      
+      // Password strength validation
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters long');
+        setLoading(false);
+        return;
+      }
+      
       // Use the working URL if available, otherwise try all URLs
       const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
       console.log('Attempting signup with:', email);
@@ -97,28 +117,19 @@ export default function SignupScreen() {
         
         console.log('Signup response status:', response.status);
         
+        const data = await response.json();
+        
         if (!response.ok) {
-          const errorData = await response.json();
-          console.log('Signup error data:', errorData);
-          setError(errorData.message || 'Signup failed');
+          console.log('Signup error data:', data);
+          setError(data.message || 'Signup failed');
           setLoading(false);
           return;
         }
         
-        const data = await response.json();
-        console.log('Signup successful:', data);
-        
+        console.log('Signup successful');
+        setVerificationEmail(email);
+        setSignupSuccess(true);
         setLoading(false);
-        Alert.alert(
-          'Success',
-          'Account created successfully. You can now log in.',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/screens/login')
-            }
-          ]
-        );
       } catch (fetchError) {
         clearTimeout(timeoutId);
         throw fetchError;
@@ -152,6 +163,48 @@ export default function SignupScreen() {
     router.replace('/screens/login');
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
+  const toggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword);
+  };
+
+  // If signup was successful, show verification instructions
+  if (signupSuccess) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.contentContainer}>
+          <Text style={styles.title}>Email Verification Required</Text>
+          
+          <View style={styles.verificationContainer}>
+            <Text style={styles.verificationText}>
+              Thank you for signing up! We've sent a verification link to:
+            </Text>
+            
+            <Text style={styles.emailText}>{verificationEmail}</Text>
+            
+            <Text style={styles.verificationText}>
+              Please check your inbox and click the verification link to complete the signup process.
+            </Text>
+            
+            <Text style={styles.verificationText}>
+              Once verified, you'll be able to log in to your account.
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.loginButton} 
+              onPress={navigateToLogin}
+            >
+              <Text style={styles.loginButtonText}>Go to Login</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -162,41 +215,14 @@ export default function SignupScreen() {
           <Text style={styles.title}>Create your account</Text>
           
           {serverStatus === 'offline' && (
-            <View style={styles.serverStatusContainer}>
-              <Text style={styles.errorText}>Server connection failed</Text>
-              <TouchableOpacity 
-                style={styles.retryButton}
-                onPress={async () => {
-                  setServerStatus('checking');
-                  setError('');
-                  
-                  try {
-                    console.log('Retrying server connection...');
-                    const connectionStatus = await checkServerConnection(API_URLS);
-                    
-                    if (connectionStatus.status === 'online') {
-                      setServerStatus('online');
-                      if (connectionStatus.url) {
-                        WORKING_URL = connectionStatus.url;
-                        console.log('Found working URL:', WORKING_URL);
-                      }
-                    } else {
-                      setServerStatus('offline');
-                      setError(connectionStatus.message);
-                    }
-                  } catch (error) {
-                    console.error('Retry failed:', error);
-                    setServerStatus('offline');
-                    setError('Cannot connect to server. Please check your network connection and server status.');
-                  }
-                }}
-              >
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
           
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error && serverStatus !== 'offline' && (
+            <Text style={styles.errorText}>{error}</Text>
+          )}
           
           <View style={styles.inputContainer}>
             <TextInput
@@ -208,21 +234,45 @@ export default function SignupScreen() {
               autoCapitalize="none"
             />
             
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeIcon} 
+                onPress={togglePasswordVisibility}
+              >
+                <FontAwesome 
+                  name={showPassword ? 'eye' : 'eye-slash'} 
+                  size={20} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
+            </View>
             
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Confirm Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeIcon} 
+                onPress={toggleConfirmPasswordVisibility}
+              >
+                <FontAwesome 
+                  name={showConfirmPassword ? 'eye' : 'eye-slash'} 
+                  size={20} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
+            </View>
           </View>
           
           <View style={styles.buttonContainer}>
@@ -285,6 +335,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     fontSize: 16,
   },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 25,
+    marginBottom: 15,
+  },
+  passwordInput: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 20,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 10,
+    marginRight: 5,
+  },
   buttonContainer: {
     width: '100%',
     alignItems: 'center',
@@ -303,11 +373,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  errorText: {
-    color: 'red',
-    marginBottom: 10,
-    textAlign: 'center'
-  },
   loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -322,20 +387,46 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textDecorationLine: 'underline',
   },
-  serverStatusContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
+  errorText: {
+    color: 'red',
+    marginBottom: 10,
+    textAlign: 'center'
   },
-  retryButton: {
-    backgroundColor: '#6c63ff',
+  errorContainer: {
+    marginBottom: 10,
     padding: 10,
+    backgroundColor: '#ffebee',
     borderRadius: 5,
   },
-  retryButtonText: {
+  verificationContainer: {
+    width: '100%',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+  },
+  verificationText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  emailText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#6c63ff',
+    marginBottom: 15,
+  },
+  loginButton: {
+    backgroundColor: '#6c63ff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  loginButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  }
+  },
 }); 
