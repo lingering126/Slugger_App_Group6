@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 // Load environment variables
 dotenv.config();
@@ -150,6 +151,10 @@ app.post('/api/auth/signup', async (req, res) => {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     
+    // Hash the password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
       // Check if user already exists in MongoDB
@@ -162,7 +167,7 @@ app.post('/api/auth/signup', async (req, res) => {
       // Create new user in MongoDB
       const newUser = new User({
         email,
-        password, // In production, hash the password
+        password: hashedPassword, // Store the hashed password
         isVerified: false,
         verificationToken,
         verificationTokenExpires
@@ -181,7 +186,7 @@ app.post('/api/auth/signup', async (req, res) => {
       const newUser = {
         id: Date.now().toString(),
         email,
-        password,
+        password: hashedPassword, // Store the hashed password
         isVerified: false,
         verificationToken,
         verificationTokenExpires
@@ -296,37 +301,39 @@ app.get('/api/auth/verify-email', async (req, res) => {
           <head>
             <title>Verification Failed</title>
             <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-              .container { max-width: 600px; margin: 0 auto; }
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
               h1 { color: #e74c3c; }
-              p { font-size: 18px; line-height: 1.6; }
+              p { font-size: 18px; line-height: 1.6; color: #555; }
               .button { 
                 display: inline-block; 
                 background-color: #6c63ff; 
                 color: white; 
-                padding: 12px 24px; 
+                padding: 12px 30px; 
                 text-decoration: none; 
                 border-radius: 4px; 
                 margin-top: 20px; 
-                margin: 5px;
+                font-size: 16px;
+                font-weight: bold;
+                transition: background-color 0.3s;
               }
-              .button-container {
-                margin-top: 20px;
+              .button:hover {
+                background-color: #5a52d5;
+              }
+              .error-icon {
+                font-size: 64px;
+                color: #e74c3c;
+                margin-bottom: 20px;
               }
             </style>
           </head>
           <body>
             <div class="container">
+              <div class="error-icon">✗</div>
               <h1>Verification Failed</h1>
               <p>The verification link is invalid or has expired.</p>
-              <div class="button-container">
-                <p>Please try logging in or request a new verification email:</p>
-                <a href="exp://192.168.31.251:19000/screens/login" class="button">Open App 1</a>
-                <a href="exp://192.168.31.250:19000/screens/login" class="button">Open App 2</a>
-                <a href="exp://192.168.1.100:19000/screens/login" class="button">Open App 3</a>
-                <a href="exp://192.168.0.100:19000/screens/login" class="button">Open App 4</a>
-                <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Original Link</a>
-              </div>
+              <p>Please try logging in or request a new verification email.</p>
+              <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Go to Login</a>
             </div>
           </body>
         </html>
@@ -339,69 +346,45 @@ app.get('/api/auth/verify-email', async (req, res) => {
         <head>
           <title>Email Verified</title>
           <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-            .container { max-width: 600px; margin: 0 auto; }
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             h1 { color: #2ecc71; }
-            p { font-size: 18px; line-height: 1.6; }
+            p { font-size: 18px; line-height: 1.6; color: #555; }
             .button { 
               display: inline-block; 
               background-color: #6c63ff; 
               color: white; 
-              padding: 12px 24px; 
+              padding: 12px 30px; 
               text-decoration: none; 
               border-radius: 4px; 
               margin-top: 20px; 
+              font-size: 16px;
+              font-weight: bold;
+              transition: background-color 0.3s;
             }
-            .button-container {
-              margin-top: 20px;
+            .button:hover {
+              background-color: #5a52d5;
             }
-            .button-container a {
-              margin: 5px;
+            .success-icon {
+              font-size: 64px;
+              color: #2ecc71;
+              margin-bottom: 20px;
             }
           </style>
           <script>
-            // Try to redirect to the app using multiple possible URLs
-            function tryRedirect() {
-              const possibleUrls = [
-                "http://localhost:19000/screens/login?verified=true",
-                "http://localhost:19006/screens/login?verified=true",
-                "exp://192.168.31.251:19000/screens/login?verified=true",
-                "exp://192.168.31.250:19000/screens/login?verified=true",
-                "exp://192.168.1.100:19000/screens/login?verified=true",
-                "exp://192.168.0.100:19000/screens/login?verified=true",
-                "exp://172.20.10.2:19000/screens/login?verified=true",
-                "exp://172.20.10.3:19000/screens/login?verified=true"
-              ];
-              
-              // Try each URL
-              for (const url of possibleUrls) {
-                try {
-                  window.location.href = url;
-                  // Wait a bit before trying the next one
-                  return;
-                } catch (e) {
-                  console.error("Failed to redirect to:", url);
-                }
-              }
-            }
-            
             // Try to redirect after 3 seconds
-            setTimeout(tryRedirect, 3000);
+            setTimeout(function() {
+              window.location.href = "${process.env.FRONTEND_URL}/screens/login?verified=true";
+            }, 3000);
           </script>
         </head>
         <body>
           <div class="container">
+            <div class="success-icon">✓</div>
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your account.</p>
             <p>You will be redirected to the login page in 3 seconds...</p>
-            <div class="button-container">
-              <p>If you're not redirected automatically, please click one of these links:</p>
-              <a href="exp://192.168.31.251:19000/screens/login?verified=true" class="button">Open App 1</a>
-              <a href="exp://192.168.31.250:19000/screens/login?verified=true" class="button">Open App 2</a>
-              <a href="exp://192.168.1.100:19000/screens/login?verified=true" class="button">Open App 3</a>
-              <a href="exp://192.168.0.100:19000/screens/login?verified=true" class="button">Open App 4</a>
-              <a href="${process.env.FRONTEND_URL}/screens/login?verified=true" class="button">Original Link</a>
-            </div>
+            <a href="${process.env.FRONTEND_URL}/screens/login?verified=true" class="button">Go to Login</a>
           </div>
         </body>
       </html>
@@ -413,39 +396,40 @@ app.get('/api/auth/verify-email', async (req, res) => {
         <head>
           <title>Verification Error</title>
           <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-            .container { max-width: 600px; margin: 0 auto; }
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             h1 { color: #e74c3c; }
-            p { font-size: 18px; line-height: 1.6; }
+            p { font-size: 18px; line-height: 1.6; color: #555; }
             .error { color: #e74c3c; font-family: monospace; margin: 20px 0; padding: 10px; background: #f8f8f8; border-radius: 4px; }
             .button { 
               display: inline-block; 
               background-color: #6c63ff; 
               color: white; 
-              padding: 12px 24px; 
+              padding: 12px 30px; 
               text-decoration: none; 
               border-radius: 4px; 
               margin-top: 20px; 
-              margin: 5px;
+              font-size: 16px;
+              font-weight: bold;
+              transition: background-color 0.3s;
             }
-            .button-container {
-              margin-top: 20px;
+            .button:hover {
+              background-color: #5a52d5;
+            }
+            .error-icon {
+              font-size: 64px;
+              color: #e74c3c;
+              margin-bottom: 20px;
             }
           </style>
         </head>
         <body>
           <div class="container">
+            <div class="error-icon">⚠</div>
             <h1>Verification Error</h1>
             <p>An error occurred during the verification process.</p>
             <div class="error">${error.message}</div>
-            <div class="button-container">
-              <p>Please try logging in or request a new verification email:</p>
-              <a href="exp://192.168.31.251:19000/screens/login" class="button">Open App 1</a>
-              <a href="exp://192.168.31.250:19000/screens/login" class="button">Open App 2</a>
-              <a href="exp://192.168.1.100:19000/screens/login" class="button">Open App 3</a>
-              <a href="exp://192.168.0.100:19000/screens/login" class="button">Open App 4</a>
-              <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Original Link</a>
-            </div>
+            <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Go to Login</a>
           </div>
         </body>
       </html>
@@ -587,8 +571,8 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
     
-    // Check password (in production, compare hashed passwords)
-    const isPasswordValid = user.password === password;
+    // Check password using bcrypt to compare the hashed password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     console.log('Password valid:', isPasswordValid);
     
     if (!isPasswordValid) {
