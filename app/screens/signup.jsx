@@ -85,6 +85,13 @@ export default function SignupScreen() {
         return;
       }
       
+      // Check if password contains at least one letter (can't be all numbers)
+      if (!/[a-zA-Z]/.test(password)) {
+        setError('Password must contain at least one letter');
+        setLoading(false);
+        return;
+      }
+      
       // Use the working URL if available, otherwise try all URLs
       const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
       console.log('Attempting signup with:', email);

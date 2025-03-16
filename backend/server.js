@@ -147,6 +147,25 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
     
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.log('Invalid email format');
+      return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
+    
+    // Validate password strength
+    if (password.length < 6) {
+      console.log('Password too short');
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+    
+    // Check if password contains at least one letter (can't be all numbers)
+    if (!/[a-zA-Z]/.test(password)) {
+      console.log('Password must contain at least one letter');
+      return res.status(400).json({ message: 'Password must contain at least one letter' });
+    }
+    
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
@@ -205,20 +224,31 @@ app.post('/api/auth/signup', async (req, res) => {
       to: email,
       subject: 'Verify your Slugger account',
       html: `
-        <h1 style="text-align: center;">Welcome to Slugger!</h1>
-        <p>Thank you for signing up. Please verify your email address by clicking the link below:</p>
-          <a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 1</a>
-        <p>If the link below doesn't work, try one of these alternative links:</p>
-        <ul>
-          <li><a href="http://192.168.31.250:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 2</a></li>
-          <li><a href="http://192.168.1.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 3</a></li>
-          <li><a href="http://192.168.0.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 4</a></li>
-          <li><a href="http://172.20.10.2:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 5</a></li>
-          <li><a href="http://172.20.10.3:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 6</a></li>
-          <li><a href="${verificationUrl}">Original Link</a></li>
-        </ul>
-        <p>This link will expire in 24 hours.</p>
-        <p>If you did not sign up for Slugger, please ignore this email.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+          <h1 style="text-align: center; color: #6c63ff;">Welcome to Slugger!</h1>
+          <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+               style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+              Verify Email
+            </a>
+          </div>
+          
+          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
+          
+          <ul style="font-size: 14px; color: #666;">
+            <li><a href="http://192.168.31.250:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 1</a></li>
+            <li><a href="http://192.168.1.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 2</a></li>
+          </ul>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
+          <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+            &copy; ${new Date().getFullYear()} Slugger Health. All rights reserved.
+          </div>
+        </div>
       `
     };
     
@@ -316,6 +346,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
                 font-size: 16px;
                 font-weight: bold;
                 transition: background-color 0.3s;
+                margin: 10px;
               }
               .button:hover {
                 background-color: #5a52d5;
@@ -325,6 +356,14 @@ app.get('/api/auth/verify-email', async (req, res) => {
                 color: #e74c3c;
                 margin-bottom: 20px;
               }
+              .button-container {
+                margin-top: 20px;
+              }
+              .note {
+                margin-top: 20px;
+                font-size: 14px;
+                color: #777;
+              }
             </style>
           </head>
           <body>
@@ -333,7 +372,14 @@ app.get('/api/auth/verify-email', async (req, res) => {
               <h1>Verification Failed</h1>
               <p>The verification link is invalid or has expired.</p>
               <p>Please try logging in or request a new verification email.</p>
-              <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Go to Login</a>
+              
+              <div class="button-container">
+                <p>If you're using the app on this device, try one of these links:</p>
+                <a href="exp://192.168.31.251:19000/screens/login" class="button">Open App</a>
+                <a href="exp://192.168.31.250:19000/screens/login" class="button">Alternative Link</a>
+              </div>
+              
+              <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
             </div>
           </body>
         </html>
@@ -361,6 +407,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
               font-size: 16px;
               font-weight: bold;
               transition: background-color 0.3s;
+              margin: 10px;
             }
             .button:hover {
               background-color: #5a52d5;
@@ -370,21 +417,22 @@ app.get('/api/auth/verify-email', async (req, res) => {
               color: #2ecc71;
               margin-bottom: 20px;
             }
+            .button-container {
+              margin-top: 20px;
+            }
+            .note {
+              margin-top: 20px;
+              font-size: 14px;
+              color: #777;
+            }
           </style>
-          <script>
-            // Try to redirect after 3 seconds
-            setTimeout(function() {
-              window.location.href = "${process.env.FRONTEND_URL}/screens/login?verified=true";
-            }, 3000);
-          </script>
         </head>
         <body>
           <div class="container">
             <div class="success-icon">✓</div>
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your account.</p>
-            <p>You will be redirected to the login page in 3 seconds...</p>
-            <a href="${process.env.FRONTEND_URL}/screens/login?verified=true" class="button">Go to Login</a>
+            <p>Please open the Slugger app on your device and log in with your credentials.</p>
           </div>
         </body>
       </html>
@@ -412,6 +460,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
               font-size: 16px;
               font-weight: bold;
               transition: background-color 0.3s;
+              margin: 10px;
             }
             .button:hover {
               background-color: #5a52d5;
@@ -421,6 +470,14 @@ app.get('/api/auth/verify-email', async (req, res) => {
               color: #e74c3c;
               margin-bottom: 20px;
             }
+            .button-container {
+              margin-top: 20px;
+            }
+            .note {
+              margin-top: 20px;
+              font-size: 14px;
+              color: #777;
+            }
           </style>
         </head>
         <body>
@@ -429,7 +486,14 @@ app.get('/api/auth/verify-email', async (req, res) => {
             <h1>Verification Error</h1>
             <p>An error occurred during the verification process.</p>
             <div class="error">${error.message}</div>
-            <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Go to Login</a>
+            
+            <div class="button-container">
+              <p>If you're using the app on this device, try one of these links:</p>
+              <a href="exp://192.168.31.251:19000/screens/login" class="button">Open App</a>
+              <a href="exp://192.168.31.250:19000/screens/login" class="button">Alternative Link</a>
+            </div>
+            
+            <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
           </div>
         </body>
       </html>
@@ -490,13 +554,31 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       to: email,
       subject: 'Verify your Slugger account',
       html: `
-        <h1 style="text-align: center;">Welcome to Slugger!</h1>
-        <p>Thank you for signing up. Please verify your email address by clicking the link below:</p>
-        <ul>
-          <li><a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Verify your email</a></li>
-        </ul>
-        <p>This link will expire in 24 hours.</p>
-        <p>If you did not sign up for Slugger, please ignore this email.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+          <h1 style="text-align: center; color: #6c63ff;">Welcome to Slugger!</h1>
+          <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
+               style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+              Verify Email
+            </a>
+          </div>
+          
+          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
+          
+          <ul style="font-size: 14px; color: #666;">
+            <li><a href="http://192.168.31.250:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link 1</a></li>
+            <li><a href="http://192.168.1.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link 2</a></li>
+          </ul>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
+          <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+            &copy; ${new Date().getFullYear()} Slugger Health. All rights reserved.
+          </div>
+        </div>
       `
     };
     
@@ -689,16 +771,25 @@ app.post('/api/test/email', async (req, res) => {
       to: email,
       subject: 'Slugger Email Test',
       html: `
-        <h1>Email Test Successful!</h1>
-        <p>If you're seeing this, your email configuration is working correctly.</p>
-        <p>Email configuration details:</p>
-        <ul>
-          <li>Host: ${process.env.MAIL_HOST}</li>
-          <li>Port: ${process.env.MAIL_PORT}</li>
-          <li>From: ${process.env.MAIL_FROM}</li>
-          <li>To: ${email}</li>
-          <li>Time: ${new Date().toISOString()}</li>
-        </ul>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+          <h1 style="text-align: center; color: #6c63ff;">Email Test Successful!</h1>
+          <p style="font-size: 16px; line-height: 1.5; color: #444;">If you're seeing this, your email configuration is working correctly.</p>
+          
+          <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="font-size: 14px; color: #666; margin: 5px 0;"><strong>Email configuration details:</strong></p>
+            <ul style="font-size: 14px; color: #666; margin: 10px 0;">
+              <li>Host: ${process.env.MAIL_HOST}</li>
+              <li>Port: ${process.env.MAIL_PORT}</li>
+              <li>From: ${process.env.MAIL_FROM}</li>
+              <li>To: ${email}</li>
+              <li>Time: ${new Date().toISOString()}</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+            &copy; ${new Date().getFullYear()} Slugger Health. All rights reserved.
+          </div>
+        </div>
       `
     };
     
