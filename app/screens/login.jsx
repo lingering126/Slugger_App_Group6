@@ -166,8 +166,17 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         
         setLoading(false);
-        // Navigate to home screen after successful login
-        router.replace('/screens/(tabs)/home');
+        
+        // Check if the user has completed the welcome flow
+        const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
+        
+        // If the user is logging in for the first time, redirect to welcome page
+        if (!welcomeCompleted) {
+          router.replace('/screens/welcome');
+        } else {
+          // Navigate to home screen after successful login
+          router.replace('/screens/(tabs)/home');
+        }
       } catch (fetchError) {
         clearTimeout(timeoutId);
         throw fetchError;
