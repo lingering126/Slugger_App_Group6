@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
@@ -241,8 +241,24 @@ export default function LoginScreen() {
   };
 
   const navigateToSignup = () => {
-    // Use replace instead of push to avoid animation
-    router.replace('/screens/signup');
+    // Prevent multiple rapid taps
+    if (loading) return;
+    
+    setLoading(true);
+    
+    // Dismiss keyboard first to prevent UI issues
+    Keyboard.dismiss();
+    
+    // Add a delay after keyboard dismissal to ensure UI stability
+    setTimeout(() => {
+      // Use push with fade animation
+      router.push('/screens/signup');
+      
+      // Reset loading state after navigation completes
+      setTimeout(() => {
+        setLoading(false);
+      }, 300);
+    }, 300);
   };
 
   // Add navigation to connection test screen
@@ -262,7 +278,11 @@ export default function LoginScreen() {
   if (needsVerification) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.contentContainer}>
+        <TouchableOpacity 
+          activeOpacity={1} 
+          style={styles.contentContainer} 
+          onPress={Keyboard.dismiss}
+        >
           <Text style={styles.title}>Email Verification Required</Text>
           
           <View style={styles.verificationContainer}>
@@ -295,7 +315,7 @@ export default function LoginScreen() {
               <Text style={styles.backButtonText}>Back to Login</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -305,8 +325,13 @@ export default function LoginScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
       >
-        <View style={styles.contentContainer}>
+        <TouchableOpacity 
+          activeOpacity={1} 
+          style={styles.contentContainer} 
+          onPress={Keyboard.dismiss}
+        >
           <Text style={styles.title}>Log in with your email</Text>
           
           {serverStatus === 'offline' && (
@@ -388,7 +413,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

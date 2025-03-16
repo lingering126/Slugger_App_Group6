@@ -5,7 +5,11 @@ export default function ScreensLayout() {
   return (
     <Stack
       screenOptions={{
-        animation: 'none', // Disable animations for auth screens
+        animation: 'fade',
+        animationDuration: 300,
+        gestureEnabled: false, // Disable gesture navigation to prevent UI issues
+        headerShown: false,
+        contentStyle: { backgroundColor: '#fff' }
       }}
     >
       {/* Authentication screens */}
