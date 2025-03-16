@@ -21,6 +21,7 @@ const sendVerificationEmail = async (email, token) => {
       <p>Please verify your email address by clicking the link below:</p>
       <a href="${verificationUrl}">Verify Email</a>
       <p>This link will expire in 24 hours.</p>
+    <p>If you didn't sign up for Slugger, you can safely ignore this email.</p>
     `
   };
 
