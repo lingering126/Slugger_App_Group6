@@ -205,11 +205,11 @@ app.post('/api/auth/signup', async (req, res) => {
       to: email,
       subject: 'Verify your Slugger account',
       html: `
-        <h1>Welcome to Slugger!</h1>
+        <h1 style="text-align: center;">Welcome to Slugger!</h1>
         <p>Thank you for signing up. Please verify your email address by clicking the link below:</p>
+          <a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 1</a>
         <p>If the link below doesn't work, try one of these alternative links:</p>
         <ul>
-          <li><a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 1</a></li>
           <li><a href="http://192.168.31.250:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 2</a></li>
           <li><a href="http://192.168.1.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 3</a></li>
           <li><a href="http://192.168.0.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 4</a></li>
