@@ -15,6 +15,12 @@ export default function ScreensLayout() {
       {/* Authentication screens */}
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="signup" options={{ headerShown: false }} />
+      <Stack.Screen name="verify-email" options={{ headerShown: false }} />
+      
+      {/* Onboarding screens */}
+      <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="join-group" options={{ headerShown: false }} />
+      <Stack.Screen name="create-group" options={{ headerShown: false }} />
       
       {/* Utility screens */}
       <Stack.Screen name="connection-test" options={{ headerShown: true, title: 'Connection Test' }} />
