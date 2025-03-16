@@ -12,15 +12,37 @@ dotenv.config();
 // Create Express app
 const app = express();
 
-// Configure Nodemailer with Mailtrap
-const transporter = nodemailer.createTransport({
+// Configure Nodemailer based on environment
+const emailConfig = {
   host: process.env.MAIL_HOST,
   port: parseInt(process.env.MAIL_PORT),
   auth: {
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS
+  },
+  // Add secure option for TLS connections
+  secure: process.env.MAIL_PORT === '465',
+  // Add additional options for better deliverability
+  
+  tls: {
+    // Do not fail on invalid certs
+    rejectUnauthorized: false
   }
-});
+};
+
+// Log email configuration (without sensitive data)
+console.log(`Email configuration: Using ${emailConfig.host}:${emailConfig.port} with user ${emailConfig.auth.user}`);
+
+// Create transporter with the configuration
+const transporter = nodemailer.createTransport(emailConfig);
+
+// Verify the transporter configuration
+transporter.verify()
+  .then(() => console.log('Email service is ready to send emails'))
+  .catch(err => {
+    console.error('Error with email configuration:', err);
+    console.error('Please check your email credentials and settings in .env file');
+  });
 
 // CORS configuration
 const corsOptions = {
@@ -37,6 +59,7 @@ app.use(cors(corsOptions));
 
 // Add OPTIONS handling for preflight requests
 app.options('*', cors(corsOptions));
+
 
 app.use(express.json());
 
@@ -169,7 +192,8 @@ app.post('/api/auth/signup', async (req, res) => {
     }
     
     // Send verification email
-    const verificationUrl = `${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}`;
+    const backendUrl = `http://localhost:${process.env.PORT || 5000}`;
+    const verificationUrl = `${backendUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}`;
     
     const mailOptions = {
       from: process.env.MAIL_FROM,
@@ -178,17 +202,38 @@ app.post('/api/auth/signup', async (req, res) => {
       html: `
         <h1>Welcome to Slugger!</h1>
         <p>Thank you for signing up. Please verify your email address by clicking the link below:</p>
-        <a href="${verificationUrl}">Verify Email</a>
+        <p>If the link below doesn't work, try one of these alternative links:</p>
+        <ul>
+          <li><a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 1</a></li>
+          <li><a href="http://192.168.31.250:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 2</a></li>
+          <li><a href="http://192.168.1.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 3</a></li>
+          <li><a href="http://192.168.0.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 4</a></li>
+          <li><a href="http://172.20.10.2:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 5</a></li>
+          <li><a href="http://172.20.10.3:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Link 6</a></li>
+          <li><a href="${verificationUrl}">Original Link</a></li>
+        </ul>
         <p>This link will expire in 24 hours.</p>
         <p>If you did not sign up for Slugger, please ignore this email.</p>
       `
     };
     
     try {
-      await transporter.sendMail(mailOptions);
+      console.log('Attempting to send verification email to:', email);
+      console.log('Using from address:', process.env.MAIL_FROM);
+      
+      const info = await transporter.sendMail(mailOptions);
       console.log('Verification email sent to:', email);
+      console.log('Email response:', info.response);
+      console.log('Message ID:', info.messageId);
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
+      console.error('Error details:', emailError.message);
+      
+      if (emailError.message.includes('authorized')) {
+        console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
+        console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
+      }
+      
       // Continue with registration even if email fails
     }
     
@@ -246,14 +291,165 @@ app.get('/api/auth/verify-email', async (req, res) => {
     }
     
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired verification link' });
+      return res.status(400).send(`
+        <html>
+          <head>
+            <title>Verification Failed</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+              .container { max-width: 600px; margin: 0 auto; }
+              h1 { color: #e74c3c; }
+              p { font-size: 18px; line-height: 1.6; }
+              .button { 
+                display: inline-block; 
+                background-color: #6c63ff; 
+                color: white; 
+                padding: 12px 24px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                margin-top: 20px; 
+                margin: 5px;
+              }
+              .button-container {
+                margin-top: 20px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Verification Failed</h1>
+              <p>The verification link is invalid or has expired.</p>
+              <div class="button-container">
+                <p>Please try logging in or request a new verification email:</p>
+                <a href="exp://192.168.31.251:19000/screens/login" class="button">Open App 1</a>
+                <a href="exp://192.168.31.250:19000/screens/login" class="button">Open App 2</a>
+                <a href="exp://192.168.1.100:19000/screens/login" class="button">Open App 3</a>
+                <a href="exp://192.168.0.100:19000/screens/login" class="button">Open App 4</a>
+                <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Original Link</a>
+              </div>
+            </div>
+          </body>
+        </html>
+      `);
     }
     
-    // Redirect to frontend with success message
-    res.redirect(`${process.env.FRONTEND_URL}/screens/login?verified=true`);
+    // Send HTML response with success message and redirect button
+    res.status(200).send(`
+      <html>
+        <head>
+          <title>Email Verified</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .container { max-width: 600px; margin: 0 auto; }
+            h1 { color: #2ecc71; }
+            p { font-size: 18px; line-height: 1.6; }
+            .button { 
+              display: inline-block; 
+              background-color: #6c63ff; 
+              color: white; 
+              padding: 12px 24px; 
+              text-decoration: none; 
+              border-radius: 4px; 
+              margin-top: 20px; 
+            }
+            .button-container {
+              margin-top: 20px;
+            }
+            .button-container a {
+              margin: 5px;
+            }
+          </style>
+          <script>
+            // Try to redirect to the app using multiple possible URLs
+            function tryRedirect() {
+              const possibleUrls = [
+                "http://localhost:19000/screens/login?verified=true",
+                "http://localhost:19006/screens/login?verified=true",
+                "exp://192.168.31.251:19000/screens/login?verified=true",
+                "exp://192.168.31.250:19000/screens/login?verified=true",
+                "exp://192.168.1.100:19000/screens/login?verified=true",
+                "exp://192.168.0.100:19000/screens/login?verified=true",
+                "exp://172.20.10.2:19000/screens/login?verified=true",
+                "exp://172.20.10.3:19000/screens/login?verified=true"
+              ];
+              
+              // Try each URL
+              for (const url of possibleUrls) {
+                try {
+                  window.location.href = url;
+                  // Wait a bit before trying the next one
+                  return;
+                } catch (e) {
+                  console.error("Failed to redirect to:", url);
+                }
+              }
+            }
+            
+            // Try to redirect after 3 seconds
+            setTimeout(tryRedirect, 3000);
+          </script>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Email Verified Successfully!</h1>
+            <p>Your email has been verified. You can now log in to your account.</p>
+            <p>You will be redirected to the login page in 3 seconds...</p>
+            <div class="button-container">
+              <p>If you're not redirected automatically, please click one of these links:</p>
+              <a href="exp://192.168.31.251:19000/screens/login?verified=true" class="button">Open App 1</a>
+              <a href="exp://192.168.31.250:19000/screens/login?verified=true" class="button">Open App 2</a>
+              <a href="exp://192.168.1.100:19000/screens/login?verified=true" class="button">Open App 3</a>
+              <a href="exp://192.168.0.100:19000/screens/login?verified=true" class="button">Open App 4</a>
+              <a href="${process.env.FRONTEND_URL}/screens/login?verified=true" class="button">Original Link</a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
   } catch (error) {
     console.error('Verification error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).send(`
+      <html>
+        <head>
+          <title>Verification Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .container { max-width: 600px; margin: 0 auto; }
+            h1 { color: #e74c3c; }
+            p { font-size: 18px; line-height: 1.6; }
+            .error { color: #e74c3c; font-family: monospace; margin: 20px 0; padding: 10px; background: #f8f8f8; border-radius: 4px; }
+            .button { 
+              display: inline-block; 
+              background-color: #6c63ff; 
+              color: white; 
+              padding: 12px 24px; 
+              text-decoration: none; 
+              border-radius: 4px; 
+              margin-top: 20px; 
+              margin: 5px;
+            }
+            .button-container {
+              margin-top: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Verification Error</h1>
+            <p>An error occurred during the verification process.</p>
+            <div class="error">${error.message}</div>
+            <div class="button-container">
+              <p>Please try logging in or request a new verification email:</p>
+              <a href="exp://192.168.31.251:19000/screens/login" class="button">Open App 1</a>
+              <a href="exp://192.168.31.250:19000/screens/login" class="button">Open App 2</a>
+              <a href="exp://192.168.1.100:19000/screens/login" class="button">Open App 3</a>
+              <a href="exp://192.168.0.100:19000/screens/login" class="button">Open App 4</a>
+              <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Original Link</a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
   }
 });
 
@@ -302,28 +498,49 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
     
     // Send verification email
-    const verificationUrl = `${process.env.FRONTEND_URL}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`;
+    const backendUrl = `http://localhost:${process.env.PORT || 5000}`;
+    const verificationUrl = `${backendUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`;
     
     const mailOptions = {
-      from: process.env.MAIL_FROM, //link to .env
+      from: process.env.MAIL_FROM,
       to: email,
       subject: 'Verify your Slugger account',
       html: `
-        <h1>Welcome to Slugger!</h1>
+        <h1 style="text-align: center;">Welcome to Slugger!</h1>
         <p>Thank you for signing up. Please verify your email address by clicking the link below:</p>
-        <a href="${verificationUrl}">Verify Email</a>
+        <ul>
+          <li><a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Verify your email</a></li>
+        </ul>
         <p>This link will expire in 24 hours.</p>
         <p>If you did not sign up for Slugger, please ignore this email.</p>
       `
     };
     
     try {
-      await transporter.sendMail(mailOptions);
+      console.log('Attempting to resend verification email to:', email);
+      console.log('Using from address:', process.env.MAIL_FROM);
+      
+      const info = await transporter.sendMail(mailOptions);
       console.log('Verification email resent to:', email);
+      console.log('Email response:', info.response);
+      console.log('Message ID:', info.messageId);
+      
       res.status(200).json({ message: 'Verification email sent. Please check your inbox.' });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
-      res.status(500).json({ message: 'Failed to send verification email' });
+      console.error('Error details:', emailError.message);
+      
+      if (emailError.message.includes('authorized')) {
+        console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
+        console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
+        
+        res.status(500).json({ 
+          message: 'Failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients.',
+          error: 'unauthorized_recipient'
+        });
+      } else {
+        res.status(500).json({ message: 'Failed to send verification email', error: emailError.message });
+      }
     }
   } catch (error) {
     console.error('Resend verification error:', error);
@@ -470,6 +687,78 @@ app.get('/ip', (req, res) => {
       timestamp: new Date().toISOString()
     }
   });
+});
+
+// Add a test email endpoint
+app.post('/api/test/email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+    
+    console.log('Test email requested for:', email);
+    
+    const mailOptions = {
+      from: process.env.MAIL_FROM,
+      to: email,
+      subject: 'Slugger Email Test',
+      html: `
+        <h1>Email Test Successful!</h1>
+        <p>If you're seeing this, your email configuration is working correctly.</p>
+        <p>Email configuration details:</p>
+        <ul>
+          <li>Host: ${process.env.MAIL_HOST}</li>
+          <li>Port: ${process.env.MAIL_PORT}</li>
+          <li>From: ${process.env.MAIL_FROM}</li>
+          <li>To: ${email}</li>
+          <li>Time: ${new Date().toISOString()}</li>
+        </ul>
+      `
+    };
+    
+    try {
+      console.log('Attempting to send test email to:', email);
+      const info = await transporter.sendMail(mailOptions);
+      console.log('Test email sent successfully');
+      console.log('Email response:', info.response);
+      console.log('Message ID:', info.messageId);
+      
+      res.status(200).json({ 
+        message: 'Test email sent successfully', 
+        details: {
+          messageId: info.messageId,
+          response: info.response
+        }
+      });
+    } catch (emailError) {
+      console.error('Error sending test email:', emailError);
+      console.error('Error details:', emailError.message);
+      
+      if (emailError.message.includes('authorized')) {
+        return res.status(500).json({ 
+          message: 'Failed to send test email. With Mailgun sandbox domains, you can only send to authorized recipients.',
+          error: 'unauthorized_recipient',
+          solution: 'Authorize this recipient in your Mailgun dashboard or use a different email service.'
+        });
+      }
+      
+      res.status(500).json({ 
+        message: 'Failed to send test email', 
+        error: emailError.message,
+        config: {
+          host: process.env.MAIL_HOST,
+          port: process.env.MAIL_PORT,
+          user: process.env.MAIL_USER,
+          from: process.env.MAIL_FROM
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Test email error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 });
 
 // Start server
