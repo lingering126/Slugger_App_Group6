@@ -22,6 +22,9 @@ export default function ScreensLayout() {
       <Stack.Screen name="join-group" options={{ headerShown: false }} />
       <Stack.Screen name="create-group" options={{ headerShown: false }} />
       
+      {/* Testing utilities */}
+      <Stack.Screen name="reset-welcome" options={{ headerShown: true, title: 'Reset Welcome Page' }} />
+      
       {/* Utility screens */}
       <Stack.Screen name="connection-test" options={{ headerShown: true, title: 'Connection Test' }} />
       
