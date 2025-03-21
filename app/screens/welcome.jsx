@@ -70,20 +70,35 @@ export default function WelcomeScreen() {
 
   // Function to handle joining a group
   const handleJoinGroup = async () => {
-    await AsyncStorage.setItem('welcomeCompleted', 'true');
-    router.replace('/screens/join-group');
+    try {
+      console.log('Setting welcomeCompleted flag before redirecting to join group');
+      await AsyncStorage.setItem('welcomeCompleted', 'true');
+      router.replace('/screens/join-group');
+    } catch (error) {
+      console.error('Error saving welcome completion state:', error);
+    }
   };
 
   // Function to handle creating a group
   const handleCreateGroup = async () => {
-    await AsyncStorage.setItem('welcomeCompleted', 'true');
-    router.replace('/screens/create-group');
+    try {
+      console.log('Setting welcomeCompleted flag before redirecting to create group');
+      await AsyncStorage.setItem('welcomeCompleted', 'true');
+      router.replace('/screens/create-group');
+    } catch (error) {
+      console.error('Error saving welcome completion state:', error);
+    }
   };
 
   // Function to skip for now and go to profile
   const handleSkipForNow = async () => {
-    await AsyncStorage.setItem('welcomeCompleted', 'true');
-    router.replace('/screens/(tabs)/profile');
+    try {
+      console.log('Setting welcomeCompleted flag before redirecting to profile');
+      await AsyncStorage.setItem('welcomeCompleted', 'true');
+      router.replace('/screens/(tabs)/profile');
+    } catch (error) {
+      console.error('Error saving welcome completion state:', error);
+    }
   };
 
   // Function to render each slide

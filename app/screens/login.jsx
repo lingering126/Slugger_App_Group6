@@ -169,11 +169,23 @@ export default function LoginScreen() {
         
         // Check if the user has completed the welcome flow
         const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
+        console.log('Welcome completed status:', welcomeCompleted);
         
         // If the user is logging in for the first time, redirect to welcome page
         if (!welcomeCompleted) {
-          router.replace('/screens/welcome');
+          console.log('First time login detected, redirecting to welcome page');
+          
+          try {
+            // Verify that the welcome route exists
+            router.replace('/screens/welcome');
+            console.log('Navigation to welcome page initiated');
+          } catch (navError) {
+            console.error('Error navigating to welcome page:', navError);
+            // Fallback to home if welcome page navigation fails
+            router.replace('/screens/(tabs)/home');
+          }
         } else {
+          console.log('Welcome already completed, redirecting to home page');
           // Navigate to home screen after successful login
           router.replace('/screens/(tabs)/home');
         }
