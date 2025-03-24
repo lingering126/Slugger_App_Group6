@@ -4,6 +4,7 @@ import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import Utils, { getApiUrl, testDirectConnection, checkServerConnection, pingServer, scanNetworkForServer } from '../utils';
 import ServerIPModal from './ServerIPModal';
 import NetInfo from '@react-native-community/netinfo';
+import IPConfig from '../config/ipConfig';
 
 const ServerSettings = ({ onClose, navigation }) => {
   const [serverIP, setServerIP] = useState('');
@@ -110,8 +111,28 @@ const ServerSettings = ({ onClose, navigation }) => {
     setTestResults(null);
     
     try {
-      // Only try to connect to the manually set server or the first URL in the list
-      const serverIP = global.serverIP || '192.168.31.252';
+      // Prioritize getting server IP from expo-constants
+      let serverIP = IPConfig.getServerIP();
+      
+      // If not obtained through expo-constants, try using the set server IP
+      if (!serverIP) {
+        serverIP = global.serverIP;
+        
+        // If still not available, try using the device's own IP
+        if (!serverIP) {
+          const netInfo = await NetInfo.fetch();
+          if (netInfo?.details?.ipAddress) {
+            serverIP = netInfo.details.ipAddress;
+          }
+        }
+      }
+      
+      if (!serverIP) {
+        Alert.alert('Error', 'Unable to get server IP address. Please set it manually or use network scanning.');
+        setLoading(false);
+        return;
+      }
+      
       const url = `http://${serverIP}:5001/api`;
       
       // First try ping which is much faster
@@ -123,7 +144,7 @@ const ServerSettings = ({ onClose, navigation }) => {
         global.workingApiUrl = url;
         Utils.recordSuccessfulConnection(global.workingApiUrl);
         setConnectionStatus('online');
-        Alert.alert('Success', `Connected to ${url} successfully using ping!`);
+        Alert.alert('Success', `Successfully connected to ${url}!`);
         
         // Update connection stats
         setConnectionStats(Utils.getConnectionStats());
@@ -155,11 +176,11 @@ const ServerSettings = ({ onClose, navigation }) => {
           global.workingApiUrl = url;
           Utils.recordSuccessfulConnection(global.workingApiUrl);
           setConnectionStatus('online');
-          Alert.alert('Success', `Connected to ${url} successfully!`);
+          Alert.alert('Success', `Successfully connected to ${url}!`);
         } else {
           console.log(`Failed with status ${response.status}`);
           setConnectionStatus('offline');
-          Alert.alert('Connection Failed', `Server responded with status: ${response.status}`);
+          Alert.alert('Connection Failed', `Server returned status code: ${response.status}`);
         }
       } catch (error) {
         console.log('Error in quick test:', error.message);
@@ -181,8 +202,28 @@ const ServerSettings = ({ onClose, navigation }) => {
     setLoading(true);
     
     try {
-      // Only try to connect to the manually set server or the first URL in the list
-      const serverIP = global.serverIP || '192.168.31.252';
+      // Prioritize getting server IP from expo-constants
+      let serverIP = IPConfig.getServerIP();
+      
+      // If not obtained through expo-constants, try using the set server IP
+      if (!serverIP) {
+        serverIP = global.serverIP;
+        
+        // If still not available, try using the device's own IP
+        if (!serverIP) {
+          const netInfo = await NetInfo.fetch();
+          if (netInfo?.details?.ipAddress) {
+            serverIP = netInfo.details.ipAddress;
+          }
+        }
+      }
+      
+      if (!serverIP) {
+        Alert.alert('Error', 'Unable to get server IP address. Please set it manually or use network scanning.');
+        setLoading(false);
+        return;
+      }
+      
       const url = `http://${serverIP}:5001/api`;
       
       console.log(`Testing ping to: ${url}`);
@@ -216,8 +257,14 @@ const ServerSettings = ({ onClose, navigation }) => {
     setTestResults(null);
     
     try {
-      // Directly test the laptop IP
-      const laptopIP = '192.168.31.252';
+      // Using expo-constants to get server IP
+      const laptopIP = IPConfig.getServerIP();
+      if (!laptopIP) {
+        Alert.alert('Error', 'Could not get server IP from Expo Constants. Please try another method.');
+        setLoading(false);
+        return;
+      }
+      
       const apiUrl = `http://${laptopIP}:5001/api`;
       
       // First try ping which is faster
@@ -657,7 +704,7 @@ const ServerSettings = ({ onClose, navigation }) => {
         <View style={styles.tipContainer}>
           <FontAwesome name="info-circle" size={16} color="#6C63FF" style={styles.tipIcon} />
           <Text style={styles.tip}>
-            Laptop IP: 192.168.31.252 - Make sure your phone and laptop are on the same network.
+            Laptop IP: {IPConfig.getServerIP() || 'Unknown'} - Make sure your phone and laptop are on the same network.
           </Text>
         </View>
         <View style={styles.tipContainer}>

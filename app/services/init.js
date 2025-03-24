@@ -6,6 +6,7 @@
 import Utils from '../utils';
 import { Platform, Alert } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import IPConfig from '../config/ipConfig';
 
 // Initialize app-wide settings and services
 const initializeApp = async () => {
@@ -65,7 +66,35 @@ const initServerConnection = async () => {
   console.log('Initializing server connection...');
   
   try {
-    // First try scanning the network to automatically find the server
+    // First try to use expo-constants to get server IP
+    const pingUrl = IPConfig.getPingUrl();
+    if (pingUrl) {
+      console.log(`Trying ping using Expo Constants: ${pingUrl}`);
+      let isConnected = false;
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        
+        const response = await fetch(pingUrl, {
+          method: 'GET',
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok && await response.text() === 'PONG') {
+          console.log('Ping successful using Expo Constants!');
+          global.workingApiUrl = IPConfig.getServerUrl();
+          Utils.recordSuccessfulConnection(global.workingApiUrl);
+          return; // Connection successful, return directly
+        }
+      } catch (error) {
+        console.log(`Ping failed using Expo Constants: ${error.message}`);
+      }
+    }
+    
+    // If Expo Constants method fails, try scanning the network
     console.log('Scanning network for server...');
     const scanResult = await Utils.scanNetworkForServer();
     
@@ -74,60 +103,29 @@ const initServerConnection = async () => {
       return; // We're already connected, no need to continue
     }
     
-    // If scan fails, then try the lightweight ping to check connectivity
-    // This uses the default serverIP (192.168.31.252)
-    const serverIP = global.serverIP || '192.168.31.252';
-    const pingUrl = `http://${serverIP}:5001/ping`;
+    // If both methods fail, try a full connection check
+    console.log('Initial ping failed, trying full connection check...');
     
-    console.log(`Initial ping to ${pingUrl}`);
-    let isConnected = false;
+    // Find the best server URL
+    const result = await Utils.findBestServerUrl();
     
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+    if (result.status === 'online') {
+      console.log('Connected to server:', result.url);
+    } else {
+      // If the server is not reachable, retry in the background after a delay
+      // This helps when the app starts before the server is fully up
+      console.log('Server not reachable, will retry in the background...');
       
-      const response = await fetch(pingUrl, {
-        method: 'GET',
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (response.ok && await response.text() === 'PONG') {
-        console.log('Initial ping successful!');
-        global.workingApiUrl = `http://${serverIP}:5001/api`;
-        Utils.recordSuccessfulConnection(global.workingApiUrl);
-        isConnected = true;
-      }
-    } catch (error) {
-      console.log(`Initial ping failed: ${error.message}`);
-    }
-    
-    // If ping failed, try a full connection check
-    if (!isConnected) {
-      console.log('Initial ping failed, trying full connection check...');
-      
-      // Find the best server URL
-      const result = await Utils.findBestServerUrl();
-      
-      if (result.status === 'online') {
-        console.log('Connected to server:', result.url);
-      } else {
-        // If the server is not reachable, retry in the background after a delay
-        // This helps when the app starts before the server is fully up
-        console.log('Server not reachable, will retry in the background...');
+      setTimeout(async () => {
+        console.log('Retrying server connection...');
+        const retryResult = await Utils.findBestServerUrl();
         
-        setTimeout(async () => {
-          console.log('Retrying server connection...');
-          const retryResult = await Utils.findBestServerUrl();
-          
-          if (retryResult.status === 'online') {
-            console.log('Successfully connected on retry:', retryResult.url);
-          } else {
-            console.log('Still cannot connect to server after retry');
-          }
-        }, 5000); // Wait 5 seconds before trying again
-      }
+        if (retryResult.status === 'online') {
+          console.log('Successfully connected on retry:', retryResult.url);
+        } else {
+          console.log('Still cannot connect to server after retry');
+        }
+      }, 5000); // Wait 5 seconds before trying again
     }
   } catch (error) {
     console.error('Error initializing server connection:', error);

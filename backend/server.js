@@ -6,6 +6,25 @@ const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const os = require('os');
+
+// Function to get all server IP addresses
+const getServerIPs = () => {
+  const networkInterfaces = os.networkInterfaces();
+  const serverIPs = [];
+  
+  // Collect all IPv4 addresses
+  Object.keys(networkInterfaces).forEach((interfaceName) => {
+    const addresses = networkInterfaces[interfaceName];
+    addresses.forEach((addr) => {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        serverIPs.push(addr.address);
+      }
+    });
+  });
+  
+  return serverIPs;
+};
 
 // Load environment variables
 dotenv.config();
@@ -216,8 +235,8 @@ app.post('/api/auth/signup', async (req, res) => {
     }
     
     // Send verification email
-    const backendUrl = `http://localhost:${process.env.PORT || 5000}`;
-    const verificationUrl = `${backendUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}`;
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
     
     const mailOptions = {
       from: process.env.MAIL_FROM,
@@ -229,7 +248,7 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://192.168.31.252:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -238,8 +257,8 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            <li><a href="http://192.168.31.252:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 1</a></li>
-            <li><a href="http://192.168.31.252:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 2</a></li>
+            <li><a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 1</a></li>
+            <li><a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 2</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -291,6 +310,10 @@ app.get('/api/auth/verify-email', async (req, res) => {
     if (!token || !email) {
       return res.status(400).json({ message: 'Invalid verification link' });
     }
+    
+    // Get server IP addresses for building App links
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost';
     
     let user;
     
@@ -375,8 +398,8 @@ app.get('/api/auth/verify-email', async (req, res) => {
               
               <div class="button-container">
                 <p>If you're using the app on this device, try one of these links:</p>
-                <a href="exp://192.168.31.252:19000/screens/login" class="button">Open App</a>
-                <a href="exp://192.168.31.252:19000/screens/login" class="button">Alternative Link</a>
+                <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
+                <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
               </div>
               
               <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
@@ -489,8 +512,8 @@ app.get('/api/auth/verify-email', async (req, res) => {
             
             <div class="button-container">
               <p>If you're using the app on this device, try one of these links:</p>
-              <a href="exp://192.168.31.252:19000/screens/login" class="button">Open App</a>
-              <a href="exp://192.168.31.252:19000/screens/login" class="button">Alternative Link</a>
+              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
+              <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
             </div>
             
             <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
@@ -546,8 +569,9 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
     
     // Send verification email
-    const backendUrl = `http://localhost:${process.env.PORT || 5000}`;
-    const verificationUrl = `${backendUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`;
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
+    const port = process.env.PORT || 5000;
     
     const mailOptions = {
       from: process.env.MAIL_FROM,
@@ -559,7 +583,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://192.168.31.252:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
+            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -568,8 +592,8 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            <li><a href="http://192.168.31.252:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link 1</a></li>
-            <li><a href="http://192.168.31.252:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link 2</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>

@@ -1,4 +1,5 @@
 import { Platform, Alert } from 'react-native';
+import IPConfig from './config/ipConfig';
 // Try to import NetInfo, but don't fail if it's not available
 let NetInfo;
 try {
@@ -53,8 +54,16 @@ export const getApiUrl = () => {
 
   // Define the backend server IP here - update this to match your actual server IP
   // This can be your computer's IP address on the same network as your phone
-  const serverIP = global.serverIP || '192.168.31.252'; // Known laptop IP address
-  console.log('Using server IP:', serverIP);
+  // Using expo-constants to get the server IP
+  const serverUrl = IPConfig.getServerUrl();
+  if (serverUrl) {
+    console.log('Using Expo Constants server URL:', serverUrl);
+    return [serverUrl];
+  }
+
+  // Get the server IP from environment or use auto-discovery
+  const serverIP = process.env.REACT_NATIVE_SERVER_IP || global.serverIP;
+  console.log('Server IP configuration:', serverIP || 'Using auto-discovery');
   
   // Only include the most likely IPs to avoid unnecessary connection attempts
   // We'll focus on the user-specified IP first
@@ -164,8 +173,32 @@ export const pingServer = async (url) => {
 
 // Add a direct connection test function
 export const testDirectConnection = async () => {
-  // Start with the server IP if one is set
-  const serverIP = global.serverIP || '192.168.31.252';
+  // Using expo-constants to get server IP
+  let serverIP = IPConfig.getServerIP();
+  
+  // If unable to get through expo-constants, try other methods
+  if (!serverIP) {
+    serverIP = global.serverIP;
+    
+    // If still unable to get, try to use the device's own IP address
+    if (!serverIP) {
+      try {
+        const netInfo = await NetInfo.fetch();
+        if (netInfo?.details?.ipAddress) {
+          const deviceIP = netInfo.details.ipAddress;
+          // Extract subnet from device IP
+          const ipParts = deviceIP.split('.');
+          if (ipParts.length === 4) {
+            // Assume server and device are on the same subnet
+            serverIP = deviceIP;
+          }
+        }
+      } catch (error) {
+        console.log('Error getting device IP:', error);
+      }
+    }
+  }
+  
   console.log('Test connection to server IP:', serverIP);
   
   // Create an array of URLs to test, prioritizing the user-specified IP
