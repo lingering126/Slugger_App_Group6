@@ -52,6 +52,15 @@ export const getApiUrl = () => {
     return [global.workingApiUrl];
   }
 
+  // Check if we're running in a web browser environment
+  const isWebEnvironment = typeof document !== 'undefined';
+  
+  // In web browser environment, prioritize localhost
+  if (isWebEnvironment) {
+    console.log('Detected web environment, prioritizing localhost');
+    return ['http://localhost:5001/api'];
+  }
+
   // Define the backend server IP here - update this to match your actual server IP
   // This can be your computer's IP address on the same network as your phone
   // Using expo-constants to get the server IP
@@ -66,11 +75,13 @@ export const getApiUrl = () => {
   console.log('Server IP configuration:', serverIP || 'Using auto-discovery');
   
   // Only include the most likely IPs to avoid unnecessary connection attempts
-  // We'll focus on the user-specified IP first
-  const possibleIPs = [
-    // Primary IP - the laptop IP address
-    serverIP, 
-  ];
+  // Initialize an empty array and only add valid IPs
+  const possibleIPs = [];
+  
+  // Add serverIP only if it exists
+  if (serverIP) {
+    possibleIPs.push(serverIP);
+  }
   
   // Add common fallbacks, but with less priority
   const additionalIPs = [
@@ -103,8 +114,10 @@ export const getApiUrl = () => {
         const commonLastOctets = ['1', '2', '100', '101', '102', '200', '250', '251', '252', '253', '254'];
         commonLastOctets.forEach(lastOctet => {
           const potentialIP = `${subnet}.${lastOctet}`;
-          // Don't add duplicates
-          if (!possibleIPs.includes(potentialIP) && !additionalIPs.includes(potentialIP)) {
+          // Don't add duplicates - with null check
+          if (potentialIP && possibleIPs && additionalIPs && 
+              !possibleIPs.includes(potentialIP) && 
+              !additionalIPs.includes(potentialIP)) {
             additionalIPs.push(potentialIP);
           }
         });
@@ -116,13 +129,19 @@ export const getApiUrl = () => {
   
   // Add additional IPs if they haven't been added already
   additionalIPs.forEach(ip => {
-    if (!possibleIPs.includes(ip)) {
+    // Only add valid IPs and avoid duplicates - with null check
+    if (ip && possibleIPs && !possibleIPs.includes(ip)) {
       possibleIPs.push(ip);
     }
   });
   
   // Create URLs for all possible IPs, handling those that already have port or protocol
   const allUrls = possibleIPs.map(ip => {
+    // Skip undefined or null values
+    if (!ip) {
+      return null;
+    }
+    
     if (ip.includes('://')) {
       return `${ip}/api`;
     } else if (ip.includes(':')) {
@@ -130,7 +149,7 @@ export const getApiUrl = () => {
     } else {
       return `http://${ip}:5001/api`;
     }
-  });
+  }).filter(Boolean); // Filter out any null/undefined values
   
   console.log('Generated API URLs to try:', allUrls);
   
@@ -141,6 +160,12 @@ export const getApiUrl = () => {
 // Simple ping function to test connectivity with minimal overhead
 export const pingServer = async (url) => {
   try {
+    // Skip ping check for web debug environment
+    if (typeof document !== 'undefined' && url.includes('10.0.2.2')) {
+      console.log(`Skipping ping to emulator address ${url} in web debug mode`);
+      return false; // Skip Android emulator IPs in web debug mode
+    }
+    
     const pingUrl = url.replace('/api', '/ping');
     console.log(`Pinging server at: ${pingUrl}`);
     
@@ -348,6 +373,28 @@ export const promptForServerIP = () => {
 // Helper function to check if the server is reachable
 export const checkServerConnection = async (apiUrls) => {
   try {
+    // Check if we're in a web environment
+    const isWebEnvironment = typeof document !== 'undefined';
+    
+    // For web environment, simplify and prioritize localhost
+    if (isWebEnvironment) {
+      console.log('Web environment detected, checking localhost first');
+      
+      const localhostUrl = 'http://localhost:5001/api';
+      const pingResult = await pingServer(localhostUrl);
+      
+      if (pingResult) {
+        console.log('Successfully connected to localhost in web environment');
+        global.workingApiUrl = localhostUrl;
+        recordSuccessfulConnection(localhostUrl);
+        return {
+          status: 'online',
+          message: 'Server is reachable via localhost (web environment)',
+          url: localhostUrl
+        };
+      }
+    }
+    
     // First check if the device has internet connection
     const netInfo = await NetInfo.fetch();
     
@@ -482,6 +529,50 @@ export const scanNetworkForServer = async () => {
   console.log('Scanning network for server...');
   
   try {
+    // Check if we're in a web environment
+    const isWebEnvironment = typeof document !== 'undefined';
+    
+    // For web environment, simplify and just check localhost
+    if (isWebEnvironment) {
+      console.log('Web environment detected, checking localhost only');
+      
+      try {
+        const pingUrl = 'http://localhost:5001/ping';
+        console.log(`Testing connection to: ${pingUrl}`);
+        
+        const response = await fetch(pingUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        if (response.ok && await response.text() === 'PONG') {
+          console.log('Server found at localhost');
+          const apiUrl = 'http://localhost:5001/api';
+          
+          // Store as global server IP
+          global.serverIP = 'localhost';
+          global.workingApiUrl = apiUrl;
+          recordSuccessfulConnection(apiUrl);
+          
+          return {
+            status: 'online',
+            message: 'Server found on localhost',
+            ip: 'localhost',
+            url: apiUrl
+          };
+        }
+      } catch (error) {
+        console.log('Failed to connect to localhost:', error.message);
+      }
+      
+      return {
+        status: 'not_found',
+        message: 'Server not found on localhost'
+      };
+    }
+    
     // Get the device's own network info
     const netInfo = await NetInfo.fetch();
     global.lastNetworkInfo = netInfo;
@@ -608,6 +699,32 @@ const Utils = {
   findBestServerUrl: async () => {
     try {
       console.log('Checking server connection...');
+      
+      // Check if we're in a web environment
+      const isWebEnvironment = typeof document !== 'undefined';
+      
+      // For web environment, prioritize localhost
+      if (isWebEnvironment) {
+        console.log('Web environment detected, trying localhost first');
+        
+        try {
+          const localhostUrl = 'http://localhost:5001/api';
+          const pingResult = await pingServer(localhostUrl);
+          
+          if (pingResult) {
+            console.log('Successfully connected to localhost in web environment');
+            global.workingApiUrl = localhostUrl;
+            recordSuccessfulConnection(localhostUrl);
+            return {
+              status: 'online',
+              message: 'Server is reachable via localhost (web environment)',
+              url: localhostUrl
+            };
+          }
+        } catch (error) {
+          console.log('Failed to connect to localhost:', error.message);
+        }
+      }
       
       // First try to scan network for server if we don't have a working API URL
       if (!global.workingApiUrl) {
