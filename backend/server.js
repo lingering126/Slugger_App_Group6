@@ -13,15 +13,57 @@ const getServerIPs = () => {
   const networkInterfaces = os.networkInterfaces();
   const serverIPs = [];
   
-  // Collect all IPv4 addresses
+  console.log('=== Network Interface Scanning Started ===');
+  console.log('Available interfaces:', Object.keys(networkInterfaces));
+  
+  // First pass: Look for preferred IPs (192.168.x.x)
   Object.keys(networkInterfaces).forEach((interfaceName) => {
     const addresses = networkInterfaces[interfaceName];
+    console.log(`\nScanning interface "${interfaceName}":`);
+    
     addresses.forEach((addr) => {
+      // Only collect IPv4, non-internal, and non-APIPA addresses
       if (addr.family === 'IPv4' && !addr.internal) {
-        serverIPs.push(addr.address);
+        console.log(`Found address: ${addr.address} (${addr.family})`);
+        
+        // Check if it's a valid local network IP
+        if (addr.address.startsWith('192.168.')) {
+          console.log(`✓ Found preferred local IP: ${addr.address}`);
+          // Add 192.168.x.x addresses first as they're most likely to work
+          serverIPs.unshift(addr.address);
+        } else if (addr.address.startsWith('10.') || 
+                  (addr.address.startsWith('172.') && 
+                   parseInt(addr.address.split('.')[1]) >= 16 && 
+                   parseInt(addr.address.split('.')[1]) <= 31)) {
+          // Add other private network IPs (10.x.x.x and 172.16-31.x.x)
+          console.log(`✓ Found alternative local IP: ${addr.address}`);
+          serverIPs.push(addr.address);
+        } else if (addr.address.startsWith('169.254.')) {
+          console.log(`✗ Skipping APIPA address: ${addr.address}`);
+        } else {
+          console.log(`? Unknown address type: ${addr.address}`);
+        }
       }
     });
   });
+  
+  // Fallback handling
+  if (serverIPs.length === 0) {
+    console.warn('⚠ No valid local IPs found, adding fallback options');
+    // Try to add common local IPs as fallback
+    const commonIPs = [
+      '192.168.1.1',
+      '192.168.0.1',
+      '10.0.0.1',
+      'localhost'
+    ];
+    serverIPs.push(...commonIPs);
+  }
+  
+  console.log('\n=== Final IP Configuration ===');
+  console.log('Primary IP (first in list):', serverIPs[0]);
+  console.log('All available IPs:', serverIPs);
+  console.log('=============================\n');
   
   return serverIPs;
 };
@@ -238,6 +280,13 @@ app.post('/api/auth/signup', async (req, res) => {
     const serverIPs = getServerIPs();
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
     
+    console.log('=== Signup Email Link Details ===');
+    console.log('Available server IPs:', serverIPs);
+    console.log('Primary IP being used:', primaryIP);
+    console.log('Port being used:', process.env.PORT || 5000);
+    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
+    console.log('===============================');
+    
     const mailOptions = {
       from: process.env.MAIL_FROM,
       to: email,
@@ -257,8 +306,8 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            <li><a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 1</a></li>
-            <li><a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 2</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -572,6 +621,17 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     const serverIPs = getServerIPs();
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
     const port = process.env.PORT || 5000;
+    
+    console.log('=== Resend Email Link Details ===');
+    console.log('Available server IPs:', serverIPs);
+    console.log('Primary IP being used:', primaryIP);
+    console.log('Port being used:', port);
+    console.log('Generated verification links:');
+    serverIPs.forEach((ip, index) => {
+      console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
+    });
+    console.log('Localhost link:', `http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
+    console.log('================================');
     
     const mailOptions = {
       from: process.env.MAIL_FROM,
