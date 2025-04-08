@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 
 // Automatically get development server IP address
-export const getServerIP = () => {
+export const getServerIP = (): string | null => {
   try {
     // Get manifest information
     const { manifest2, manifest } = Constants;
@@ -28,7 +28,7 @@ export const getServerIP = () => {
 };
 
 // Build complete server URL
-export const getServerUrl = (port = 5001, path = '/api') => {
+export const getServerUrl = (port: number = 5001, path: string = '/api'): string | null => {
   const ip = getServerIP();
   if (ip) {
     return `http://${ip}:${port}${path}`;
@@ -39,7 +39,7 @@ export const getServerUrl = (port = 5001, path = '/api') => {
 };
 
 // Build health check URL
-export const getHealthUrl = (port = 5001) => {
+export const getHealthUrl = (port: number = 5001): string | null => {
   const ip = getServerIP();
   if (ip) {
     return `http://${ip}:${port}/health`;
@@ -48,7 +48,7 @@ export const getHealthUrl = (port = 5001) => {
 };
 
 // Build ping URL
-export const getPingUrl = (port = 5001) => {
+export const getPingUrl = (port: number = 5001): string | null => {
   const ip = getServerIP();
   if (ip) {
     return `http://${ip}:${port}/ping`;
