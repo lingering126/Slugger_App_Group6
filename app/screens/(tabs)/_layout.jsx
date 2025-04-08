@@ -38,6 +38,7 @@ export default function TabsLayout() {
           name="analytics"
           options={{
             title: "Analytics",
+            headerShown: false,
           }}
         />
         <Tabs.Screen
