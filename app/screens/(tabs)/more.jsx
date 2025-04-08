@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -41,36 +41,6 @@ export default function MoreScreen() {
       Alert.alert('Error', 'Failed to sign out. Please try again.');
     }
   };
-  
-  // Function to reset welcome flow for testing
-  const resetWelcomeFlow = async () => {
-    try {
-      Alert.alert(
-        "Reset Welcome Flow",
-        "This will reset the welcome tutorial. You'll see it next time you log in. Continue?",
-        [
-          {
-            text: "Cancel",
-            style: "cancel"
-          },
-          {
-            text: "Reset",
-            onPress: async () => {
-              await AsyncStorage.removeItem('welcomeCompleted');
-              Alert.alert(
-                "Success",
-                "Welcome flow has been reset. You'll see the welcome tutorial after your next login.",
-                [{ text: "OK" }]
-              );
-            }
-          }
-        ]
-      );
-    } catch (error) {
-      console.error('Error resetting welcome flow:', error);
-      Alert.alert('Error', 'Failed to reset welcome flow. Please try again.');
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -85,14 +55,6 @@ export default function MoreScreen() {
         >
           <FontAwesome name="sign-out" size={24} color="#721c24" style={styles.buttonIcon} />
           <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.resetButton} 
-          onPress={resetWelcomeFlow}
-        >
-          <FontAwesome name="refresh" size={24} color="#004085" style={styles.buttonIcon} />
-          <Text style={styles.resetButtonText}>Reset Welcome Tutorial</Text>
         </TouchableOpacity>
       </View>
       
@@ -124,7 +86,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    gap: 20, // Add space between buttons
   },
   signOutButton: {
     flexDirection: 'row',
@@ -137,27 +98,11 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 300,
   },
-  resetButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: "#cce5ff",
-    paddingVertical: 16,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-    width: '100%',
-    maxWidth: 300,
-  },
   buttonIcon: {
     marginRight: 12,
   },
   signOutText: {
     color: "#721c24",
-    fontWeight: "600",
-    fontSize: 18,
-  },
-  resetButtonText: {
-    color: "#004085",
     fontWeight: "600",
     fontSize: 18,
   },

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList } from 'react-native'
 import React, { useState } from 'react'
-import { useRouter } from 'expo-router'
+import { useNavigation } from '@react-navigation/native'
 
 // Mock data (would normally come from a database)
 const mockUserData = {
@@ -56,7 +56,7 @@ const bonusActivities = [
 ]
 
 const Profile = () => {
-  const router = useRouter()
+  const navigation = useNavigation()
   const [selectedPhysicalActivities, setSelectedPhysicalActivities] = useState([])
   const [physicalModalVisible, setPhysicalModalVisible] = useState(false)
   const [selectedMentalActivities, setSelectedMentalActivities] = useState([])
@@ -224,17 +224,6 @@ const Profile = () => {
         </TouchableOpacity>
       </ScrollView>
       
-      {/* Developer Tools Section */}
-      <View style={styles.developerSection}>
-        <Text style={styles.developerTitle}>Developer Tools</Text>
-        <TouchableOpacity 
-          style={styles.developerButton}
-          onPress={() => router.push('/screens/reset-welcome')}
-        >
-          <Text style={styles.developerButtonText}>Reset Welcome Page</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Modal for selecting physical activities */}
       <Modal
         animationType="slide"
@@ -656,30 +645,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   modalDoneText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  developerSection: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    margin: 15,
-    marginBottom: 30,
-  },
-  developerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF5722',
-    marginBottom: 10,
-  },
-  developerButton: {
-    backgroundColor: '#FF5722',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  developerButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

@@ -6,6 +6,67 @@ const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const os = require('os');
+
+// Function to get all server IP addresses
+const getServerIPs = () => {
+  const networkInterfaces = os.networkInterfaces();
+  const serverIPs = [];
+  
+  console.log('=== Network Interface Scanning Started ===');
+  console.log('Available interfaces:', Object.keys(networkInterfaces));
+  
+  // First pass: Look for preferred IPs (192.168.x.x)
+  Object.keys(networkInterfaces).forEach((interfaceName) => {
+    const addresses = networkInterfaces[interfaceName];
+    console.log(`\nScanning interface "${interfaceName}":`);
+    
+    addresses.forEach((addr) => {
+      // Only collect IPv4, non-internal, and non-APIPA addresses
+      if (addr.family === 'IPv4' && !addr.internal) {
+        console.log(`Found address: ${addr.address} (${addr.family})`);
+        
+        // Check if it's a valid local network IP
+        if (addr.address.startsWith('192.168.')) {
+          console.log(`✓ Found preferred local IP: ${addr.address}`);
+          // Add 192.168.x.x addresses first as they're most likely to work
+          serverIPs.unshift(addr.address);
+        } else if (addr.address.startsWith('10.') || 
+                  (addr.address.startsWith('172.') && 
+                   parseInt(addr.address.split('.')[1]) >= 16 && 
+                   parseInt(addr.address.split('.')[1]) <= 31)) {
+          // Add other private network IPs (10.x.x.x and 172.16-31.x.x)
+          console.log(`✓ Found alternative local IP: ${addr.address}`);
+          serverIPs.push(addr.address);
+        } else if (addr.address.startsWith('169.254.')) {
+          console.log(`✗ Skipping APIPA address: ${addr.address}`);
+        } else {
+          console.log(`? Unknown address type: ${addr.address}`);
+        }
+      }
+    });
+  });
+  
+  // Fallback handling
+  if (serverIPs.length === 0) {
+    console.warn('⚠ No valid local IPs found, adding fallback options');
+    // Try to add common local IPs as fallback
+    const commonIPs = [
+      '192.168.1.1',
+      '192.168.0.1',
+      '10.0.0.1',
+      'localhost'
+    ];
+    serverIPs.push(...commonIPs);
+  }
+  
+  console.log('\n=== Final IP Configuration ===');
+  console.log('Primary IP (first in list):', serverIPs[0]);
+  console.log('All available IPs:', serverIPs);
+  console.log('=============================\n');
+  
+  return serverIPs;
+};
 
 // Load environment variables
 dotenv.config();
@@ -216,8 +277,15 @@ app.post('/api/auth/signup', async (req, res) => {
     }
     
     // Send verification email
-    const backendUrl = `http://localhost:${process.env.PORT || 5000}`;
-    const verificationUrl = `${backendUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}`;
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
+    
+    console.log('=== Signup Email Link Details ===');
+    console.log('Available server IPs:', serverIPs);
+    console.log('Primary IP being used:', primaryIP);
+    console.log('Port being used:', process.env.PORT || 5000);
+    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
+    console.log('===============================');
     
     const mailOptions = {
       from: process.env.MAIL_FROM,
@@ -229,7 +297,7 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -238,8 +306,8 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            <li><a href="http://192.168.31.250:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 1</a></li>
-            <li><a href="http://192.168.1.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link 2</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -291,6 +359,10 @@ app.get('/api/auth/verify-email', async (req, res) => {
     if (!token || !email) {
       return res.status(400).json({ message: 'Invalid verification link' });
     }
+    
+    // Get server IP addresses for building App links
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost';
     
     let user;
     
@@ -375,8 +447,8 @@ app.get('/api/auth/verify-email', async (req, res) => {
               
               <div class="button-container">
                 <p>If you're using the app on this device, try one of these links:</p>
-                <a href="exp://192.168.31.251:19000/screens/login" class="button">Open App</a>
-                <a href="exp://192.168.31.250:19000/screens/login" class="button">Alternative Link</a>
+                <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
+                <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
               </div>
               
               <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
@@ -489,8 +561,8 @@ app.get('/api/auth/verify-email', async (req, res) => {
             
             <div class="button-container">
               <p>If you're using the app on this device, try one of these links:</p>
-              <a href="exp://192.168.31.251:19000/screens/login" class="button">Open App</a>
-              <a href="exp://192.168.31.250:19000/screens/login" class="button">Alternative Link</a>
+              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
+              <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
             </div>
             
             <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
@@ -546,8 +618,20 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
     
     // Send verification email
-    const backendUrl = `http://localhost:${process.env.PORT || 5000}`;
-    const verificationUrl = `${backendUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`;
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
+    const port = process.env.PORT || 5000;
+    
+    console.log('=== Resend Email Link Details ===');
+    console.log('Available server IPs:', serverIPs);
+    console.log('Primary IP being used:', primaryIP);
+    console.log('Port being used:', port);
+    console.log('Generated verification links:');
+    serverIPs.forEach((ip, index) => {
+      console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
+    });
+    console.log('Localhost link:', `http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
+    console.log('================================');
     
     const mailOptions = {
       from: process.env.MAIL_FROM,
@@ -559,7 +643,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://192.168.31.251:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
+            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -568,8 +652,8 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            <li><a href="http://192.168.31.250:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link 1</a></li>
-            <li><a href="http://192.168.1.100:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link 2</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -685,24 +769,79 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Health check route
-app.get('/health', async (req, res) => {
-  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-  const userCount = mongoose.connection.readyState === 1 
-    ? await User.countDocuments() 
-    : inMemoryUsers.length;
-  
-  // Log client information for debugging
-  console.log('Health check request from:', req.ip);
-  console.log('User-Agent:', req.headers['user-agent']);
-  console.log('Origin:', req.headers.origin);
-  
-  res.status(200).json({ 
-    status: 'ok', 
-    database: dbStatus,
-    users: userCount,
-    server_time: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+app.get('/health', (req, res) => {
+  try {
+    // Return basic server info and network information
+    const networkInterfaces = require('os').networkInterfaces();
+    const ipAddresses = Object.keys(networkInterfaces)
+      .reduce((ips, iface) => {
+        const validIps = networkInterfaces[iface]
+          .filter(details => details.family === 'IPv4' && !details.internal)
+          .map(details => details.address);
+        return [...ips, ...validIps];
+      }, []);
+
+    res.status(200).json({
+      status: 'up',
+      timestamp: new Date().toISOString(),
+      ipAddresses,
+      serverInfo: {
+        hostname: require('os').hostname(),
+        platform: process.platform,
+        nodeVersion: process.version,
+        port: process.env.PORT || 5000
+      },
+      // Add extra fields to help identify this as the Slugger server
+      serverType: 'Slugger Backend',
+      version: '1.0.0'
+    });
+  } catch (error) {
+    console.error('Health check error:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Server error during health check', 
+      error: error.message 
+    });
+  }
+});
+
+// Add a lightweight ping endpoint for quick connectivity checks
+app.get('/ping', (req, res) => {
+  // This is an ultra-lightweight endpoint for connectivity testing
+  // No JSON parsing overhead, just a simple text response
+  res.setHeader('Content-Type', 'text/plain');
+  res.send('PONG');
+});
+
+// Add server discovery endpoint for network scanning
+app.get('/discover', (req, res) => {
+  try {
+    // Get all network interfaces
+    const networkInterfaces = require('os').networkInterfaces();
+    const ipAddresses = Object.keys(networkInterfaces)
+      .reduce((ips, iface) => {
+        const validIps = networkInterfaces[iface]
+          .filter(details => details.family === 'IPv4' && !details.internal)
+          .map(details => details.address);
+        return [...ips, ...validIps];
+      }, []);
+      
+    res.status(200).json({
+      server: 'Slugger Backend',
+      version: '1.0.0',
+      status: 'online',
+      interfaces: ipAddresses,
+      port: process.env.PORT || 5000,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Discovery endpoint error:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Server error during discovery', 
+      error: error.message 
+    });
+  }
 });
 
 // Add a more detailed API test endpoint
@@ -837,10 +976,32 @@ app.post('/api/test/email', async (req, res) => {
 });
 
 // Start server
+// Note: PORT is set to 5001 in the .env file, which overrides this default
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}/api`);
+  
+  // Print out all available IP addresses
+  const networkInterfaces = require('os').networkInterfaces();
+  const ipAddresses = [];
+  
+  Object.keys(networkInterfaces).forEach(iface => {
+    networkInterfaces[iface].forEach(details => {
+      if (details.family === 'IPv4' && !details.internal) {
+        ipAddresses.push(details.address);
+        console.log(`Server available at: http://${details.address}:${PORT}/api`);
+      }
+    });
+  });
+  
   console.log(`Server also available at http://0.0.0.0:${PORT}/api (all interfaces)`);
   console.log(`MongoDB connection string: ${process.env.MONGODB_URI.replace(/\/\/(.+?)@/, '//***@')}`);
+  
+  console.log("\n=== NETWORK DISCOVERY INFO ===");
+  console.log("The server can be auto-discovered on these IPs:");
+  ipAddresses.forEach(ip => {
+    console.log(`- ${ip}`);
+  });
+  console.log("================================\n");
 });
