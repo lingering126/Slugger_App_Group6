@@ -11,7 +11,7 @@ import {
   SafeAreaView
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { FontAwesome, FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
@@ -23,21 +23,21 @@ const slides = [
     title: 'Welcome to Slugger!',
     text: 'Slugger is a lifestyle app designed to keep you and your group motivated to stay active every day.',
     icon: 'running',
-    iconType: 'material'
+    iconType: 'fa5'
   },
   {
     id: '2',
     title: 'Weekly Targets',
     text: 'Each week, your group sets a target, and everyone contributes by logging their daily activities to earn points. Activities can be:\n\n• Physical: Soccer, HIIT, running, etc.\n• Mental: Reading, writing, meditation, etc.\n• Cumulative: Calories burned, sleep hours, etc.\n• Bonus: Extra points! For personal bests and so on.',
-    icon: 'target',
-    iconType: 'material'
+    icon: 'bullseye',
+    iconType: 'fa5'
   },
   {
     id: '3',
     title: 'Daily Consistency',
     text: 'To encourage consistency, you can log up to 4 activities per category per day. (So don\'t be a weekend warrior, keep active everyday!)',
     icon: 'calendar-check',
-    iconType: 'font'
+    iconType: 'fa5'
   },
   {
     id: '4',
@@ -55,8 +55,8 @@ const slides = [
   },
   {
     id: '6',
-    title: 'Join or Create a Group',
-    text: 'To get started, join an existing group or create your own.',
+    title: 'Join or Create a Team',
+    text: 'To get started, join an existing team or create your own.',
     icon: 'users',
     iconType: 'font'
   }
@@ -128,6 +128,8 @@ export default function WelcomeScreen() {
           <View style={styles.iconContainer}>
             {item.iconType === 'font' ? (
               <FontAwesome name={item.icon} size={80} color="#4CAF50" />
+            ) : item.iconType === 'fa5' ? (
+              <FontAwesome5 name={item.icon} size={80} color="#4CAF50" />
             ) : (
               <MaterialCommunityIcons name={item.icon} size={80} color="#4CAF50" />
             )}
@@ -141,14 +143,14 @@ export default function WelcomeScreen() {
                 style={[styles.button, styles.joinButton]} 
                 onPress={handleJoinGroup}
               >
-                <Text style={styles.buttonText}>Join a Group</Text>
+                <Text style={styles.buttonText}>Join a team</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={[styles.button, styles.createButton]} 
                 onPress={handleCreateGroup}
               >
-                <Text style={styles.buttonText}>Create a Group</Text>
+                <Text style={styles.buttonText}>Create a team</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
