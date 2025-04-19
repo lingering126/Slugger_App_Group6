@@ -635,20 +635,11 @@ app.get('/api/auth/verify-email', async (req, res) => {
             body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f9f9f9; }
             .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             h1 { color: #2ecc71; }
-            p { font-size: 18px; line-height: 1.6; color: #555; }
+            p { font-size: 18px; line-height: 1.6; color: #555; margin-top: 20px; }
             .success-icon {
               font-size: 64px;
               color: #2ecc71;
               margin-bottom: 20px;
-            }
-            .note {
-              margin-top: 20px;
-              font-size: 14px;
-              color: #777;
-            }
-            /* Mobile styles */
-            @media (max-width: 600px) {
-              .container { padding: 20px; }
             }
           </style>
         </head>
@@ -657,8 +648,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
             <div class="success-icon">✓</div>
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your account.</p>
-            
-            <p class="note">Please open the Slugger app on your device and log in with your credentials.</p>
+            <p>Please open the Slugger app on your device and log in with your credentials.</p>
           </div>
         </body>
       </html>
@@ -1110,8 +1100,8 @@ app.post('/api/test/email', async (req, res) => {
   }
 });
 
-// Add a test account login endpoint
-app.get('/api/test-account', async (req, res) => {
+// Add a direct test account endpoint without /api prefix for easier access
+app.get('/test-account', async (req, res) => {
   try {
     if (mongoose.connection.readyState !== 1) {
       return res.status(500).json({ message: 'MongoDB not connected' });
@@ -1237,6 +1227,171 @@ app.use('*', (req, res) => {
       </body>
     </html>
   `);
+});
+
+// Add a force-update endpoint for test account
+app.get('/force-update', async (req, res) => {
+  try {
+    res.status(200).send(`
+      <html>
+        <head>
+          <title>Server Force Update</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #2ecc71; }
+            p { font-size: 18px; line-height: 1.6; color: #555; margin-top: 20px; }
+            .success-icon { font-size: 64px; color: #2ecc71; margin-bottom: 20px; }
+            pre { background: #f5f5f5; padding: 10px; border-radius: 4px; text-align: left; overflow: auto; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">⚡</div>
+            <h1>Server Force Update</h1>
+            <p>Creating test account...</p>
+            <div id="result">Working...</div>
+            
+            <script>
+              async function createTestAccount() {
+                try {
+                  const response = await fetch('/api/test-account');
+                  const data = await response.json();
+                  document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                } catch (error) {
+                  document.getElementById('result').innerHTML = '<pre>Error: ' + error.message + '</pre>';
+                }
+              }
+              
+              // Run immediately
+              createTestAccount();
+            </script>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    res.status(500).send(`Error: ${error.message}`);
+  }
+});
+
+// Add an HTML test account creator page
+app.get('/create-test-account', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.send(`
+        <html>
+          <head>
+            <title>Test Account Creator</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f9f9f9; }
+              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+              h1 { color: #e74c3c; }
+              p { font-size: 18px; line-height: 1.6; color: #555; margin-top: 20px; }
+              .icon { font-size: 64px; color: #e74c3c; margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="icon">⚠️</div>
+              <h1>Database Not Connected</h1>
+              <p>MongoDB is not connected. Cannot create test account.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+    
+    // Try to create the test account
+    const testEmail = '1@slugger.com';
+    
+    // Check if the test account exists
+    let testUser = await User.findOne({ email: testEmail });
+    
+    if (!testUser) {
+      // Create the test account
+      console.log('Test account not found, creating it now...');
+      
+      // Hash the password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash('316316', salt);
+      
+      // Create new test user
+      const newTestUser = new User({
+        email: testEmail,
+        password: hashedPassword,
+        isVerified: true, // Already verified
+        verificationToken: null,
+        verificationTokenExpires: null
+      });
+      
+      await newTestUser.save();
+      console.log('Test account created successfully');
+      
+      testUser = newTestUser;
+    }
+    
+    // Return a simple HTML response
+    res.send(`
+      <html>
+        <head>
+          <title>Test Account Creator</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #2ecc71; }
+            p { font-size: 18px; line-height: 1.6; color: #555; margin-top: 20px; }
+            .success-icon { font-size: 64px; color: #2ecc71; margin-bottom: 20px; }
+            .credentials { background: #f5f5f5; padding: 20px; border-radius: 4px; margin-top: 20px; }
+            .label { font-weight: bold; color: #333; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">✓</div>
+            <h1>Test Account Ready</h1>
+            <p>The test account has been ${testUser.isNew ? 'created' : 'verified'}.</p>
+            
+            <div class="credentials">
+              <p><span class="label">Email:</span> ${testEmail}</p>
+              <p><span class="label">Password:</span> 316316</p>
+            </div>
+            
+            <p>You can now log in to the Slugger app using these credentials.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error creating test account:', error);
+    res.status(500).send(`
+      <html>
+        <head>
+          <title>Test Account Creator</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #e74c3c; }
+            p { font-size: 18px; line-height: 1.6; color: #555; margin-top: 20px; }
+            .error-icon { font-size: 64px; color: #e74c3c; margin-bottom: 20px; }
+            .error { background: #f5f5f5; padding: 10px; border-radius: 4px; color: #e74c3c; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="error-icon">⚠️</div>
+            <h1>Error Creating Test Account</h1>
+            <p>An error occurred while creating the test account:</p>
+            <div class="error">${error.message}</div>
+          </div>
+        </body>
+      </html>
+    `);
+  }
 });
 
 // Start server
