@@ -52,22 +52,30 @@ export const getApiUrl = () => {
     return [global.workingApiUrl];
   }
 
+  // Use deployed Render URL as highest priority
+  const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+  console.log('Using deployed Render URL:', deployedUrl);
+  
   // Check if we're running in a web browser environment
   const isWebEnvironment = typeof document !== 'undefined';
   
-  // In web browser environment, prioritize localhost
+  // In web browser environment, prioritize localhost but include deployed URL
   if (isWebEnvironment) {
-    console.log('Detected web environment, prioritizing localhost');
-    return ['http://localhost:5001/api'];
+    console.log('Detected web environment, prioritizing deployed URL and localhost');
+    return [deployedUrl, 'http://localhost:5001/api'];
   }
 
   // Define the backend server IP here - update this to match your actual server IP
   // This can be your computer's IP address on the same network as your phone
   // Using expo-constants to get the server IP
   const serverUrl = IPConfig.getServerUrl();
+  
+  // Create a list of URLs prioritizing the deployed URL
+  const priorityUrls = [deployedUrl];
+  
   if (serverUrl) {
-    console.log('Using Expo Constants server URL:', serverUrl);
-    return [serverUrl];
+    console.log('Adding Expo Constants server URL:', serverUrl);
+    priorityUrls.push(serverUrl);
   }
 
   // Get the server IP from environment or use auto-discovery
@@ -75,7 +83,7 @@ export const getApiUrl = () => {
   console.log('Server IP configuration:', serverIP || 'Using auto-discovery');
   
   // Only include the most likely IPs to avoid unnecessary connection attempts
-  // Initialize an empty array and only add valid IPs
+  // Initialize an array and add deployed URL first
   const possibleIPs = [];
   
   // Add serverIP only if it exists
@@ -151,10 +159,11 @@ export const getApiUrl = () => {
     }
   }).filter(Boolean); // Filter out any null/undefined values
   
-  console.log('Generated API URLs to try:', allUrls);
+  // Make sure deployed URL is first, then add all other URLs
+  console.log('Generated API URLs to try:', [deployedUrl, ...allUrls]);
   
-  // Return all URLs to try, prioritized by past success
-  return getPrioritizedUrls(allUrls);
+  // Return all URLs to try, with deployed URL first, then prioritized by past success
+  return getPrioritizedUrls([deployedUrl, ...allUrls]);
 };
 
 // Simple ping function to test connectivity with minimal overhead
