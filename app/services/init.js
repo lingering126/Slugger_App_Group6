@@ -66,41 +66,58 @@ const initServerConnection = async () => {
   console.log('Initializing server connection...');
   
   try {
-    // First try to use expo-constants to get server IP
-    const pingUrl = IPConfig.getPingUrl();
-    if (pingUrl) {
-      console.log(`Trying ping using Expo Constants: ${pingUrl}`);
-      let isConnected = false;
+    // Check if we're in development mode
+    if (__DEV__) {
+      console.log('Running in development mode, will try local connections');
       
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+      // First try to use expo-constants to get server IP
+      const pingUrl = IPConfig.getPingUrl();
+      if (pingUrl) {
+        console.log(`Trying ping using Expo Constants: ${pingUrl}`);
+        let isConnected = false;
         
-        const response = await fetch(pingUrl, {
-          method: 'GET',
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (response.ok && await response.text() === 'PONG') {
-          console.log('Ping successful using Expo Constants!');
-          global.workingApiUrl = IPConfig.getServerUrl();
-          Utils.recordSuccessfulConnection(global.workingApiUrl);
-          return; // Connection successful, return directly
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
+          
+          const response = await fetch(pingUrl, {
+            method: 'GET',
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (response.ok && await response.text() === 'PONG') {
+            console.log('Ping successful using Expo Constants!');
+            global.workingApiUrl = IPConfig.getServerUrl();
+            Utils.recordSuccessfulConnection(global.workingApiUrl);
+            return; // Connection successful, return directly
+          }
+        } catch (error) {
+          console.log(`Ping failed using Expo Constants: ${error.message}`);
         }
-      } catch (error) {
-        console.log(`Ping failed using Expo Constants: ${error.message}`);
       }
-    }
-    
-    // If Expo Constants method fails, try scanning the network
-    console.log('Scanning network for server...');
-    const scanResult = await Utils.scanNetworkForServer();
-    
-    if (scanResult.status === 'online') {
-      console.log('Server found via network scan:', scanResult.ip);
-      return; // We're already connected, no need to continue
+      
+      // If Expo Constants method fails, try scanning the network
+      console.log('Scanning network for server...');
+      const scanResult = await Utils.scanNetworkForServer();
+      
+      if (scanResult.status === 'online') {
+        console.log('Server found via network scan:', scanResult.ip);
+        return; // We're already connected, no need to continue
+      }
+    } else {
+      console.log('Running in production mode, using deployed URL');
+      // Set the working API URL to the deployed Render URL
+      global.workingApiUrl = 'https://slugger-app-group6.onrender.com/api';
+      
+      // Try a ping to check if it's reachable
+      const pingResult = await Utils.pingServer(global.workingApiUrl);
+      if (pingResult) {
+        console.log('Ping successful to deployed URL!');
+        Utils.recordSuccessfulConnection(global.workingApiUrl);
+        return; // Connection successful, return directly
+      }
     }
     
     // If both methods fail, try a full connection check
@@ -110,22 +127,9 @@ const initServerConnection = async () => {
     const result = await Utils.findBestServerUrl();
     
     if (result.status === 'online') {
-      console.log('Connected to server:', result.url);
+      console.log('Server connection established to:', result.url);
     } else {
-      // If the server is not reachable, retry in the background after a delay
-      // This helps when the app starts before the server is fully up
-      console.log('Server not reachable, will retry in the background...');
-      
-      setTimeout(async () => {
-        console.log('Retrying server connection...');
-        const retryResult = await Utils.findBestServerUrl();
-        
-        if (retryResult.status === 'online') {
-          console.log('Successfully connected on retry:', retryResult.url);
-        } else {
-          console.log('Still cannot connect to server after retry');
-        }
-      }, 5000); // Wait 5 seconds before trying again
+      console.warn('Server connection failed:', result.message);
     }
   } catch (error) {
     console.error('Error initializing server connection:', error);
