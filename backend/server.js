@@ -10,6 +10,15 @@ const os = require('os');
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
+  // Check if an APP_PUBLIC_URL environment variable is set
+  // This should be set to the public domain or IP where the app is accessible
+  if (process.env.APP_PUBLIC_URL) {
+    console.log(`=== Using configured public URL ===`);
+    console.log(`Public URL: ${process.env.APP_PUBLIC_URL}`);
+    // Return the configured public URL as the first (and only) option
+    return [process.env.APP_PUBLIC_URL];
+  }
+  
   const networkInterfaces = os.networkInterfaces();
   const serverIPs = [];
   
@@ -297,17 +306,23 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+            <a href="${process.env.APP_PUBLIC_URL ? `http://${process.env.APP_PUBLIC_URL}` : `http://${primaryIP}:${process.env.PORT || 5000}`}/api/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
           </div>
           
-          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
+          <p style="font-size: 14px; color: #666;">If you're using a mobile device and the button doesn't work, try copying and pasting this link into your browser:</p>
+          
+          <div style="margin: 15px 0; padding: 10px; background-color: #f5f5f5; border-radius: 4px; word-break: break-all; font-family: monospace; font-size: 12px;">
+            ${process.env.APP_PUBLIC_URL ? `http://${process.env.APP_PUBLIC_URL}` : `http://${primaryIP}:${process.env.PORT || 5000}`}/api/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}
+          </div>
+          
+          <p style="font-size: 14px; color: #666;">If the links above don't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -402,8 +417,9 @@ app.get('/api/auth/verify-email', async (req, res) => {
         <html>
           <head>
             <title>Verification Failed</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+              body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f9f9f9; }
               .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
               h1 { color: #e74c3c; }
               p { font-size: 18px; line-height: 1.6; color: #555; }
@@ -436,6 +452,15 @@ app.get('/api/auth/verify-email', async (req, res) => {
                 font-size: 14px;
                 color: #777;
               }
+              /* Mobile styles */
+              @media (max-width: 600px) {
+                .container { padding: 20px; }
+                .button { 
+                  display: block;
+                  width: 80%;
+                  margin: 10px auto;
+                }
+              }
             </style>
           </head>
           <body>
@@ -446,9 +471,9 @@ app.get('/api/auth/verify-email', async (req, res) => {
               <p>Please try logging in or request a new verification email.</p>
               
               <div class="button-container">
-                <p>If you're using the app on this device, try one of these links:</p>
+                <p>If you're using the app on this device, tap one of these links:</p>
                 <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-                <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
+                <a href="slugger://login" class="button">Open App (Alternative)</a>
               </div>
               
               <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
@@ -463,8 +488,9 @@ app.get('/api/auth/verify-email', async (req, res) => {
       <html>
         <head>
           <title>Email Verified</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+            body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f9f9f9; }
             .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             h1 { color: #2ecc71; }
             p { font-size: 18px; line-height: 1.6; color: #555; }
@@ -497,6 +523,15 @@ app.get('/api/auth/verify-email', async (req, res) => {
               font-size: 14px;
               color: #777;
             }
+            /* Mobile styles */
+            @media (max-width: 600px) {
+              .container { padding: 20px; }
+              .button { 
+                display: block;
+                width: 80%;
+                margin: 10px auto;
+              }
+            }
           </style>
         </head>
         <body>
@@ -504,7 +539,14 @@ app.get('/api/auth/verify-email', async (req, res) => {
             <div class="success-icon">✓</div>
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your account.</p>
-            <p>Please open the Slugger app on your device and log in with your credentials.</p>
+            
+            <div class="button-container">
+              <p>Please open the Slugger app on your device:</p>
+              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
+              <a href="slugger://login" class="button">Open App (Alternative)</a>
+            </div>
+            
+            <p class="note">If the buttons above don't work, please manually open the Slugger app on your device and log in with your credentials.</p>
           </div>
         </body>
       </html>
@@ -643,17 +685,23 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
+            <a href="${process.env.APP_PUBLIC_URL ? `http://${process.env.APP_PUBLIC_URL}` : `http://${primaryIP}:${port}`}/api/auth/verify-email?token=${user.verificationToken}&email=${encodeURIComponent(email)}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
           </div>
           
-          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
+          <p style="font-size: 14px; color: #666;">If you're using a mobile device and the button doesn't work, try copying and pasting this link into your browser:</p>
+          
+          <div style="margin: 15px 0; padding: 10px; background-color: #f5f5f5; border-radius: 4px; word-break: break-all; font-family: monospace; font-size: 12px;">
+            ${process.env.APP_PUBLIC_URL ? `http://${process.env.APP_PUBLIC_URL}` : `http://${primaryIP}:${port}`}/api/auth/verify-email?token=${user.verificationToken}&email=${encodeURIComponent(email)}
+          </div>
+          
+          <p style="font-size: 14px; color: #666;">If the links above don't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Local Link (localhost)</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${encodeURIComponent(email)}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${encodeURIComponent(email)}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
