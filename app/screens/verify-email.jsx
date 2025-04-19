@@ -3,8 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import axios from 'axios';
+import { getApiUrl } from '../utils';
 
-const API_URL = 'http://your-backend-url.com/api';
+// Use the deployed Render URL
+const API_URL = 'https://slugger-app-group6.onrender.com/api';
 
 export default function VerifyEmail({ navigation }) {
   const [loading, setLoading] = useState(true);
