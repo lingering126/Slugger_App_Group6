@@ -8,13 +8,15 @@ import {
   FlatList,
   Image,
   Animated,
-  SafeAreaView
+  SafeAreaView,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FontAwesome, FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import platformHelpers from '../utils/platformHelpers';
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = platformHelpers.getScreenDimensions();
 
 // Welcome page slides data
 const slides = [
@@ -142,6 +144,7 @@ export default function WelcomeScreen() {
               <TouchableOpacity 
                 style={[styles.button, styles.joinButton]} 
                 onPress={handleJoinGroup}
+                {...platformHelpers.getTouchableProps()}
               >
                 <Text style={styles.buttonText}>Join a team</Text>
               </TouchableOpacity>
@@ -149,6 +152,7 @@ export default function WelcomeScreen() {
               <TouchableOpacity 
                 style={[styles.button, styles.createButton]} 
                 onPress={handleCreateGroup}
+                {...platformHelpers.getTouchableProps()}
               >
                 <Text style={styles.buttonText}>Create a team</Text>
               </TouchableOpacity>
@@ -156,6 +160,7 @@ export default function WelcomeScreen() {
               <TouchableOpacity 
                 style={[styles.button, styles.skipButton]} 
                 onPress={handleSkipForNow}
+                {...platformHelpers.getTouchableProps()}
               >
                 <Text style={styles.skipButtonText}>Not for now</Text>
               </TouchableOpacity>
@@ -242,6 +247,11 @@ export default function WelcomeScreen() {
           setCurrentIndex(index);
         }}
         scrollEventThrottle={16}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+        snapToInterval={width}
+        decelerationRate="fast"
+        snapToAlignment="center"
       />
       
       {renderPagination()}
@@ -249,12 +259,20 @@ export default function WelcomeScreen() {
       {currentIndex < slides.length - 1 && (
         <View style={styles.navigationButtons}>
           {currentIndex > 0 && (
-            <TouchableOpacity style={styles.navButton} onPress={handlePrev}>
+            <TouchableOpacity 
+              style={styles.navButton} 
+              onPress={handlePrev}
+              activeOpacity={0.7}
+            >
               <Ionicons name="chevron-back" size={24} color="#4CAF50" />
             </TouchableOpacity>
           )}
           
-          <TouchableOpacity style={styles.navButton} onPress={handleNext}>
+          <TouchableOpacity 
+            style={styles.navButton} 
+            onPress={handleNext}
+            activeOpacity={0.7}
+          >
             <Ionicons name="chevron-forward" size={24} color="#4CAF50" />
           </TouchableOpacity>
         </View>
@@ -270,7 +288,7 @@ const styles = StyleSheet.create({
   },
   slide: {
     width,
-    height,
+    height: platformHelpers.getPlatformStyleValue('100vh', height),
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -280,6 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
+    maxWidth: platformHelpers.getPlatformStyleValue(600, '100%'),
   },
   iconContainer: {
     width: 150,
@@ -327,6 +346,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 40,
     width: '80%',
+    maxWidth: 500,
     alignSelf: 'center',
   },
   navButton: {
@@ -341,10 +361,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+    ...platformHelpers.isWeb && { cursor: 'pointer' },
   },
   buttonContainer: {
     width: '100%',
     marginTop: 40,
+    maxWidth: platformHelpers.getPlatformStyleValue(400, '100%'),
   },
   button: {
     paddingVertical: 15,
@@ -356,6 +378,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+    ...platformHelpers.isWeb && { cursor: 'pointer' },
   },
   joinButton: {
     backgroundColor: '#4CAF50',

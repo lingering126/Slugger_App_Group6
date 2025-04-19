@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
+import platformHelpers from '../utils/platformHelpers';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
@@ -379,6 +380,7 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              {...platformHelpers.getInputProps()}
             />
             
             <View style={styles.passwordContainer}>
@@ -388,6 +390,7 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                {...platformHelpers.getInputProps()}
               />
               <TouchableOpacity 
                 style={styles.eyeIcon} 
@@ -419,6 +422,7 @@ export default function LoginScreen() {
               style={styles.button} 
               onPress={handleLogin}
               disabled={loading || serverStatus === 'offline'}
+              {...platformHelpers.getTouchableProps()}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />

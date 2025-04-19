@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Keyb
 import { useRouter } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
+import platformHelpers from '../utils/platformHelpers';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
@@ -264,6 +265,7 @@ export default function SignupScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              {...platformHelpers.getInputProps()}
             />
             
             <View style={styles.passwordContainer}>
@@ -273,10 +275,12 @@ export default function SignupScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                {...platformHelpers.getInputProps()}
               />
               <TouchableOpacity 
                 style={styles.eyeIcon} 
                 onPress={togglePasswordVisibility}
+                {...platformHelpers.getTouchableProps()}
               >
                 <FontAwesome 
                   name={showPassword ? 'eye' : 'eye-slash'} 
@@ -293,10 +297,12 @@ export default function SignupScreen() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
+                {...platformHelpers.getInputProps()}
               />
               <TouchableOpacity 
                 style={styles.eyeIcon} 
                 onPress={toggleConfirmPasswordVisibility}
+                {...platformHelpers.getTouchableProps()}
               >
                 <FontAwesome 
                   name={showConfirmPassword ? 'eye' : 'eye-slash'} 
