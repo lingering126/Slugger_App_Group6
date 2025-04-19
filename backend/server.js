@@ -83,58 +83,15 @@ dotenv.config();
 // Create Express app
 const app = express();
 
-// Configure Nodemailer based on environment
-const emailConfig = {
-  host: process.env.MAIL_HOST,
-  port: parseInt(process.env.MAIL_PORT),
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS
-  },
-  // Add secure option for TLS connections
-  secure: process.env.MAIL_PORT === '465',
-  // Add additional options for better deliverability
-  
-  tls: {
-    // Do not fail on invalid certs
-    rejectUnauthorized: false
-  }
-};
-
-// Log email configuration (without sensitive data)
-console.log(`Email configuration: Using ${emailConfig.host}:${emailConfig.port} with user ${emailConfig.auth.user}`);
-
-// Create transporter with the configuration
-const transporter = nodemailer.createTransport(emailConfig);
-
-// Verify the transporter configuration
-transporter.verify()
-  .then(() => console.log('Email service is ready to send emails'))
-  .catch(err => {
-    console.error('Error with email configuration:', err);
-    console.error('Please check your email credentials and settings in .env file');
-  });
-
-// CORS configuration
-const corsOptions = {
-  origin: '*', // Allow all origins in development
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
-
-// Middleware
-app.use(cors(corsOptions));
-
-// Add OPTIONS handling for preflight requests
-app.options('*', cors(corsOptions));
-
-app.use(express.json());
-
-// Add a root route handler
+// Add a root route handler (moved to top priority)
 app.get('/', (req, res) => {
+  // Check if the request accepts HTML
+  const acceptsHtml = req.accepts('html');
+  
+  if (!acceptsHtml) {
+    return res.status(200).send('Slugger API Server is running.');
+  }
+  
   res.status(200).send(`
     <html>
       <head>
@@ -227,6 +184,56 @@ app.get('/', (req, res) => {
     </html>
   `);
 });
+
+// Configure Nodemailer based on environment
+const emailConfig = {
+  host: process.env.MAIL_HOST,
+  port: parseInt(process.env.MAIL_PORT),
+  auth: {
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS
+  },
+  // Add secure option for TLS connections
+  secure: process.env.MAIL_PORT === '465',
+  // Add additional options for better deliverability
+  
+  tls: {
+    // Do not fail on invalid certs
+    rejectUnauthorized: false
+  }
+};
+
+// Log email configuration (without sensitive data)
+console.log(`Email configuration: Using ${emailConfig.host}:${emailConfig.port} with user ${emailConfig.auth.user}`);
+
+// Create transporter with the configuration
+const transporter = nodemailer.createTransport(emailConfig);
+
+// Verify the transporter configuration
+transporter.verify()
+  .then(() => console.log('Email service is ready to send emails'))
+  .catch(err => {
+    console.error('Error with email configuration:', err);
+    console.error('Please check your email credentials and settings in .env file');
+  });
+
+// CORS configuration
+const corsOptions = {
+  origin: '*', // Allow all origins in development
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Middleware
+app.use(cors(corsOptions));
+
+// Add OPTIONS handling for preflight requests
+app.options('*', cors(corsOptions));
+
+app.use(express.json());
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI)
@@ -1146,4 +1153,52 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`- ${ip}`);
   });
   console.log("================================\n");
+});
+
+// Add a catch-all route handler for undefined routes
+app.use('*', (req, res) => {
+  res.status(404).send(`
+    <html>
+      <head>
+        <title>404 - Not Found</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px;
+            text-align: center;
+          }
+          h1 { color: #e74c3c; }
+          .back { 
+            margin-top: 20px;
+            color: #6c63ff;
+          }
+          .container {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 40px auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          .error-code {
+            font-size: 72px;
+            color: #e74c3c;
+            margin: 0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <p class="error-code">404</p>
+          <h1>Page Not Found</h1>
+          <p>The requested URL ${req.originalUrl} was not found on this server.</p>
+          <p class="back"><a href="/">Go to the homepage</a></p>
+        </div>
+      </body>
+    </html>
+  `);
 });
