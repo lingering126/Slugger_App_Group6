@@ -89,6 +89,199 @@ export default function LoginScreen() {
     checkServer();
   }, []);
 
+  // Web-specific fixes for input focus and cursor issues
+  useEffect(() => {
+    if (platformHelpers.isWeb) {
+      // Create a style element to add CSS rules for proper cursor behavior
+      const style = document.createElement('style');
+      style.textContent = `
+        /* Global reset for inputs */
+        input, textarea {
+          box-sizing: border-box !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        
+        /* Make single inputs look good */
+        .form-input {
+          display: block !important;
+          width: 100% !important;
+          height: 50px !important; 
+          padding: 0 20px !important;
+          margin-bottom: 15px !important;
+          border: 1px solid #ddd !important;
+          border-radius: 25px !important;
+          font-size: 16px !important;
+          color: #000 !important;
+          background-color: #fff !important;
+          box-shadow: none !important;
+          cursor: text !important;
+          outline: none !important;
+        }
+        
+        /* Fix password container */
+        .password-container {
+          display: flex !important;
+          align-items: center !important;
+          width: 100% !important;
+          height: 50px !important;
+          margin-bottom: 15px !important;
+          padding: 0 !important;
+          border: 1px solid #ddd !important;
+          border-radius: 25px !important;
+          background-color: #fff !important;
+          position: relative !important;
+        }
+        
+        /* Password input inside container */
+        .password-input {
+          flex: 1 !important;
+          height: 100% !important;
+          padding: 0 50px 0 20px !important;
+          border: none !important;
+          background: transparent !important;
+          font-size: 16px !important;
+          color: #000 !important;
+          outline: none !important;
+        }
+        
+        /* Eye icon - IMPORTANT STYLES */
+        .eye-icon {
+          position: absolute !important;
+          right: 0 !important;
+          top: 0 !important;
+          width: 50px !important;
+          height: 50px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background: transparent !important;
+          border: none !important;
+          cursor: pointer !important;
+          z-index: 10 !important;
+          pointer-events: auto !important;
+        }
+        
+        /* More direct eye icon target */
+        .password-container > [role="button"],
+        .passwordContainer > [role="button"] {
+          position: absolute !important;
+          right: 0 !important;
+          top: 0 !important;
+          width: 50px !important;
+          height: 50px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background: transparent !important;
+          z-index: 10 !important;
+        }
+        
+        /* Fix placeholder color */
+        ::placeholder {
+          color: #bbbbbb !important;
+          opacity: 1 !important;
+        }
+
+        /* Fix for double inputs in React Native Web */
+        input[type="email"], input[type="text"], input[type="password"] {
+          display: block !important;
+          opacity: 1 !important;
+          position: static !important;
+        }
+
+        /* Even more specific eye icon targeting */
+        [data-testid="password-toggle-button"],
+        button svg,
+        div[role="button"] svg,
+        .eye-icon svg,
+        .eye-icon-btn svg,
+        svg[class*="FontAwesome"],
+        .passwordContainer svg {
+          position: absolute !important;
+          top: 50% !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) !important;
+          color: #666 !important;
+          z-index: 20 !important;
+          pointer-events: none !important;
+          width: 20px !important;
+      `;
+      document.head.appendChild(style);
+      
+      // Function to apply our custom styling
+      const applyCustomStyling = () => {
+        // Clean up any mess that might have been caused by multiple renders
+        document.querySelectorAll('input').forEach(input => {
+          // Make sure siblings are properly stacked
+          const parent = input.parentElement;
+          if (parent) {
+            Array.from(parent.children).forEach(child => {
+              if (child !== input && child.tagName === 'INPUT') {
+                child.style.display = 'none';
+              }
+            });
+          }
+        });
+        
+        // Single inputs (like email)
+        const singleInputs = document.querySelectorAll('input[type="email"], input[type="text"]');
+        singleInputs.forEach(input => {
+          input.classList.add('form-input');
+        });
+        
+        // Password containers - more forceful approach
+        const passwordContainers = document.querySelectorAll('.passwordContainer');
+        passwordContainers.forEach(container => {
+          container.classList.add('password-container');
+          
+          // Find password input inside container
+          const input = container.querySelector('input');
+          if (input) {
+            input.classList.add('password-input');
+            input.style.paddingRight = '50px';
+          }
+          
+          // Direct eye icon handling - MORE RELIABLE APPROACH
+          const eyeIconElements = container.querySelectorAll('[role="button"], div[role="button"], button');
+          eyeIconElements.forEach(icon => {
+            icon.className = 'eye-icon'; // Replace any classes
+            icon.style.position = 'absolute';
+            icon.style.right = '0';
+            icon.style.top = '0';
+            icon.style.width = '50px';
+            icon.style.height = '50px';
+            icon.style.display = 'flex';
+            icon.style.alignItems = 'center';
+            icon.style.justifyContent = 'center';
+            icon.style.background = 'transparent';
+            icon.style.zIndex = '10'; 
+            icon.style.cursor = 'pointer';
+            icon.style.border = 'none';
+          });
+        });
+      };
+      
+      // Apply initially with a delay to ensure DOM is ready
+      setTimeout(applyCustomStyling, 100);
+      
+      // And set up a bigger delay for any race conditions
+      setTimeout(applyCustomStyling, 500);
+      
+      // Run it on resize/orientation change
+      window.addEventListener('resize', applyCustomStyling);
+      
+      // Apply on window load as well
+      window.addEventListener('load', applyCustomStyling);
+      
+      // Clean up
+      return () => {
+        window.removeEventListener('load', applyCustomStyling);
+        window.removeEventListener('resize', applyCustomStyling);
+      };
+    }
+  }, []);
+
   const handleLogin = async () => {
     try {
       setLoading(true);
@@ -354,7 +547,7 @@ export default function LoginScreen() {
           style={styles.contentContainer} 
           onPress={Keyboard.dismiss}
         >
-          <Text style={styles.title}>Log in with your email</Text>
+          <Text style={[styles.title, { className: 'formTitle' }]}>Log in with your email</Text>
           
           {serverStatus === 'offline' && (
             <View style={styles.errorContainer}>
@@ -372,7 +565,7 @@ export default function LoginScreen() {
             <Text style={styles.errorText}>{error}</Text>
           )}
           
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, { className: 'formContainer' }]}>
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -380,26 +573,39 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              {...platformHelpers.isWeb && { type: "email" }}
               {...platformHelpers.getInputProps()}
             />
             
-            <View style={styles.passwordContainer}>
+            <View style={[styles.passwordContainer, { className: 'passwordContainer' }]}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Password"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                {...platformHelpers.isWeb && { type: showPassword ? "text" : "password" }}
                 {...platformHelpers.getInputProps()}
               />
               <TouchableOpacity 
-                style={styles.eyeIcon} 
+                style={styles.eyeIcon}
                 onPress={togglePasswordVisibility}
+                {...platformHelpers.isWeb && { 
+                  role: "button", 
+                  ariaLabel: "Toggle password visibility",
+                  className: "eye-icon-btn"
+                }}
               >
                 <FontAwesome 
                   name={showPassword ? 'eye' : 'eye-slash'} 
                   size={20} 
-                  color="#666" 
+                  color="#666"
+                  style={platformHelpers.isWeb ? {
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)'
+                  } : undefined}
                 />
               </TouchableOpacity>
             </View>
@@ -418,20 +624,51 @@ export default function LoginScreen() {
           </View>
           
           <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={styles.button} 
-              onPress={handleLogin}
-              disabled={loading || serverStatus === 'offline'}
-              {...platformHelpers.getTouchableProps()}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Log in</Text>
-              )}
-            </TouchableOpacity>
+            {platformHelpers.isWeb ? (
+              <button 
+                onClick={handleLogin}
+                disabled={loading || serverStatus === 'offline'}
+                className="login-button"
+                style={{
+                  width: '100%',
+                  height: 50,
+                  backgroundColor: '#6c63ff',
+                  borderRadius: 25,
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#fff',
+                  fontSize: 18,
+                  fontWeight: 600,
+                  marginBottom: 20,
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  outline: 'none',
+                  position: 'relative',
+                  zIndex: 1
+                }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  "Log in"
+                )}
+              </button>
+            ) : (
+              <TouchableOpacity 
+                style={styles.button}
+                onPress={handleLogin}
+                disabled={loading || serverStatus === 'offline'}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Log in</Text>
+                )}
+              </TouchableOpacity>
+            )}
             
-            <View style={styles.signupContainer}>
+            <View style={[styles.signupContainer, { className: 'linkContainer' }]}>
               <Text style={styles.signupText}>No account? </Text>
               <TouchableOpacity onPress={navigateToSignup}>
                 <Text style={styles.signupLink}>Sign up</Text>
@@ -448,25 +685,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+    ...(platformHelpers.isWeb && {
+      maxWidth: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }),
   },
   keyboardAvoidingView: {
     flex: 1,
+    ...(platformHelpers.isWeb && {
+      maxWidth: 450,
+      width: '100%',
+    }),
   },
   contentContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+    ...(platformHelpers.isWeb && {
+      width: '100%',
+      maxWidth: 450,
+      padding: 40,
+      boxShadow: 'none',
+      borderRadius: 0,
+      backgroundColor: '#fff',
+    }),
   },
   title: {
     fontSize: 24,
     fontWeight: '500',
     marginBottom: 40,
     color: '#666',
+    textAlign: 'center',
   },
   inputContainer: {
     width: '100%',
     marginBottom: 30,
+    maxWidth: platformHelpers.isWeb ? 400 : '100%',
   },
   input: {
     width: '100%',
@@ -477,6 +733,12 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     paddingHorizontal: 20,
     fontSize: 16,
+    backgroundColor: '#fff',
+    ...(platformHelpers.isWeb && {
+      display: 'block',
+      position: 'static',
+      zIndex: 'auto'
+    })
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -487,16 +749,31 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 25,
     marginBottom: 15,
+    backgroundColor: '#fff',
+    ...(platformHelpers.isWeb && {
+      display: 'flex',
+      position: 'relative',
+      zIndex: 'auto',
+      overflow: 'visible'
+    })
   },
   passwordInput: {
     flex: 1,
     height: '100%',
     paddingHorizontal: 20,
     fontSize: 16,
+    ...(platformHelpers.isWeb && {
+      display: 'block',
+      position: 'static',
+      zIndex: 'auto',
+      backgroundColor: 'transparent',
+      border: 'none'
+    })
   },
   eyeIcon: {
     padding: 10,
     marginRight: 5,
+    zIndex: 2,
   },
   rememberContainer: {
     flexDirection: 'row',
@@ -512,6 +789,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
   rememberText: {
     fontSize: 14,
@@ -520,6 +798,7 @@ const styles = StyleSheet.create({
   buttonContainer: {
     width: '100%',
     alignItems: 'center',
+    maxWidth: platformHelpers.getPlatformStyleValue(400, '100%'),
   },
   button: {
     width: '100%',

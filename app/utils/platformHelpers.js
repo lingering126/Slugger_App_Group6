@@ -27,31 +27,63 @@ export const getScreenDimensions = () => {
   };
 };
 
+// Get platform-specific touchable props
+export const getTouchableProps = () => {
+  if (isWeb) {
+    return {
+      activeOpacity: 0.7,
+      accessibilityRole: 'button',
+      style: { 
+        cursor: 'pointer'
+      }
+    };
+  }
+  
+  return {
+    activeOpacity: 0.8
+  };
+};
+
 // Get platform-specific input props to fix focus issues on web
 export const getInputProps = () => {
   if (isWeb) {
     return {
       autoCorrect: false,
       spellCheck: false,
-      autoFocus: false,
-      blurOnSubmit: false
-    };
-  }
-  
-  return {};
-};
-
-// Get platform-specific touchable props
-export const getTouchableProps = () => {
-  if (isWeb) {
-    return {
-      activeOpacity: 0.7,
-      style: { cursor: 'pointer' }
+      autoCapitalize: 'none',
+      autoComplete: 'off',
+      tabIndex: 0,
+      className: 'web-input',
+      placeholderTextColor: '#bbbbbb',
+      style: {
+        cursor: 'text !important',
+        caretColor: 'black !important',
+        outline: 'none !important',
+        userSelect: 'text !important',
+        WebkitUserSelect: 'text !important',
+        touchAction: 'auto !important',
+        pointerEvents: 'auto !important',
+        backgroundColor: 'white !important',
+        position: 'static',
+        border: 'none'
+      },
+      onFocus: (e) => {
+        // Ensure the input is properly focused
+        if (e.target) {
+          e.target.style.outline = 'none';
+          e.target.style.position = 'static';
+        }
+      },
+      onClick: (e) => {
+        // Prevent event bubbling and ensure focus
+        e.stopPropagation();
+        e.target.focus();
+      }
     };
   }
   
   return {
-    activeOpacity: 0.8
+    placeholderTextColor: '#bbbbbb'
   };
 };
 

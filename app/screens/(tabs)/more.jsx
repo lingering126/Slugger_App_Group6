@@ -2,40 +2,57 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "rea
 import { useRouter } from "expo-router";
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import platformHelpers from '../../utils/platformHelpers';
 
 export default function MoreScreen() {
   const router = useRouter();
 
   const handleSignOut = async () => {
     try {
-      // Show confirmation alert before signing out
-      Alert.alert(
-        "Sign Out",
-        "Are you sure you want to sign out?",
-        [
-          {
-            text: "Cancel",
-            style: "cancel"
-          },
-          {
-            text: "Sign Out",
-            onPress: async () => {
-              // Clear authentication tokens
-              await AsyncStorage.removeItem('token');
-              await AsyncStorage.removeItem('user');
-              
-              // Optionally keep saved email for convenience but clear password
-              await AsyncStorage.removeItem('savedPassword');
-              
-              // Clear any cached connection URLs (optional)
-              global.workingApiUrl = null;
-              
-              // Navigate to login screen
-              router.replace('/screens/login');
+      if (platformHelpers.isWeb) {
+        // For web platform, directly sign out without showing the alert
+        // Clear authentication tokens
+        await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('user');
+        
+        // Optionally keep saved email for convenience but clear password
+        await AsyncStorage.removeItem('savedPassword');
+        
+        // Clear any cached connection URLs (optional)
+        global.workingApiUrl = null;
+        
+        // Navigate to login screen
+        router.replace('/screens/login');
+      } else {
+        // Show confirmation alert before signing out on mobile platforms
+        Alert.alert(
+          "Sign Out",
+          "Are you sure you want to sign out?",
+          [
+            {
+              text: "Cancel",
+              style: "cancel"
+            },
+            {
+              text: "Sign Out",
+              onPress: async () => {
+                // Clear authentication tokens
+                await AsyncStorage.removeItem('token');
+                await AsyncStorage.removeItem('user');
+                
+                // Optionally keep saved email for convenience but clear password
+                await AsyncStorage.removeItem('savedPassword');
+                
+                // Clear any cached connection URLs (optional)
+                global.workingApiUrl = null;
+                
+                // Navigate to login screen
+                router.replace('/screens/login');
+              }
             }
-          }
-        ]
-      );
+          ]
+        );
+      }
     } catch (error) {
       console.error('Error signing out:', error);
       Alert.alert('Error', 'Failed to sign out. Please try again.');
@@ -49,13 +66,38 @@ export default function MoreScreen() {
       </View>
       
       <View style={styles.content}>
-        <TouchableOpacity 
-          style={styles.signOutButton} 
-          onPress={handleSignOut}
-        >
-          <FontAwesome name="sign-out" size={24} color="#721c24" style={styles.buttonIcon} />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
+        {platformHelpers.isWeb ? (
+          <button 
+            onClick={handleSignOut}
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: "#f8d7da",
+              paddingTop: 16,
+              paddingBottom: 16,
+              paddingLeft: 30,
+              paddingRight: 30,
+              borderRadius: 8,
+              width: '100%',
+              maxWidth: 300,
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <FontAwesome name="sign-out" size={24} color="#721c24" style={{marginRight: 12}} />
+            <span style={{color: "#721c24", fontWeight: 600, fontSize: 18}}>Sign Out</span>
+          </button>
+        ) : (
+          <TouchableOpacity 
+            style={styles.signOutButton} 
+            onPress={handleSignOut}
+          >
+            <FontAwesome name="sign-out" size={24} color="#721c24" style={styles.buttonIcon} />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+        )}
       </View>
       
       <View style={styles.footer}>

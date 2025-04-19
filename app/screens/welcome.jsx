@@ -141,29 +141,93 @@ export default function WelcomeScreen() {
           
           {index === slides.length - 1 && (
             <View style={styles.buttonContainer}>
-              <TouchableOpacity 
-                style={[styles.button, styles.joinButton]} 
-                onPress={handleJoinGroup}
-                {...platformHelpers.getTouchableProps()}
-              >
-                <Text style={styles.buttonText}>Join a team</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.button, styles.createButton]} 
-                onPress={handleCreateGroup}
-                {...platformHelpers.getTouchableProps()}
-              >
-                <Text style={styles.buttonText}>Create a team</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.button, styles.skipButton]} 
-                onPress={handleSkipForNow}
-                {...platformHelpers.getTouchableProps()}
-              >
-                <Text style={styles.skipButtonText}>Not for now</Text>
-              </TouchableOpacity>
+              {platformHelpers.isWeb ? (
+                <>
+                  <button
+                    onClick={handleJoinGroup}
+                    style={{
+                      width: '100%',
+                      paddingVertical: 15,
+                      borderRadius: 10,
+                      backgroundColor: '#4CAF50',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: 16,
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      marginBottom: 15,
+                      padding: '15px 0',
+                      display: 'block',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                    }}
+                  >
+                    Join a team
+                  </button>
+                  
+                  <button
+                    onClick={handleCreateGroup}
+                    style={{
+                      width: '100%',
+                      paddingVertical: 15,
+                      borderRadius: 10,
+                      backgroundColor: '#2196F3',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: 16,
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      marginBottom: 15,
+                      padding: '15px 0',
+                      display: 'block',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                    }}
+                  >
+                    Create a team
+                  </button>
+                  
+                  <button
+                    onClick={handleSkipForNow}
+                    style={{
+                      width: '100%',
+                      paddingVertical: 15,
+                      borderRadius: 10,
+                      backgroundColor: 'transparent',
+                      border: '1px solid #ccc',
+                      color: '#666',
+                      fontSize: 16,
+                      cursor: 'pointer',
+                      marginBottom: 15,
+                      padding: '15px 0',
+                      display: 'block'
+                    }}
+                  >
+                    Not for now
+                  </button>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.button, styles.joinButton]} 
+                    onPress={handleJoinGroup}
+                  >
+                    <Text style={styles.buttonText}>Join a team</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.button, styles.createButton]} 
+                    onPress={handleCreateGroup}
+                  >
+                    <Text style={styles.buttonText}>Create a team</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.button, styles.skipButton]} 
+                    onPress={handleSkipForNow}
+                  >
+                    <Text style={styles.skipButtonText}>Not for now</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           )}
         </Animated.View>
