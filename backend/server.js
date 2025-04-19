@@ -83,6 +83,39 @@ dotenv.config();
 // Create Express app
 const app = express();
 
+// Absolute simplest route for diagnostics
+app.get('/test', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.send('Slugger server is running. 🚀');
+});
+
+// Add a simple debug route
+app.get('/debug', (req, res) => {
+  try {
+    const debugInfo = {
+      timestamp: new Date().toISOString(),
+      node_env: process.env.NODE_ENV || 'not set',
+      port: process.env.PORT || '5000',
+      app_public_url: process.env.APP_PUBLIC_URL || 'not set',
+      mongodb_status: mongoose.connection.readyState,
+      headers: req.headers,
+      routes: app._router.stack
+        .filter(r => r.route && r.route.path)
+        .map(r => ({
+          path: r.route.path,
+          methods: Object.keys(r.route.methods).filter(m => r.route.methods[m])
+        }))
+    };
+    
+    res.status(200).json(debugInfo);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // Add a root route handler (moved to top priority)
 app.get('/', (req, res) => {
   // Check if the request accepts HTML
@@ -1124,37 +1157,6 @@ app.post('/api/test/email', async (req, res) => {
   }
 });
 
-// Start server
-// Note: PORT is set to 5001 in the .env file, which overrides this default
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api`);
-  
-  // Print out all available IP addresses
-  const networkInterfaces = require('os').networkInterfaces();
-  const ipAddresses = [];
-  
-  Object.keys(networkInterfaces).forEach(iface => {
-    networkInterfaces[iface].forEach(details => {
-      if (details.family === 'IPv4' && !details.internal) {
-        ipAddresses.push(details.address);
-        console.log(`Server available at: http://${details.address}:${PORT}/api`);
-      }
-    });
-  });
-  
-  console.log(`Server also available at http://0.0.0.0:${PORT}/api (all interfaces)`);
-  console.log(`MongoDB connection string: ${process.env.MONGODB_URI.replace(/\/\/(.+?)@/, '//***@')}`);
-  
-  console.log("\n=== NETWORK DISCOVERY INFO ===");
-  console.log("The server can be auto-discovered on these IPs:");
-  ipAddresses.forEach(ip => {
-    console.log(`- ${ip}`);
-  });
-  console.log("================================\n");
-});
-
 // Add a catch-all route handler for undefined routes
 app.use('*', (req, res) => {
   res.status(404).send(`
@@ -1201,4 +1203,34 @@ app.use('*', (req, res) => {
       </body>
     </html>
   `);
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`API available at http://localhost:${PORT}/api`);
+  
+  // Print out all available IP addresses
+  const networkInterfaces = require('os').networkInterfaces();
+  const ipAddresses = [];
+  
+  Object.keys(networkInterfaces).forEach(iface => {
+    networkInterfaces[iface].forEach(details => {
+      if (details.family === 'IPv4' && !details.internal) {
+        ipAddresses.push(details.address);
+        console.log(`Server available at: http://${details.address}:${PORT}/api`);
+      }
+    });
+  });
+  
+  console.log(`Server also available at http://0.0.0.0:${PORT}/api (all interfaces)`);
+  console.log(`MongoDB connection string: ${process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/\/\/(.+?)@/, '//***@') : 'Not configured'}`);
+  
+  console.log("\n=== NETWORK DISCOVERY INFO ===");
+  console.log("The server can be auto-discovered on these IPs:");
+  ipAddresses.forEach(ip => {
+    console.log(`- ${ip}`);
+  });
+  console.log("================================\n");
 });
