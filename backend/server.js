@@ -270,7 +270,11 @@ app.use(express.json());
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB Atlas'))
+  .then(() => {
+    console.log('Connected to MongoDB Atlas');
+    // Create test account after successful connection
+    createTestAccount();
+  })
   .catch(err => {
     console.error('Could not connect to MongoDB Atlas:', err.message);
     // Continue with in-memory storage as fallback
@@ -309,6 +313,40 @@ const userSchema = new mongoose.Schema({
 
 // Create User model
 const User = mongoose.model('User', userSchema);
+
+// Function to create a test account
+async function createTestAccount() {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      // Check if test account already exists
+      const testEmail = '1@slugger.com';
+      const existingUser = await User.findOne({ email: testEmail });
+      
+      if (!existingUser) {
+        console.log('Creating test account...');
+        // Hash the password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash('316316', salt);
+        
+        // Create new test user
+        const testUser = new User({
+          email: testEmail,
+          password: hashedPassword,
+          isVerified: true, // Already verified
+          verificationToken: null,
+          verificationTokenExpires: null
+        });
+        
+        await testUser.save();
+        console.log('Test account created successfully');
+      } else {
+        console.log('Test account already exists');
+      }
+    }
+  } catch (error) {
+    console.error('Error creating test account:', error);
+  }
+}
 
 // In-memory user storage as fallback
 const inMemoryUsers = [];
@@ -557,29 +595,10 @@ app.get('/api/auth/verify-email', async (req, res) => {
               .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
               h1 { color: #e74c3c; }
               p { font-size: 18px; line-height: 1.6; color: #555; }
-              .button { 
-                display: inline-block; 
-                background-color: #6c63ff; 
-                color: white; 
-                padding: 12px 30px; 
-                text-decoration: none; 
-                border-radius: 4px; 
-                margin-top: 20px; 
-                font-size: 16px;
-                font-weight: bold;
-                transition: background-color 0.3s;
-                margin: 10px;
-              }
-              .button:hover {
-                background-color: #5a52d5;
-              }
               .error-icon {
                 font-size: 64px;
                 color: #e74c3c;
                 margin-bottom: 20px;
-              }
-              .button-container {
-                margin-top: 20px;
               }
               .note {
                 margin-top: 20px;
@@ -589,11 +608,6 @@ app.get('/api/auth/verify-email', async (req, res) => {
               /* Mobile styles */
               @media (max-width: 600px) {
                 .container { padding: 20px; }
-                .button { 
-                  display: block;
-                  width: 80%;
-                  margin: 10px auto;
-                }
               }
             </style>
           </head>
@@ -604,13 +618,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
               <p>The verification link is invalid or has expired.</p>
               <p>Please try logging in or request a new verification email.</p>
               
-              <div class="button-container">
-                <p>If you're using the app on this device, tap one of these links:</p>
-                <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-                <a href="slugger://login" class="button">Open App (Alternative)</a>
-              </div>
-              
-              <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
+              <p class="note">Please open the Slugger app on your device to log in or request a new verification email.</p>
             </div>
           </body>
         </html>
@@ -628,29 +636,10 @@ app.get('/api/auth/verify-email', async (req, res) => {
             .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             h1 { color: #2ecc71; }
             p { font-size: 18px; line-height: 1.6; color: #555; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-              margin: 10px;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
             .success-icon {
               font-size: 64px;
               color: #2ecc71;
               margin-bottom: 20px;
-            }
-            .button-container {
-              margin-top: 20px;
             }
             .note {
               margin-top: 20px;
@@ -660,11 +649,6 @@ app.get('/api/auth/verify-email', async (req, res) => {
             /* Mobile styles */
             @media (max-width: 600px) {
               .container { padding: 20px; }
-              .button { 
-                display: block;
-                width: 80%;
-                margin: 10px auto;
-              }
             }
           </style>
         </head>
@@ -674,13 +658,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your account.</p>
             
-            <div class="button-container">
-              <p>Please open the Slugger app on your device:</p>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-              <a href="slugger://login" class="button">Open App (Alternative)</a>
-            </div>
-            
-            <p class="note">If the buttons above don't work, please manually open the Slugger app on your device and log in with your credentials.</p>
+            <p class="note">Please open the Slugger app on your device and log in with your credentials.</p>
           </div>
         </body>
       </html>
@@ -697,29 +675,10 @@ app.get('/api/auth/verify-email', async (req, res) => {
             h1 { color: #e74c3c; }
             p { font-size: 18px; line-height: 1.6; color: #555; }
             .error { color: #e74c3c; font-family: monospace; margin: 20px 0; padding: 10px; background: #f8f8f8; border-radius: 4px; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-              margin: 10px;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
             .error-icon {
               font-size: 64px;
               color: #e74c3c;
               margin-bottom: 20px;
-            }
-            .button-container {
-              margin-top: 20px;
             }
             .note {
               margin-top: 20px;
@@ -735,13 +694,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
             <p>An error occurred during the verification process.</p>
             <div class="error">${error.message}</div>
             
-            <div class="button-container">
-              <p>If you're using the app on this device, try one of these links:</p>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
-            </div>
-            
-            <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
+            <p class="note">Please open the Slugger app on your device and try to log in or request a new verification email.</p>
           </div>
         </body>
       </html>
@@ -1157,6 +1110,87 @@ app.post('/api/test/email', async (req, res) => {
   }
 });
 
+// Add a test account login endpoint
+app.get('/api/test-account', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(500).json({ message: 'MongoDB not connected' });
+    }
+    
+    const testEmail = '1@slugger.com';
+    // Check if the test account exists
+    const testUser = await User.findOne({ email: testEmail });
+    
+    if (!testUser) {
+      // Create the test account if it doesn't exist
+      console.log('Test account not found, creating it now...');
+      
+      // Hash the password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash('316316', salt);
+      
+      // Create new test user
+      const newTestUser = new User({
+        email: testEmail,
+        password: hashedPassword,
+        isVerified: true, // Already verified
+        verificationToken: null,
+        verificationTokenExpires: null
+      });
+      
+      await newTestUser.save();
+      console.log('Test account created successfully');
+      
+      return res.status(200).json({ 
+        message: 'Test account created successfully', 
+        credentials: {
+          email: testEmail,
+          password: '316316'
+        }
+      });
+    }
+    
+    return res.status(200).json({ 
+      message: 'Test account exists', 
+      credentials: {
+        email: testEmail,
+        password: '316316'
+      }
+    });
+  } catch (error) {
+    console.error('Error with test account:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Add a debug endpoint to list all users
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(500).json({ message: 'MongoDB not connected' });
+    }
+    
+    // Get all users (limit to last 10 for security)
+    const users = await User.find({})
+      .select('email isVerified createdAt')
+      .sort('-createdAt')
+      .limit(10);
+    
+    return res.status(200).json({ 
+      message: 'List of users (limited to 10)',
+      users,
+      count: users.length,
+      testAccountInfo: {
+        email: '1@slugger.com',
+        password: '316316'
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Add a catch-all route handler for undefined routes
 app.use('*', (req, res) => {
   res.status(404).send(`
@@ -1210,6 +1244,16 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}/api`);
+  
+  // Try to create test account on server start
+  if (mongoose.connection.readyState === 1) {
+    console.log('Creating test account on server start...');
+    createTestAccount().then(() => {
+      console.log('Test account creation attempt completed');
+    }).catch(err => {
+      console.error('Error creating test account on server start:', err);
+    });
+  }
   
   // Print out all available IP addresses
   const networkInterfaces = require('os').networkInterfaces();
