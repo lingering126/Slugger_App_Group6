@@ -24,4 +24,4 @@ services:
       - key: MAIL_FROM
         sync: false
       - key: APP_PUBLIC_URL
-        value: slugger-app.onrender.com 
+        value: https://slugger-app-group6.onrender.com 
