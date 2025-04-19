@@ -131,8 +131,102 @@ app.use(cors(corsOptions));
 // Add OPTIONS handling for preflight requests
 app.options('*', cors(corsOptions));
 
-
 app.use(express.json());
+
+// Add a root route handler
+app.get('/', (req, res) => {
+  res.status(200).send(`
+    <html>
+      <head>
+        <title>Slugger API Server</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px;
+          }
+          h1 { color: #6c63ff; }
+          .card {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          .endpoint {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+          }
+          .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-left: 10px;
+            font-size: 14px;
+            font-weight: bold;
+          }
+          .status.active {
+            background: #4CAF50;
+            color: white;
+          }
+          .method {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            margin-right: 8px;
+            font-size: 12px;
+            font-weight: bold;
+          }
+          .get { background: #61affe; color: white; }
+          .post { background: #49cc90; color: white; }
+        </style>
+      </head>
+      <body>
+        <h1>✓ Slugger API Server</h1>
+        <div class="card">
+          <h2>Server Status <span class="status active">ONLINE</span></h2>
+          <p>The server is running correctly. This is the API backend for the Slugger health tracking application.</p>
+        </div>
+        
+        <div class="card">
+          <h2>Available Endpoints</h2>
+          
+          <div class="endpoint">
+            <span class="method post">POST</span> /api/auth/signup
+            <p>Register a new user account</p>
+          </div>
+          
+          <div class="endpoint">
+            <span class="method get">GET</span> /api/auth/verify-email
+            <p>Verify user email address</p>
+          </div>
+          
+          <div class="endpoint">
+            <span class="method post">POST</span> /api/auth/login
+            <p>Authenticate and get access token</p>
+          </div>
+          
+          <div class="endpoint">
+            <span class="method post">POST</span> /api/auth/resend-verification
+            <p>Resend verification email</p>
+          </div>
+        </div>
+        
+        <div class="card">
+          <h2>Documentation</h2>
+          <p>For more information on how to use these endpoints, please refer to the project documentation.</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI)
