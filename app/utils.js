@@ -46,124 +46,92 @@ const recordSuccessfulConnection = (url) => {
 
 // Helper function to get the appropriate API URL based on the environment
 export const getApiUrl = () => {
-  // If we already found a working URL, return it
-  if (global.workingApiUrl) {
-    console.log('Using previously discovered working API URL:', global.workingApiUrl);
-    return [global.workingApiUrl];
-  }
-
   // Use deployed Render URL as highest priority
   const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
   console.log('Using deployed Render URL:', deployedUrl);
   
-  // Check if we're running in a web browser environment
-  const isWebEnvironment = typeof document !== 'undefined';
-  
-  // In web browser environment, prioritize localhost but include deployed URL
-  if (isWebEnvironment) {
-    console.log('Detected web environment, prioritizing deployed URL and localhost');
-    return [deployedUrl, 'http://localhost:5001/api'];
-  }
-
-  // Define the backend server IP here - update this to match your actual server IP
-  // This can be your computer's IP address on the same network as your phone
-  // Using expo-constants to get the server IP
-  const serverUrl = IPConfig.getServerUrl();
-  
-  // Create a list of URLs prioritizing the deployed URL
-  const priorityUrls = [deployedUrl];
-  
-  if (serverUrl) {
-    console.log('Adding Expo Constants server URL:', serverUrl);
-    priorityUrls.push(serverUrl);
-  }
-
-  // Get the server IP from environment or use auto-discovery
-  const serverIP = process.env.REACT_NATIVE_SERVER_IP || global.serverIP;
-  console.log('Server IP configuration:', serverIP || 'Using auto-discovery');
-  
-  // Only include the most likely IPs to avoid unnecessary connection attempts
-  // Initialize an array and add deployed URL first
-  const possibleIPs = [];
-  
-  // Add serverIP only if it exists
-  if (serverIP) {
-    possibleIPs.push(serverIP);
-  }
-  
-  // Add common fallbacks, but with less priority
-  const additionalIPs = [
-    // Local network addresses (including your specific subnet)
-    '192.168.31.1',    // Common router IP in your subnet
-    '192.168.31.252',  // Your laptop IP explicitly
+  // If running in development mode (with Metro bundler)
+  if (__DEV__) {
+    console.log('App running in development mode, will try local IPs too');
     
-    // Emulator addresses
-    '10.0.2.2',        // Android emulator
-    'localhost',       // iOS simulator
-    '127.0.0.1',       // Localhost
-  ];
-  
-  // Add IP ranges to scan if we're on a typical home network
-  // This helps find the server even if the IP changed
-  try {
-    // Check the device's own IP to determine network subnet
-    const netInfo = global.lastNetworkInfo;
-    if (netInfo && netInfo.details && netInfo.details.ipAddress) {
-      const deviceIP = netInfo.details.ipAddress;
-      console.log('Device IP:', deviceIP);
-      
-      // Extract subnet from device IP (e.g., from 192.168.1.5 get 192.168.1)
-      const ipParts = deviceIP.split('.');
-      if (ipParts.length === 4) {
-        const subnet = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}`;
-        console.log('Detected subnet:', subnet);
-        
-        // Add common server ports on this subnet
-        const commonLastOctets = ['1', '2', '100', '101', '102', '200', '250', '251', '252', '253', '254'];
-        commonLastOctets.forEach(lastOctet => {
-          const potentialIP = `${subnet}.${lastOctet}`;
-          // Don't add duplicates - with null check
-          if (potentialIP && possibleIPs && additionalIPs && 
-              !possibleIPs.includes(potentialIP) && 
-              !additionalIPs.includes(potentialIP)) {
-            additionalIPs.push(potentialIP);
-          }
-        });
+    // If we already found a working URL, return it
+    if (global.workingApiUrl) {
+      console.log('Using previously discovered working API URL:', global.workingApiUrl);
+      return [global.workingApiUrl];
+    }
+    
+    // Check if we're running in a web browser environment
+    const isWebEnvironment = typeof document !== 'undefined';
+    
+    // In web browser environment, prioritize localhost but include deployed URL
+    if (isWebEnvironment) {
+      console.log('Detected web environment, prioritizing deployed URL and localhost');
+      return [deployedUrl, 'http://localhost:5001/api'];
+    }
+
+    // Define the backend server IP here - update this to match your actual server IP
+    // This can be your computer's IP address on the same network as your phone
+    // Using expo-constants to get the server IP
+    const serverUrl = IPConfig.getServerUrl();
+    
+    // Create a list of URLs prioritizing the deployed URL
+    const priorityUrls = [deployedUrl];
+    
+    if (serverUrl) {
+      console.log('Adding Expo Constants server URL:', serverUrl);
+      priorityUrls.push(serverUrl);
+    }
+
+    // Get the server IP from environment or use auto-discovery
+    const serverIP = process.env.REACT_NATIVE_SERVER_IP || global.serverIP;
+    console.log('Server IP configuration:', serverIP || 'Using auto-discovery');
+    
+    // Only include the most likely IPs to avoid unnecessary connection attempts
+    // Initialize an array and add deployed URL first
+    const possibleIPs = [];
+    
+    // Add serverIP only if it exists
+    if (serverIP) {
+      possibleIPs.push(serverIP);
+    }
+    
+    // Add common development IP addresses
+    possibleIPs.push(
+      '192.168.31.252', // Your specific IP address
+      '192.168.1.1',
+      '192.168.0.1',
+      '10.0.2.2',       // Android emulator
+      'localhost',
+      '127.0.0.1'
+    );
+    
+    // Create URLs for all possible IPs, handling those that already have port or protocol
+    const allUrls = possibleIPs.map(ip => {
+      // Skip undefined or null values
+      if (!ip) {
+        return null;
       }
-    }
-  } catch (error) {
-    console.warn('Error detecting network subnet:', error);
-  }
-  
-  // Add additional IPs if they haven't been added already
-  additionalIPs.forEach(ip => {
-    // Only add valid IPs and avoid duplicates - with null check
-    if (ip && possibleIPs && !possibleIPs.includes(ip)) {
-      possibleIPs.push(ip);
-    }
-  });
-  
-  // Create URLs for all possible IPs, handling those that already have port or protocol
-  const allUrls = possibleIPs.map(ip => {
-    // Skip undefined or null values
-    if (!ip) {
-      return null;
-    }
+      
+      if (ip.includes('://')) {
+        return `${ip}/api`;
+      } else if (ip.includes(':')) {
+        return `http://${ip}/api`;
+      } else {
+        return `http://${ip}:5001/api`;
+      }
+    }).filter(Boolean); // Filter out any null/undefined values
     
-    if (ip.includes('://')) {
-      return `${ip}/api`;
-    } else if (ip.includes(':')) {
-      return `http://${ip}/api`;
-    } else {
-      return `http://${ip}:5001/api`;
-    }
-  }).filter(Boolean); // Filter out any null/undefined values
-  
-  // Make sure deployed URL is first, then add all other URLs
-  console.log('Generated API URLs to try:', [deployedUrl, ...allUrls]);
-  
-  // Return all URLs to try, with deployed URL first, then prioritized by past success
-  return getPrioritizedUrls([deployedUrl, ...allUrls]);
+    // Make sure deployed URL is first, then add all other URLs
+    console.log('Generated API URLs to try:', [deployedUrl, ...allUrls]);
+    
+    // Return all URLs to try, with deployed URL first, then prioritized by past success
+    return getPrioritizedUrls([deployedUrl, ...allUrls]);
+  } else {
+    // In production mode, only use the deployed URL
+    console.log('App running in production mode, only using deployed URL');
+    global.workingApiUrl = deployedUrl;
+    return [deployedUrl];
+  }
 };
 
 // Simple ping function to test connectivity with minimal overhead
@@ -709,6 +677,44 @@ const Utils = {
     try {
       console.log('Checking server connection...');
       
+      // In production mode, only use the deployed URL
+      if (!__DEV__) {
+        console.log('Production mode: using only the deployed URL');
+        const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+        
+        try {
+          // Try to ping the deployed URL
+          const pingResult = await pingServer(deployedUrl);
+          
+          if (pingResult) {
+            console.log('Successfully connected to deployed URL');
+            global.workingApiUrl = deployedUrl;
+            recordSuccessfulConnection(deployedUrl);
+            return {
+              status: 'online',
+              message: 'Server is reachable via deployed URL',
+              url: deployedUrl
+            };
+          } else {
+            console.log('Failed to ping deployed URL');
+            return {
+              status: 'offline',
+              message: 'Could not connect to the server. Please check your internet connection.',
+              url: deployedUrl
+            };
+          }
+        } catch (error) {
+          console.log('Error connecting to deployed URL:', error.message);
+          return {
+            status: 'error',
+            message: 'Error connecting to server',
+            error: error.message,
+            url: deployedUrl
+          };
+        }
+      }
+      
+      // Development mode logic below
       // Check if we're in a web environment
       const isWebEnvironment = typeof document !== 'undefined';
       
