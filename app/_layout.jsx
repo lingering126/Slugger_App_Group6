@@ -15,6 +15,17 @@ const RootLayout = () => {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="screens" />
+      <Stack.Screen 
+        name="team-stats" 
+        options={{
+          title: "Team Statistics",
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: '#fff',
+          },
+          headerTintColor: '#333',
+        }}
+      />
     </Stack>
   );
 };
