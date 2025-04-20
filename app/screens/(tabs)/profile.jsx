@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList } from 'react-native'
 import React, { useState } from 'react'
 import { useNavigation } from '@react-navigation/native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 // Mock data (would normally come from a database)
 const mockUserData = {
@@ -199,7 +200,7 @@ const Profile = () => {
           {selectedBonusActivities.length > 0 && (
             <View style={styles.selectedActivitiesContainer}>
               {selectedBonusActivities.map(activity => (
-                <View key={activity.id} style={[styles.activityChip, { backgroundColor: '#4A9D63' }]}>
+                <View key={activity.id} style={[styles.activityChip, { backgroundColor: '#FF6B6B' }]}>
                   <Text style={styles.activityChipIcon}>{activity.icon}</Text>
                   <Text style={styles.activityChipText}>{activity.name}</Text>
                   <TouchableOpacity 
@@ -218,6 +219,28 @@ const Profile = () => {
           )}
         </View>
 
+        {/* Developer Tools Section - For testing only */}
+        <View style={styles.devToolsSection}>
+          <Text style={styles.devToolsTitle}>Developer Tools</Text>
+          <Text style={styles.devToolsDescription}>These tools are for development testing only</Text>
+          
+          <TouchableOpacity 
+            style={styles.resetButton} 
+            onPress={async () => {
+              try {
+                // Remove the welcomeCompleted flag from AsyncStorage
+                await AsyncStorage.removeItem('welcomeCompleted');
+                alert('Welcome flow has been reset. Log out and back in to see the welcome screens.');
+              } catch (error) {
+                console.error('Error resetting welcome flow:', error);
+                alert('Failed to reset welcome flow: ' + error.message);
+              }
+            }}
+          >
+            <Text style={styles.resetButtonText}>Reset Welcome Flow</Text>
+          </TouchableOpacity>
+        </View>
+        
         {/* Save Button */}
         <TouchableOpacity style={styles.saveButton}>
           <Text style={styles.saveButtonText}>Save Settings</Text>
@@ -645,6 +668,36 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   modalDoneText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  devToolsSection: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  devToolsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0E5E6F',
+    marginBottom: 5,
+  },
+  devToolsDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+  },
+  resetButton: {
+    backgroundColor: '#0E5E6F',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 40,
+  },
+  resetButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

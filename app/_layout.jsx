@@ -9,7 +9,8 @@ const RootLayout = () => {
     <Stack 
       screenOptions={{ 
         headerShown: false,
-        animation: 'none' // Disable animations
+        animation: 'fade', // Use fade animation instead of none
+        animationDuration: 200 // Smooth transition duration
       }}
     >
       <Stack.Screen name="index" />
