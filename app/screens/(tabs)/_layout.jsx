@@ -20,6 +20,7 @@ export default function TabsLayout() {
           name="home"
           options={{
             title: "Home",
+            headerShown: false, // Hide the default header for home screen
           }}
         />
         <Tabs.Screen
