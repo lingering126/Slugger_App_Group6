@@ -13,6 +13,7 @@ import {
   SafeAreaView
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function JoinGroupScreen() {
   const [groupCode, setGroupCode] = useState('');
@@ -32,32 +33,54 @@ export default function JoinGroupScreen() {
     setLoading(true);
 
     try {
-      // In a real app, we would make an API call to join the group
-      // For now, just simulate a delay and navigate to home
-      setTimeout(() => {
-        setLoading(false);
-        if (Platform.OS === 'web') {
-          alert(`Successfully joined group with code "${groupCode}"!`); // 使用简单的 alert
-          router.replace('/screens/(tabs)/home');
-        } else {
-          Alert.alert(
-            'Success',
-            `Successfully joined group with code "${groupCode}"!`,
-            [
-              {
-                text: 'OK',
-                onPress: () => router.replace('/screens/(tabs)/home'),
-              },
-            ]
-          );
-        }
-      }, 1500);
+      // 从 AsyncStorage 获取 token
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // 获取服务器 API URL
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      const response = await fetch(`${apiUrl}/groups/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          groupId: groupCode
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to join group');
+      }
+
+      setLoading(false);
+      if (Platform.OS === 'web') {
+        alert(`Successfully joined group "${data.name}"!`);
+        router.replace('/screens/(tabs)/home');
+      } else {
+        Alert.alert(
+          'Success',
+          `Successfully joined group "${data.name}"!`,
+          [
+            {
+              text: 'OK',
+              onPress: () => router.replace('/screens/(tabs)/home'),
+            },
+          ]
+        );
+      }
     } catch (error) {
       setLoading(false);
       if (Platform.OS === 'web') {
-        alert('Failed to join group. Please try again.');
+        alert(error.message || 'Failed to join group. Please try again.');
       } else {
-        Alert.alert('Error', 'Failed to join group. Please try again.');
+        Alert.alert('Error', error.message || 'Failed to join group. Please try again.');
       }
       console.error('Error joining group:', error);
     }
