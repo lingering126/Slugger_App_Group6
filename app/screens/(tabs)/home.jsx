@@ -4,6 +4,37 @@ import { Picker } from '@react-native-picker/picker'; // import picker
 import { StatusBar } from 'expo-status-bar';
 import { FontAwesome5 } from '@expo/vector-icons';
 
+// 将所有活动按 Category 分类
+const activityData = {
+  Physical: [
+    "Cricket", "Soccer", "Run", "Walk", "HIIT", "Gym Workout", 
+    "Cycle", "Swim", "Home Workout", "Physio", "Yoga", "Squash", 
+    "Rugby", "Touch Rugby", "Steps goal", "DIY", "Gardening", 
+    "Physical other"
+  ],
+  Mental: [
+    "Meditation", "Reading", "Writing", "Music Practice", 
+    "Mental Gym", "Duolingo", "Language Training", "Cold shower", 
+    "Mental other", "Journal", "Breathing exercise"
+  ],
+  Bonus: [
+    "Community Service", "Family", "Personal Best", "Personal Goal", "Bonus other"
+  ],
+  // 如果将来需要 Cummulative 类别，可以留在这里
+  Cummulative: [
+    "Calories Target", "Sleep Time Target", "Apocolyps", 
+    "Cumulative other (4)", "Cumulative other (6)", "Cumulative other (7)", "Cumulative other (3)"
+  ]
+};
+
+// 用来把“Physical Exercise”、“Mental Training”、“Bonus Activity”映射到真正的分类名
+const categoryMap = {
+  "Physical Exercise": "Physical",
+  "Mental Training": "Mental",
+  "Bonus Activity": "Bonus"
+  // 如果将来需要 "Cummulative Activity"，可以在这里加
+};
+
 export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -85,7 +116,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-
         <View style={styles.chatBubble}>
           <Text style={styles.chatUser}>Junu</Text>
           <Text style={styles.chatMessage}>Ironman, I'm in!</Text>
@@ -118,34 +148,36 @@ export default function HomeScreen() {
 
             {/* Time Picker */}
             <Text style={styles.modalLabel}>Select Duration (Hours)</Text>
-            <Picker selectedValue={selectedTime} style={styles.picker} onValueChange={(itemValue) => setSelectedTime(itemValue)}>
+            <Picker 
+              selectedValue={selectedTime} 
+              style={styles.picker} 
+              onValueChange={(itemValue) => setSelectedTime(itemValue)}
+            >
               {[...Array(24).keys()].map((num) => (
                 <Picker.Item key={num + 1} label={`${num + 1} hour`} value={`${num + 1}`} />
               ))}
             </Picker>
 
-            {/* Activity Options */}
+            {/* Activity Options: 动态渲染 */}
+            {/** 先确定真正的分类 */}
             <View style={styles.optionContainer}>
-              <TouchableOpacity 
-                style={[styles.optionButton, selectedActivity === 'Running' && styles.selectedButton]} 
-                onPress={() => handleSelectActivity('Running')}
-              >
-                <Text style={[styles.optionText, selectedActivity === 'Running' && styles.selectedText]}>🏃 Running</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[styles.optionButton, selectedActivity === 'Yoga' && styles.selectedButton]} 
-                onPress={() => handleSelectActivity('Yoga')}
-              >
-                <Text style={[styles.optionText, selectedActivity === 'Yoga' && styles.selectedText]}>🧘 Yoga</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[styles.optionButton, selectedActivity === 'Cycling' && styles.selectedButton]} 
-                onPress={() => handleSelectActivity('Cycling')}
-              >
-                <Text style={[styles.optionText, selectedActivity === 'Cycling' && styles.selectedText]}>🚴 Cycling</Text>
-              </TouchableOpacity>
+              { (activityData[ categoryMap[selectedCategory] ] || []).map((activityName) => (
+                <TouchableOpacity 
+                  key={activityName}
+                  style={[
+                    styles.optionButton, 
+                    selectedActivity === activityName && styles.selectedButton
+                  ]}
+                  onPress={() => handleSelectActivity(activityName)}
+                >
+                  <Text style={[
+                    styles.optionText, 
+                    selectedActivity === activityName && styles.selectedText
+                  ]}>
+                    {activityName}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             {/* Confirm & Close Buttons */}
