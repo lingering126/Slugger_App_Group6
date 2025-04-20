@@ -25,7 +25,11 @@ export default function CreateGroupScreen() {
 
   const handleCreateGroup = async () => {
     if (!groupName.trim()) {
-      Alert.alert('Error', 'Please enter a group name');
+      if (Platform.OS === 'web') {
+        alert('Please enter a group name'); 
+      } else {
+        Alert.alert('Error', 'Please enter a group name');
+      }
       return;
     }
 
@@ -36,20 +40,29 @@ export default function CreateGroupScreen() {
       // For now, just simulate a delay and navigate to home
       setTimeout(() => {
         setLoading(false);
-        Alert.alert(
-          'Success', 
-          `Group "${groupName}" created successfully!`,
-          [
-            { 
-              text: 'OK', 
-              onPress: () => router.replace('/screens/(tabs)/home') 
-            }
-          ]
-        );
+        if (Platform.OS === 'web') {
+          alert(`Group "${groupName}" created successfully!`); 
+          router.replace('/screens/(tabs)/home');
+        } else {
+          Alert.alert(
+            'Success',
+            `Group "${groupName}" created successfully!`,
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/screens/(tabs)/home'),
+              },
+            ]
+          );
+        }
       }, 1500);
     } catch (error) {
       setLoading(false);
-      Alert.alert('Error', 'Failed to create group. Please try again.');
+      if (Platform.OS === 'web') {
+        alert('Failed to create group. Please try again.'); 
+      } else {
+        Alert.alert('Error', 'Failed to create group. Please try again.');
+      }
       console.error('Error creating group:', error);
     }
   };
@@ -198,4 +211,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-}); 
+});

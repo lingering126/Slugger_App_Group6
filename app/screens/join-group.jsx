@@ -13,7 +13,6 @@ import {
   SafeAreaView
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function JoinGroupScreen() {
   const [groupCode, setGroupCode] = useState('');
@@ -22,37 +21,44 @@ export default function JoinGroupScreen() {
 
   const handleJoinGroup = async () => {
     if (!groupCode.trim()) {
-      Alert.alert('Error', 'Please enter a group code');
+      if (Platform.OS === 'web') {
+        alert('Please enter a group code');
+      } else {
+        Alert.alert('Error', 'Please enter a group code');
+      }
       return;
     }
 
     setLoading(true);
 
     try {
-      // In a real app, we would make an API call to validate the group code
+      // In a real app, we would make an API call to join the group
       // For now, just simulate a delay and navigate to home
       setTimeout(() => {
         setLoading(false);
-        
-        // For testing, let's accept any 6-character code
-        if (groupCode.length >= 6) {
+        if (Platform.OS === 'web') {
+          alert(`Successfully joined group with code "${groupCode}"!`); // 使用简单的 alert
+          router.replace('/screens/(tabs)/home');
+        } else {
           Alert.alert(
-            'Success', 
-            `You have joined the group successfully!`,
+            'Success',
+            `Successfully joined group with code "${groupCode}"!`,
             [
-              { 
-                text: 'OK', 
-                onPress: () => router.replace('/screens/(tabs)/home') 
-              }
+              {
+                text: 'OK',
+                onPress: () => router.replace('/screens/(tabs)/home'),
+              },
             ]
           );
-        } else {
-          Alert.alert('Error', 'Invalid group code. Please try again.');
         }
       }, 1500);
     } catch (error) {
       setLoading(false);
-      Alert.alert('Error', 'Failed to join group. Please try again.');
+      if (Platform.OS === 'web') {
+        alert('Failed to join group. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to join group. Please try again.');
+      }
       console.error('Error joining group:', error);
     }
   };
@@ -64,21 +70,16 @@ export default function JoinGroupScreen() {
         style={styles.keyboardAvoidingView}
       >
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <Text style={styles.title}>Join an Existing Team</Text>
-          
-          <Text style={styles.description}>
-            Enter the team code provided by the team administrator to join their Slugger team.
-          </Text>
+          <Text style={styles.title}>Join a Group</Text>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Team Code *</Text>
+            <Text style={styles.label}>Group Code *</Text>
             <TextInput
               style={styles.input}
               value={groupCode}
               onChangeText={setGroupCode}
-              placeholder="Enter 6-digit team code"
+              placeholder="Enter the group code"
               maxLength={10}
-              autoCapitalize="characters"
             />
           </View>
 
@@ -90,15 +91,8 @@ export default function JoinGroupScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.buttonText}>Join Team</Text>
+              <Text style={styles.buttonText}>Join Group</Text>
             )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.createGroupButton}
-            onPress={() => router.replace('/screens/create-group')}
-          >
-            <Text style={styles.createGroupButtonText}>Create a New Team Instead</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -133,13 +127,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#0E5E6F',
   },
-  description: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 30,
-    lineHeight: 22,
-  },
   formGroup: {
     marginBottom: 25,
   },
@@ -171,16 +158,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  createGroupButton: {
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  createGroupButtonText: {
-    color: '#0E5E6F',
-    fontSize: 16,
-    textDecorationLine: 'underline',
-  },
   cancelButton: {
     backgroundColor: '#F5F5F8',
     padding: 15,
@@ -195,4 +172,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-}); 
+});
