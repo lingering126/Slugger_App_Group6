@@ -336,7 +336,7 @@ const PostCard = ({ post }) => {
   const renderContent = () => {
     switch (post.type) {
       case 'activity':
-        return (
+  return (
           <View style={styles.activityCard}>
             <View style={styles.activityHeader}>
               <Text style={styles.activityTitle}>{post.activityType}</Text>
@@ -377,8 +377,8 @@ const PostCard = ({ post }) => {
             <Text style={styles.avatarText}>{post.author[0]}</Text>
           </View>
           <Text style={styles.username}>{post.author}</Text>
+          </View>
         </View>
-      </View>
       {renderContent()}
       
       {/* 评论列表 */}
@@ -389,13 +389,13 @@ const PostCard = ({ post }) => {
               <View style={styles.commentHeader}>
                 <View style={styles.commentAvatar}>
                   <Text style={styles.commentAvatarText}>{comment.author[0]}</Text>
-                </View>
+          </View>
                 <Text style={styles.commentAuthor}>{comment.author}</Text>
                 <Text style={styles.commentContent}>{comment.content}</Text>
-              </View>
-            </View>
-          ))}
+          </View>
         </View>
+          ))}
+      </View>
       )}
 
       {/* 评论按钮和输入框 */}
@@ -427,7 +427,7 @@ const PostCard = ({ post }) => {
         >
           <Ionicons name="share-social-outline" size={24} color="#666" />
         </TouchableOpacity>
-      </View>
+        </View>
 
       {/* 分享选项弹窗 */}
       <Modal
@@ -483,7 +483,7 @@ const PostCard = ({ post }) => {
           >
             <Ionicons name="send" size={24} color="#4A90E2" />
           </TouchableOpacity>
-        </View>
+            </View>
       )}
     </View>
   );
@@ -573,10 +573,10 @@ const ChannelSelector = ({ selectedChannel, onChannelSelect }) => {
               styles.teamItemText,
               selectedChannel.teamId === team.id && styles.selectedTeamItemText,
             ]}>{team.name}</Text>
-          </TouchableOpacity>
+        </TouchableOpacity>
         ))}
       </Animated.View>
-    </View>
+      </View>
   );
 };
 
@@ -683,8 +683,8 @@ const AddContentModal = ({ visible, onClose }) => {
       visible={visible}
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Create New Post</Text>
           
           {/* Channel Selection */}
@@ -724,7 +724,7 @@ const AddContentModal = ({ visible, onClose }) => {
           {showTeamList && (
             <View style={styles.teamSelection}>
               {teams.map(team => (
-                <TouchableOpacity
+                <TouchableOpacity 
                   key={team.id}
                   style={[
                     styles.teamOption,
@@ -752,7 +752,7 @@ const AddContentModal = ({ visible, onClose }) => {
               <Text style={contentType === 'message' ? styles.selectedOptionText : styles.optionText}>
                 Message
               </Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.contentTypeOption,
@@ -763,8 +763,8 @@ const AddContentModal = ({ visible, onClose }) => {
               <Text style={contentType === 'activity' ? styles.selectedOptionText : styles.optionText}>
                 Activity Share
               </Text>
-            </TouchableOpacity>
-          </View>
+              </TouchableOpacity>
+            </View>
 
           {/* Content Input */}
           {contentType === 'message' && (
@@ -780,7 +780,7 @@ const AddContentModal = ({ visible, onClose }) => {
           {contentType === 'activity' && (
             <View style={styles.activitySelection}>
               {/* Add activity selection UI here */}
-            </View>
+          </View>
           )}
 
           {/* Action Buttons */}
@@ -797,8 +797,8 @@ const AddContentModal = ({ visible, onClose }) => {
             >
               <Text style={styles.modalButtonText}>Cancel</Text>
             </TouchableOpacity>
-          </View>
         </View>
+    </View>
       </View>
     </Modal>
   );
@@ -1017,9 +1017,9 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#E8F0F2',
+  container: { 
+    flex: 1, 
+    backgroundColor: '#E8F0F2', 
   },
   backgroundImage: {
     flex: 1,
@@ -1038,8 +1038,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(248, 250, 252, 0.95)',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', 
+    alignItems: 'center', 
     justifyContent: 'center',
     paddingHorizontal: 15,
     paddingVertical: 12,
@@ -1057,11 +1057,11 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-between', 
     marginBottom: 10,
   },
   statCard: {
-    flex: 1,
+    flex: 1, 
     alignItems: 'center',
     paddingVertical: 8,
     marginHorizontal: 4,
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
-  progressBar: {
+  progressBar: { 
     flex: 1,
     height: 6,
     backgroundColor: '#f0f0f0',
@@ -1104,7 +1104,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   progressFill: {
-    height: '100%',
+    height: '100%', 
     backgroundColor: '#4CAF50',
     borderRadius: 3,
   },
@@ -1127,8 +1127,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   channelButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', 
+    alignItems: 'center', 
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 20,
@@ -1183,11 +1183,11 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   scrollView: {
-    flex: 1,
+    flex: 1, 
     marginBottom: 60,
   },
   postCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#fff', 
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
