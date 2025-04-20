@@ -36,32 +36,57 @@ export default function CreateGroupScreen() {
     setLoading(true);
 
     try {
-      // In a real app, we would make an API call to create the group
-      // For now, just simulate a delay and navigate to home
-      setTimeout(() => {
-        setLoading(false);
-        if (Platform.OS === 'web') {
-          alert(`Group "${groupName}" created successfully!`); 
-          router.replace('/screens/(tabs)/home');
-        } else {
-          Alert.alert(
-            'Success',
-            `Group "${groupName}" created successfully!`,
-            [
-              {
-                text: 'OK',
-                onPress: () => router.replace('/screens/(tabs)/home'),
-              },
-            ]
-          );
-        }
-      }, 1500);
+      // 从 AsyncStorage 获取 token
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // 获取服务器 API URL
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      const response = await fetch(`${apiUrl}/groups`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: groupName,
+          description: groupDescription,
+          targetName,
+          targetValue
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to create group');
+      }
+
+      setLoading(false);
+      if (Platform.OS === 'web') {
+        alert(`Group "${groupName}" created successfully!`); 
+        router.replace('/screens/(tabs)/home');
+      } else {
+        Alert.alert(
+          'Success',
+          `Group "${groupName}" created successfully!`,
+          [
+            {
+              text: 'OK',
+              onPress: () => router.replace('/screens/(tabs)/home'),
+            },
+          ]
+        );
+      }
     } catch (error) {
       setLoading(false);
       if (Platform.OS === 'web') {
-        alert('Failed to create group. Please try again.'); 
+        alert(error.message || 'Failed to create group. Please try again.'); 
       } else {
-        Alert.alert('Error', 'Failed to create group. Please try again.');
+        Alert.alert('Error', error.message || 'Failed to create group. Please try again.');
       }
       console.error('Error creating group:', error);
     }
