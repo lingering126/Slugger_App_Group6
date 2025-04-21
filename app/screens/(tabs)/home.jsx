@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, SafeAreaView, ImageBackground, Image, TextInput, Alert, Linking, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, SafeAreaView, ImageBackground, Image, TextInput, Alert, Linking, Animated, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { StatusBar } from 'expo-status-bar';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SocialButtons } from '../../components/SocialButtons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import API_CONFIG from '../../config/api';
 
 // 活动分类数据
 const activityData = {
@@ -163,7 +164,7 @@ const ActivityModal = ({ visible, category, onClose }) => {
 
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch('http://localhost:5000/api/homepage/activities', {
+      const response = await fetch(`${API_CONFIG.API_URL}/activities`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -260,14 +261,26 @@ const ActivityModal = ({ visible, category, onClose }) => {
 
 const PostCard = ({ post }) => {
   const [comment, setComment] = useState('');
-  const [localComments, setLocalComments] = useState(post.comments || []);
+  const [localComments, setLocalComments] = useState(post?.comments || []);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(post.likes);
+  const [likesCount, setLikesCount] = useState(post?.likes || 0);
   const [showShareOptions, setShowShareOptions] = useState(false);
 
+  // 安全地获取作者名字的第一个字符
+  const getAuthorInitial = () => {
+    if (!post?.author?.name) {
+      return '?';
+    }
+    return post.author.name[0] || '?';
+  };
+
+  // 安全地获取作者名字
+  const getAuthorName = () => {
+    return post?.author?.name || 'Anonymous';
+  };
+
   const handleLike = () => {
-    // 更新点赞状态和数量
     setIsLiked(!isLiked);
     setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
   };
@@ -275,20 +288,17 @@ const PostCard = ({ post }) => {
   const handleShare = async (destination) => {
     try {
       if (destination === 'github') {
-        // 分享到GitHub的逻辑
-        const githubUrl = `https://github.com/share?text=${encodeURIComponent(post.content)}`;
+        const githubUrl = `https://github.com/share?text=${encodeURIComponent(post?.content || '')}`;
         Linking.openURL(githubUrl);
       } else {
-        // 分享到公共或团队界面的逻辑
         const token = await AsyncStorage.getItem('userToken');
-        const response = await fetch('http://localhost:5000/api/homepage/posts/share', {
+        const response = await fetch(`${API_CONFIG.API_URL}/posts/${post?._id}/share`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            postId: post.id,
             destination: destination
           })
         });
@@ -308,7 +318,7 @@ const PostCard = ({ post }) => {
     
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`http://localhost:5000/api/homepage/posts/${post.id}/comments`, {
+      const response = await fetch(`${API_CONFIG.API_URL}/posts/${post?._id}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -319,14 +329,13 @@ const PostCard = ({ post }) => {
 
       if (response.ok) {
         const newComment = await response.json();
-        // 将新评论添加到现有评论列表末尾
         setLocalComments(prevComments => [...prevComments, {
           id: newComment.id,
-          author: newComment.author || 'User', // 使用实际的用户名
+          author: newComment.author || 'Anonymous',
           content: comment
         }]);
         setComment('');
-        setShowCommentInput(false); // 发送后隐藏输入框
+        setShowCommentInput(false);
       }
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -334,22 +343,24 @@ const PostCard = ({ post }) => {
   };
 
   const renderContent = () => {
+    if (!post) return null;
+
     switch (post.type) {
       case 'activity':
-  return (
+        return (
           <View style={styles.activityCard}>
             <View style={styles.activityHeader}>
-              <Text style={styles.activityTitle}>{post.activityType}</Text>
-              <Text style={styles.activityPoints}>+{post.points} pts</Text>
+              <Text style={styles.activityTitle}>{post.activityType || 'Activity'}</Text>
+              <Text style={styles.activityPoints}>+{post.points || 0} pts</Text>
             </View>
             <View style={styles.activityDetails}>
-              <Text style={styles.activityText}>Activity: {post.activity}</Text>
-              <Text style={styles.activityText}>Duration: {post.duration}</Text>
-              <Text style={styles.activityText}>Personal target completed: {post.progress}%</Text>
+              <Text style={styles.activityText}>Activity: {post.activity || 'Unknown'}</Text>
+              <Text style={styles.activityText}>Duration: {post.duration || '0 mins'}</Text>
+              <Text style={styles.activityText}>Personal target completed: {post.progress || 0}%</Text>
             </View>
             <View style={styles.progressBarContainer}>
               <View style={styles.progressBarBackground}>
-                <View style={[styles.progressBarFill, { width: `${post.progress}%` }]} />
+                <View style={[styles.progressBarFill, { width: `${post.progress || 0}%` }]} />
               </View>
             </View>
           </View>
@@ -358,27 +369,33 @@ const PostCard = ({ post }) => {
         return (
           <View>
             <Text style={styles.postContent}>{post.content}</Text>
-            <Image 
-              source={{ uri: post.imageUrl }}
-              style={styles.postImage}
-            />
+            {post.imageUrl && (
+              <Image 
+                source={{ uri: post.imageUrl }}
+                style={styles.postImage}
+              />
+            )}
           </View>
         );
       default:
-        return <Text style={styles.postContent}>{post.content}</Text>;
+        return <Text style={styles.postContent}>{post.content || ''}</Text>;
     }
   };
+
+  if (!post) {
+    return null;
+  }
 
   return (
     <View style={styles.postCard}>
       <View style={styles.postHeader}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{post.author[0]}</Text>
+            <Text style={styles.avatarText}>{getAuthorInitial()}</Text>
           </View>
-          <Text style={styles.username}>{post.author}</Text>
-          </View>
+          <Text style={styles.username}>{getAuthorName()}</Text>
         </View>
+      </View>
       {renderContent()}
       
       {/* 评论列表 */}
@@ -388,14 +405,16 @@ const PostCard = ({ post }) => {
             <View key={index} style={styles.commentContainer}>
               <View style={styles.commentHeader}>
                 <View style={styles.commentAvatar}>
-                  <Text style={styles.commentAvatarText}>{comment.author[0]}</Text>
-          </View>
-                <Text style={styles.commentAuthor}>{comment.author}</Text>
-                <Text style={styles.commentContent}>{comment.content}</Text>
-          </View>
-        </View>
+                  <Text style={styles.commentAvatarText}>
+                    {comment?.author?.[0] || '?'}
+                  </Text>
+                </View>
+                <Text style={styles.commentAuthor}>{comment?.author || 'Anonymous'}</Text>
+                <Text style={styles.commentContent}>{comment?.content || ''}</Text>
+              </View>
+            </View>
           ))}
-      </View>
+        </View>
       )}
 
       {/* 评论按钮和输入框 */}
@@ -427,7 +446,7 @@ const PostCard = ({ post }) => {
         >
           <Ionicons name="share-social-outline" size={24} color="#666" />
         </TouchableOpacity>
-        </View>
+      </View>
 
       {/* 分享选项弹窗 */}
       <Modal
@@ -483,7 +502,7 @@ const PostCard = ({ post }) => {
           >
             <Ionicons name="send" size={24} color="#4A90E2" />
           </TouchableOpacity>
-            </View>
+        </View>
       )}
     </View>
   );
@@ -624,55 +643,105 @@ const StatsCard = ({ title, personalProgress, teamProgress }) => (
   </View>
 );
 
-const AddContentModal = ({ visible, onClose }) => {
+const AddContentModal = ({ visible, onClose, onPostCreated }) => {
   const [selectedChannel, setSelectedChannel] = useState('public');
   const [selectedTeam, setSelectedTeam] = useState(null);
-  const [contentType, setContentType] = useState(null);
+  const [contentType, setContentType] = useState('text');
   const [showTeamList, setShowTeamList] = useState(false);
   const [content, setContent] = useState('');
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [activityType, setActivityType] = useState('');
+  const [duration, setDuration] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
-    if (contentType === 'message' && !content.trim()) return;
-    if (contentType === 'activity' && !selectedActivity) return;
-
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      let endpoint = 'http://localhost:5000/api/homepage/';
-      let body = {};
+      console.log('Starting post submission...');
+      setLoading(true);
+      setError('');
 
-      if (contentType === 'message') {
-        endpoint += 'posts';
-        body = {
-          content,
-          channel: selectedChannel,
-          teamId: selectedTeam
-        };
-      } else if (contentType === 'activity') {
-        endpoint += 'activities/share';
-        body = {
-          activityId: selectedActivity.id,
-          channel: selectedChannel,
-          teamId: selectedTeam
-        };
+      const token = await AsyncStorage.getItem('userToken');
+      console.log('Retrieved token:', token);
+      
+      if (!token) {
+        console.error('No token found in AsyncStorage');
+        setError('Please login again');
+        setLoading(false);
+        return;
       }
 
-      const response = await fetch(endpoint, {
+      if (!content.trim()) {
+        console.error('Content is empty');
+        setError('Content is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!contentType) {
+        console.error('Content type not selected');
+        setError('Please select a post type');
+        setLoading(false);
+        return;
+      }
+
+      const postData = {
+        type: contentType,
+        content: content.trim(),
+        channelType: selectedChannel?.type || 'public'
+      };
+
+      // Add activity specific fields if it's an activity post
+      if (contentType === 'activity') {
+        if (!activityType || !duration) {
+          console.error('Missing activity fields');
+          setError('Activity type and duration are required');
+          setLoading(false);
+          return;
+        }
+        postData.activityType = activityType;
+        postData.duration = parseInt(duration, 10);
+      }
+
+      // Add teamId if it's a team post
+      if (selectedChannel?.type === 'team' && selectedChannel?.teamId) {
+        postData.teamId = selectedChannel.teamId;
+      }
+
+      console.log('Sending post data:', postData);
+
+      const response = await fetch(`${API_CONFIG.API_URL}/posts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(postData)
       });
 
-      if (response.ok) {
-        setContent('');
-        setSelectedActivity(null);
-        onClose();
+      if (!response.ok) {
+        const responseData = await response.json();
+        throw new Error(responseData.message || 'Failed to create post');
+      }
+
+      const responseData = await response.json();
+      console.log('Server response:', responseData);
+
+      // Clear form and close modal
+      setContent('');
+      setActivityType('');
+      setDuration('');
+      onClose();
+      
+      // Refresh posts list
+      if (onPostCreated) {
+        onPostCreated();
       }
     } catch (error) {
-      console.error('Error creating content:', error);
+      console.error('Error creating post:', error);
+      setError(error.message || 'Failed to create post');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -683,104 +752,67 @@ const AddContentModal = ({ visible, onClose }) => {
       visible={visible}
       onRequestClose={onClose}
     >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Create New Post</Text>
           
-          {/* Channel Selection */}
-          <View style={styles.channelSelection}>
-            <TouchableOpacity
-              style={[
-                styles.channelOption,
-                selectedChannel === 'public' && styles.selectedOption
-              ]}
-              onPress={() => {
-                setSelectedChannel('public');
-                setShowTeamList(false);
-                setSelectedTeam(null);
-              }}
-            >
-              <Text style={selectedChannel === 'public' ? styles.selectedOptionText : styles.optionText}>
-                Public
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.channelOption,
-                selectedChannel === 'team' && styles.selectedOption
-              ]}
-              onPress={() => {
-                setSelectedChannel('team');
-                setShowTeamList(true);
-              }}
-            >
-              <Text style={selectedChannel === 'team' ? styles.selectedOptionText : styles.optionText}>
-                Team
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Team Selection */}
-          {showTeamList && (
-            <View style={styles.teamSelection}>
-              {teams.map(team => (
-                <TouchableOpacity 
-                  key={team.id}
-                  style={[
-                    styles.teamOption,
-                    selectedTeam === team.id && styles.selectedTeam
-                  ]}
-                  onPress={() => setSelectedTeam(team.id)}
-                >
-                  <Text style={selectedTeam === team.id ? styles.selectedTeamText : styles.teamOptionText}>
-                    {team.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
           {/* Content Type Selection */}
-          <View style={styles.contentTypeSelection}>
+          <View style={styles.typeSelection}>
             <TouchableOpacity
               style={[
-                styles.contentTypeOption,
-                contentType === 'message' && styles.selectedOption
+                styles.typeOption,
+                contentType === 'text' && styles.selectedOption
               ]}
-              onPress={() => setContentType('message')}
+              onPress={() => setContentType('text')}
             >
-              <Text style={contentType === 'message' ? styles.selectedOptionText : styles.optionText}>
-                Message
+              <Text style={contentType === 'text' ? styles.selectedOptionText : styles.optionText}>
+                Text Post
               </Text>
-              </TouchableOpacity>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[
-                styles.contentTypeOption,
+                styles.typeOption,
                 contentType === 'activity' && styles.selectedOption
               ]}
               onPress={() => setContentType('activity')}
             >
               <Text style={contentType === 'activity' ? styles.selectedOptionText : styles.optionText}>
-                Activity Share
+                Activity Post
               </Text>
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Error Message */}
+          {error ? (
+            <Text style={styles.errorText}>{error}</Text>
+          ) : null}
 
           {/* Content Input */}
-          {contentType === 'message' && (
-            <TextInput
-              style={styles.contentInput}
-              placeholder="What's on your mind?"
-              multiline
-              value={content}
-              onChangeText={setContent}
-            />
-          )}
+          <TextInput
+            style={styles.contentInput}
+            placeholder={contentType === 'text' ? "What's on your mind?" : "Describe your activity"}
+            multiline
+            value={content}
+            onChangeText={setContent}
+          />
 
+          {/* Activity Fields */}
           {contentType === 'activity' && (
-            <View style={styles.activitySelection}>
-              {/* Add activity selection UI here */}
-          </View>
+            <View style={styles.activityFields}>
+              <TextInput
+                style={styles.activityInput}
+                placeholder="Activity Type (e.g., running, cycling)"
+                value={activityType}
+                onChangeText={setActivityType}
+              />
+              <TextInput
+                style={styles.activityInput}
+                placeholder="Duration (minutes)"
+                value={duration}
+                onChangeText={setDuration}
+                keyboardType="numeric"
+              />
+            </View>
           )}
 
           {/* Action Buttons */}
@@ -788,17 +820,23 @@ const AddContentModal = ({ visible, onClose }) => {
             <TouchableOpacity
               style={[styles.modalButton, styles.confirmButton]}
               onPress={handleSubmit}
+              disabled={loading}
             >
-              <Text style={styles.modalButtonText}>Share</Text>
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.modalButtonText}>Share</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modalButton, styles.cancelButton]}
               onPress={onClose}
+              disabled={loading}
             >
               <Text style={styles.modalButtonText}>Cancel</Text>
             </TouchableOpacity>
+          </View>
         </View>
-    </View>
       </View>
     </Modal>
   );
@@ -813,6 +851,7 @@ const HomeScreen = () => {
   const [postType, setPostType] = useState(null);
   const [contentType, setContentType] = useState(null);
   const [postContent, setPostContent] = useState('');
+  const [posts, setPosts] = useState([]);
   const [userStats, setUserStats] = useState({
     totalPoints: 0,
     totalActivities: 0,
@@ -827,12 +866,42 @@ const HomeScreen = () => {
 
   useEffect(() => {
     fetchUserStats();
-  }, []);
+    fetchPosts();
+  }, [selectedChannel]);
+
+  const fetchPosts = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      let url = `${API_CONFIG.API_URL}/posts`;
+      
+      // Add query parameters based on selected channel
+      if (selectedChannel.type === 'team' && selectedChannel.teamId) {
+        url += `?teamId=${selectedChannel.teamId}`;
+      } else {
+        url += '?visibility=public';
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPosts(data);
+      } else {
+        console.error('Failed to fetch posts:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    }
+  };
 
   const fetchUserStats = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch('http://localhost:5000/api/homepage/stats/user', {
+      const response = await fetch(`${API_CONFIG.API_URL}/homepage/stats/user`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -861,12 +930,7 @@ const HomeScreen = () => {
   };
 
   const getCurrentPosts = () => {
-    if (selectedChannel.type === 'public') {
-      return samplePosts.public;
-    } else if (selectedChannel.type === 'team' && selectedChannel.teamId) {
-      return samplePosts.team[selectedChannel.teamId] || [];
-    }
-    return [];
+    return posts;
   };
 
   return (
@@ -955,7 +1019,7 @@ const HomeScreen = () => {
 
             <ScrollView style={styles.scrollView}>
               {getCurrentPosts().map(post => (
-                <PostCard key={post.id} post={post} />
+                <PostCard key={post._id} post={post} />
               ))}
             </ScrollView>
 
@@ -1008,6 +1072,7 @@ const HomeScreen = () => {
             <AddContentModal
               visible={showNewPostModal}
               onClose={() => setShowNewPostModal(false)}
+              onPostCreated={fetchPosts}
             />
           </View>
         </LinearGradient>
@@ -1407,11 +1472,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  channelSelection: {
+  typeSelection: {
     flexDirection: 'row',
     marginBottom: 15,
   },
-  channelOption: {
+  typeOption: {
     flex: 1,
     padding: 10,
     alignItems: 'center',
@@ -1466,8 +1531,14 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlignVertical: 'top',
   },
-  activitySelection: {
+  activityFields: {
     marginBottom: 15,
+  },
+  activityInput: {
+    height: 40,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    padding: 10,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1537,6 +1608,10 @@ const styles = StyleSheet.create({
   },
   likedText: {
     color: '#ff4b4b',
+  },
+  errorText: {
+    color: '#ff4b4b',
+    marginBottom: 10,
   },
 });
 

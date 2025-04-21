@@ -8,7 +8,8 @@ const commentSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   createdAt: {
     type: Date,
@@ -20,48 +21,77 @@ const postSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
   type: {
     type: String,
-    enum: ['text', 'activity', 'image'],
+    enum: ['text', 'activity'],
     required: true
   },
-  content: String,
-  activityId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Activity'
-  },
-  imageUrl: String,
-  channel: {
+  content: {
     type: String,
-    enum: ['public', 'team'],
-    required: true
+    required: true,
+    trim: true
   },
-  teamId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Team'
+  activityType: {
+    type: String,
+    required: function() {
+      return this.type === 'activity';
+    }
+  },
+  duration: {
+    type: Number,
+    required: function() {
+      return this.type === 'activity';
+    },
+    min: 0
+  },
+  points: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  progress: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
   },
   likes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
   comments: [commentSchema],
-  createdAt: {
-    type: Date,
-    default: Date.now
+  visibility: {
+    type: String,
+    enum: ['public', 'team', 'private'],
+    default: 'public'
+  },
+  teamId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team',
+    required: function() {
+      return this.visibility === 'team';
+    }
   }
+}, {
+  timestamps: true
 });
 
-// 添加获取点赞数的虚拟字段
+// Virtual fields
 postSchema.virtual('likeCount').get(function() {
   return this.likes.length;
 });
 
-// 添加获取评论数的虚拟字段
 postSchema.virtual('commentCount').get(function() {
   return this.comments.length;
 });
+
+// Indexes for better query performance
+postSchema.index({ createdAt: -1 });
+postSchema.index({ teamId: 1, visibility: 1 });
+postSchema.index({ userId: 1, type: 1 });
 
 const Post = mongoose.model('Post', postSchema);
 

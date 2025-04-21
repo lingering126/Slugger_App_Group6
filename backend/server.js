@@ -7,6 +7,9 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const os = require('os');
+const User = require('./models/User');
+const postsRouter = require('./homepage/routes/posts');
+const auth = require('./middleware/auth');
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
@@ -108,7 +111,7 @@ transporter.verify()
 
 // CORS configuration
 const corsOptions = {
-  origin: '*', // Allow all origins in development
+  origin: ['http://localhost:8081', 'http://localhost:19006'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
   credentials: true,
@@ -122,50 +125,42 @@ app.use(cors(corsOptions));
 // Add OPTIONS handling for preflight requests
 app.options('*', cors(corsOptions));
 
-
 app.use(express.json());
 
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB Atlas'))
-  .catch(err => {
-    console.error('Could not connect to MongoDB Atlas:', err.message);
-    // Continue with in-memory storage as fallback
-  });
+// Routes
+app.use('/api/posts', auth, postsRouter);
 
-// Define User Schema
-const userSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true,
-    lowercase: true
-  },
-  password: {
-    type: String,
-    required: true
-  },
-  isVerified: {
-    type: Boolean,
-    default: false // Changed to false to require verification
-  },
-  verificationToken: {
-    type: String,
-    default: null
-  },
-  verificationTokenExpires: {
-    type: Date,
-    default: null
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+// Connect to MongoDB Atlas
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+})
+.then(() => {
+  console.log('Successfully connected to MongoDB Atlas');
+  console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
+})
+.catch(err => {
+  console.error('MongoDB connection error:', err);
+  console.error('Error code:', err.code);
+  console.error('Error name:', err.name);
+  console.error('Full error:', err);
+  // Continue with in-memory storage as fallback
+  console.log('Falling back to in-memory storage');
 });
 
-// Create User model
-const User = mongoose.model('User', userSchema);
+// Add MongoDB connection error handlers
+mongoose.connection.on('error', err => {
+  console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('MongoDB reconnected');
+});
 
 // In-memory user storage as fallback
 const inMemoryUsers = [];

@@ -3,7 +3,7 @@ const router = express.Router();
 const activityController = require('../controllers/activityController');
 const postController = require('../controllers/postController');
 const statsController = require('../controllers/statsController');
-const auth = require('../middleware/auth');
+const auth = require('../../middleware/auth');
 
 // 中间件：检查用户是否已认证
 const isAuthenticated = (req, res, next) => {
@@ -23,8 +23,7 @@ router.put('/activities/:id/status', auth, activityController.updateActivityStat
 // 帖子相关路由
 router.post('/posts', auth, postController.createPost);
 router.get('/posts', auth, postController.getPosts);
-router.post('/posts/:id/like', auth, postController.likePost);
-router.post('/posts/:id/comment', auth, postController.commentPost);
+router.post('/posts/:postId/comments', auth, postController.addComment);
 
 // 统计相关路由
 router.get('/stats/user', auth, statsController.getUserStats);

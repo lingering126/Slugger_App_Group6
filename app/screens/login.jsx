@@ -161,11 +161,12 @@ export default function LoginScreen() {
           await AsyncStorage.removeItem('savedPassword');
         }
         
-        // Store token
-        await AsyncStorage.setItem('token', data.token);
-        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+        // Store user data
+        await AsyncStorage.setItem('userToken', data.token);
+        await AsyncStorage.setItem('userId', data.user.id);
+        await AsyncStorage.setItem('username', data.user.username);
         
-        setLoading(false);
+        console.log('User data stored in AsyncStorage');
         
         // Check if the user has completed the welcome flow
         const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
