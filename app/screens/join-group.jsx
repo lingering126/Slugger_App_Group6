@@ -16,11 +16,15 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function JoinGroupScreen() {
+  // State to store the group code entered by the user
   const [groupCode, setGroupCode] = useState('');
+  // State to manage the loading indicator
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Function to handle joining a group
   const handleJoinGroup = async () => {
+    // Validate that the group code is not empty
     if (!groupCode.trim()) {
       if (Platform.OS === 'web') {
         alert('Please enter a group code');
@@ -33,15 +37,16 @@ export default function JoinGroupScreen() {
     setLoading(true);
 
     try {
-      // 从 AsyncStorage 获取 token
+      // Retrieve the authentication token from local storage
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      // 获取服务器 API URL
+      // Define the API endpoint
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       
+      // Send a POST request to join the group
       const response = await fetch(`${apiUrl}/groups/join`, {
         method: 'POST',
         headers: {
@@ -55,6 +60,7 @@ export default function JoinGroupScreen() {
 
       const data = await response.json();
       
+      // Check if the response is successful
       if (!response.ok) {
         throw new Error(data.message || 'Failed to join group');
       }
@@ -62,7 +68,7 @@ export default function JoinGroupScreen() {
       setLoading(false);
       if (Platform.OS === 'web') {
         alert(`Successfully joined group "${data.name}"!`);
-        router.replace('/screens/(tabs)/home');
+        router.replace('/screens/(tabs)/home'); // Navigate to the home screen
       } else {
         Alert.alert(
           'Success',
@@ -95,6 +101,7 @@ export default function JoinGroupScreen() {
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <Text style={styles.title}>Join a Group</Text>
 
+          {/* Input field for the group code */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Group Code *</Text>
             <TextInput
@@ -106,6 +113,7 @@ export default function JoinGroupScreen() {
             />
           </View>
 
+          {/* Button to join the group */}
           <TouchableOpacity
             style={styles.button}
             onPress={handleJoinGroup}
@@ -118,6 +126,7 @@ export default function JoinGroupScreen() {
             )}
           </TouchableOpacity>
 
+          {/* Button to cancel and go back */}
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={() => router.replace('/screens/welcome')}

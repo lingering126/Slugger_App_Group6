@@ -3,16 +3,32 @@ const router = express.Router();
 const Group = require('../models/group');
 const authMiddleware = require('../middleware/auth');
 
-// 创建群组
+// Create a new group
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const {
+      name,
+      description,
+      targetName,
+      targetMentalValue,
+      targetPhysicalValue,
+      dailyLimitPhysical = 100,
+      dailyLimitMental = 100
+    } = req.body;
+
     const userId = req.user.userId;
+
     const group = new Group({
       name,
       description,
+      targetName,
+      targetMentalValue,
+      targetPhysicalValue,
+      dailyLimitPhysical,
+      dailyLimitMental,
       members: [userId]
     });
+
     await group.save();
     res.status(201).json(group);
   } catch (error) {
@@ -20,7 +36,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// 加入群组
+// Join an existing group
 router.post('/join', authMiddleware, async (req, res) => {
   try {
     const { groupId } = req.body;
@@ -38,7 +54,7 @@ router.post('/join', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取用户所有群组
+// Get all groups the user is a member of
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
