@@ -85,8 +85,34 @@ const teamService = {
 
   async leaveTeam(teamId) {
     try {
-      const response = await api.post(`/teams/${teamId}/leave`);
-      return response.data;
+      console.log('Attempting to leave team with ID:', teamId);
+      // 使用完全原生的fetch调用，绕过可能的拦截器问题
+      const token = await getAuthToken();
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const apiUrl = global.workingApiUrl || API_URL;
+      console.log(`Using API URL: ${apiUrl}/groups/leave`);
+      
+      const response = await fetch(`${apiUrl}/groups/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ groupId: teamId })
+      });
+      
+      console.log('Leave team response status:', response.status);
+      const data = await response.json();
+      console.log('Leave team response data:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to leave team');
+      }
+      
+      return data;
     } catch (error) {
       console.error('Error leaving team:', error);
       throw error;

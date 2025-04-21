@@ -75,4 +75,53 @@ router.get('/all', authMiddleware, async (req, res) => {
   }
 });
 
+// Leave a group
+router.post('/leave', authMiddleware, async (req, res) => {
+  try {
+    const { groupId } = req.body;
+    const userId = req.user.userId;
+    
+    console.log(`User ${userId} attempting to leave group ${groupId}`);
+    
+    if (!groupId) {
+      console.error('No groupId provided in request body');
+      return res.status(400).json({ message: 'Group ID is required' });
+    }
+    
+    const group = await Group.findById(groupId);
+    
+    if (!group) {
+      console.error(`Group not found with ID: ${groupId}`);
+      return res.status(404).json({ message: 'Group not found' });
+    }
+    
+    console.log(`Group found: ${group.name}, members: ${group.members}`);
+    
+    // Check if user is a member
+    const isMember = group.members.some(member => member.toString() === userId.toString());
+    if (!isMember) {
+      console.error(`User ${userId} is not a member of group ${groupId}`);
+      return res.status(400).json({ message: 'Not a member of this group' });
+    }
+    
+    // Remove user from group members
+    const originalMemberCount = group.members.length;
+    group.members = group.members.filter(member => member.toString() !== userId.toString());
+    
+    console.log(`Removed user ${userId} from group. Original members: ${originalMemberCount}, New members: ${group.members.length}`);
+    
+    await group.save();
+    console.log(`Group ${groupId} saved successfully after member removal`);
+    
+    res.status(200).json({ 
+      message: 'Successfully left the group', 
+      group,
+      membersRemoved: originalMemberCount - group.members.length
+    });
+  } catch (error) {
+    console.error('Error leaving group:', error);
+    res.status(500).json({ message: 'Failed to leave group', error: error.message });
+  }
+});
+
 module.exports = router;

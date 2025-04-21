@@ -238,53 +238,76 @@ export default function TeamsScreen() {
     }
   };
 
-  const handleLeaveTeam = async () => {
-    if (!userTeam) return;
-    
-    try {
-      setLoading(true);
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert('Error', 'Please log in first');
-        return;
-      }
-
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      console.log('Leaving team:', userTeam._id);
-      
-      const response = await fetch(`${apiUrl}/groups/leave`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          groupId: userTeam._id
-        })
-      });
-
-      console.log('Leave response status:', response.status);
-      const data = await response.json();
-      console.log('Leave response data:', data);
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to leave team');
-      }
-
-      // 检查团队是否为空
-      const updatedTeams = teams.filter(team => team._id !== userTeam._id);
-      setTeams(updatedTeams);
-      
-      // 清除用户团队状态
-      setUserTeam(null);
-      
-      Alert.alert('Success', 'Successfully left the team');
-    } catch (error) {
-      console.error('Error leaving team:', error);
-      Alert.alert('Error', error.message || 'Failed to leave team');
-    } finally {
-      setLoading(false);
+  // 增强版退出团队功能，确保退出后自动刷新状态
+  const handleLeaveTeam = () => {
+    if (!userTeam) {
+      console.log('No team to leave');
+      return;
     }
+    
+    console.log('Preparing to leave team:', userTeam._id);
+    
+    // 保存团队ID以便后续使用
+    const teamIdToLeave = userTeam._id;
+    
+    // 立即清除用户团队状态，返回团队列表
+    setUserTeam(null);
+    
+    // 立即重新加载团队列表
+    loadTeams();
+    
+    // 设置定时器，延迟再次刷新团队列表，确保状态更新
+    setTimeout(() => {
+      console.log('Refreshing team list after delay');
+      loadTeams();
+    }, 1000);
+    
+    // 再次延迟刷新，确保后端数据已更新
+    setTimeout(() => {
+      console.log('Final refresh of team list');
+      loadTeams();
+    }, 2000);
+    
+    // 在后台尝试调用API退出团队
+    try {
+      // 获取token
+      AsyncStorage.getItem('token').then(token => {
+        if (!token) return;
+        
+        const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${apiUrl}/groups/leave`);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        
+        xhr.onload = function() {
+          console.log('Leave team API response status:', xhr.status);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            console.log('Successfully left team, refreshing team list');
+            // API调用成功后再次刷新团队列表
+            loadTeams();
+          } else {
+            console.error('Error leaving team:', xhr.responseText);
+          }
+        };
+        
+        xhr.onerror = function() {
+          console.error('Network error when leaving team');
+        };
+        
+        xhr.send(JSON.stringify({ groupId: teamIdToLeave }));
+      }).catch(err => {
+        console.error('Error getting token:', err);
+      });
+    } catch (error) {
+      console.error('Error in leave team process:', error);
+    }
+  };
+  
+  // 单独的函数处理团队列表中的“返回”按钮
+  const handleBackToTeamList = () => {
+    console.log('Returning to team list without leaving');
+    setUserTeam(null);
   };
 
   const handleAddGoal = async () => {
@@ -432,38 +455,64 @@ export default function TeamsScreen() {
     setTeamProgress(Math.round(totalProgress / team.goals.length));
   };
 
-  const renderTeamCard = ({ item }) => (
-    <View style={styles.teamCard}>
-      <View style={styles.teamCardHeader}>
-        <Ionicons name="people" size={24} color="#4A90E2" />
-        <Text style={styles.teamName}>{item.name}</Text>
+  // 进入团队而不是加入团队（已经是成员的情况）
+  const handleEnterTeam = (team) => {
+    setUserTeam(team);
+  };
+  
+  const renderTeamCard = ({ item }) => {
+    // 检查用户是否是团队成员，简化逻辑以适应不同的数据结构
+    const isTeamMember = item.members && Array.isArray(item.members) && item.members.some(member => {
+      // 如果成员是对象并且有user属性
+      if (typeof member === 'object' && member.user) {
+        return member.user._id === userId || member.user.id === userId;
+      }
+      // 如果成员是字符串ID
+      if (typeof member === 'string') {
+        return member === userId;
+      }
+      // 如果成员是对象但没有user属性（可能直接是ID）
+      if (typeof member === 'object' && member._id) {
+        return member._id === userId;
+      }
+      return false;
+    });
+    
+    console.log(`Checking if user ${userId} is member of team ${item.name}: ${isTeamMember}`);
+    
+    return (
+      <View style={styles.teamCard}>
+        <View style={styles.teamCardHeader}>
+          <Ionicons name="people" size={24} color="#4A90E2" />
+          <Text style={styles.teamName}>{item.name}</Text>
+        </View>
+        <View style={styles.teamCardBody}>
+          <Text style={styles.memberCount}>
+            {item.members?.length || 0} members
+          </Text>
+          <Text style={styles.targetInfo}>
+            Target: {item.targetName}
+          </Text>
+          <Text style={styles.description}>
+            {item.description || 'No description provided'}
+          </Text>
+        </View>
+        {!userTeam && (
+          <TouchableOpacity 
+            style={[styles.joinButton, isTeamMember ? styles.enterButton : styles.joinButton]} 
+            onPress={() => isTeamMember ? handleEnterTeam(item) : handleJoinTeam(item._id)}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.joinButtonText}>{isTeamMember ? 'Enter Team' : 'Join Team'}</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
-      <View style={styles.teamCardBody}>
-        <Text style={styles.memberCount}>
-          {item.members?.length || 0} members
-        </Text>
-        <Text style={styles.targetInfo}>
-          Target: {item.targetName}
-        </Text>
-        <Text style={styles.description}>
-          {item.description || 'No description provided'}
-        </Text>
-      </View>
-      {!userTeam && (
-        <TouchableOpacity 
-          style={styles.joinButton} 
-          onPress={() => handleJoinTeam(item._id)}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.joinButtonText}>Join Team</Text>
-          )}
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -478,6 +527,15 @@ export default function TeamsScreen() {
   const renderTeamDashboard = () => (
     <View style={styles.teamDashboard}>
       <View style={styles.teamHeader}>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBackToTeamList}
+          >
+            <Ionicons name="arrow-back" size={24} color="#4A90E2" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.teamTitle}>{userTeam.name}</Text>
         <Text style={styles.teamDescription}>{userTeam.description}</Text>
       </View>
@@ -496,7 +554,7 @@ export default function TeamsScreen() {
           <View key={index} style={styles.memberCard}>
             <Ionicons name="person-circle" size={40} color="#4A90E2" />
             <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>{member.name || 'Anonymous'}</Text>
+              <Text style={styles.memberName}>{member.user?.name || (member.user?.email ? member.user.email.split('@')[0] : 'Anonymous')}</Text>
               <Text style={styles.memberRole}>{member.role || 'Member'}</Text>
             </View>
           </View>
@@ -924,6 +982,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F5F7FA",
     padding: 16,
+  },
+  enterButton: {
+    backgroundColor: "#2ECC71",
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  backButtonText: {
+    marginLeft: 5,
+    fontSize: 16,
+    color: "#4A90E2",
+    fontWeight: "bold",
+  },
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    width: '100%',
+    marginBottom: 10,
   },
   headerContainer: {
     flexDirection: 'row',
