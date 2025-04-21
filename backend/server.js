@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs');
 const os = require('os');
 const teamRoutes = require('./src/routes/team');
 const authRoutes = require('./src/routes/auth');
+const User = require('./src/models/user');
 
 
 // Function to get all server IP addresses
@@ -136,40 +137,6 @@ mongoose.connect(process.env.MONGODB_URI)
     // Continue with in-memory storage as fallback
   });
 
-
-// Define User Schema
-const userSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true,
-    lowercase: true
-  },
-  password: {
-    type: String,
-    required: true
-  },
-  isVerified: {
-    type: Boolean,
-    default: false // Changed to false to require verification
-  },
-  verificationToken: {
-    type: String,
-    default: null
-  },
-  verificationTokenExpires: {
-    type: Date,
-    default: null
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-// Create User model
-const User = mongoose.model('User', userSchema);
 
 // In-memory user storage as fallback
 const inMemoryUsers = [];
