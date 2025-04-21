@@ -508,97 +508,6 @@ const PostCard = ({ post }) => {
   );
 };
 
-const ChannelSelector = ({ selectedChannel, onChannelSelect }) => {
-  const [showTeamList, setShowTeamList] = useState(false);
-  const [teams, setTeams] = useState([
-    { id: '1', name: 'Team A' },
-    { id: '2', name: 'Team B' },
-    { id: '3', name: 'Team C' },
-  ]);
-  
-  const slideAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(slideAnim, {
-      toValue: showTeamList ? 1 : 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  }, [showTeamList]);
-
-  const handleTeamSelect = (team) => {
-    onChannelSelect({ type: 'team', teamId: team.id, teamName: team.name });
-    setShowTeamList(false);
-  };
-
-  return (
-    <View style={styles.channelSelectorContainer}>
-      <View style={styles.channelButtonsRow}>
-        <TouchableOpacity
-          style={[
-            styles.channelButton,
-            selectedChannel.type === 'public' && styles.selectedChannelButton,
-          ]}
-          onPress={() => {
-            onChannelSelect({ type: 'public' });
-            setShowTeamList(false);
-          }}
-        >
-          <Text style={[
-            styles.channelButtonText,
-            selectedChannel.type === 'public' && styles.selectedChannelButtonText
-          ]}>Public</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.channelButton,
-            selectedChannel.type === 'team' && styles.selectedChannelButton,
-          ]}
-          onPress={() => setShowTeamList(!showTeamList)}
-        >
-          <Text style={[
-            styles.channelButtonText,
-            selectedChannel.type === 'team' && styles.selectedChannelButtonText
-          ]}>Team</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Animated.View 
-        style={[
-          styles.teamList,
-          {
-            opacity: slideAnim,
-            transform: [{
-              translateY: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [-20, 0],
-              }),
-            }],
-            display: showTeamList ? 'flex' : 'none',
-          },
-        ]}
-      >
-        {teams.map((team) => (
-          <TouchableOpacity
-            key={team.id}
-            style={[
-              styles.teamItem,
-              selectedChannel.teamId === team.id && styles.selectedTeamItem,
-            ]}
-            onPress={() => handleTeamSelect(team)}
-          >
-            <Text style={[
-              styles.teamItemText,
-              selectedChannel.teamId === team.id && styles.selectedTeamItemText,
-            ]}>{team.name}</Text>
-        </TouchableOpacity>
-        ))}
-      </Animated.View>
-      </View>
-  );
-};
-
 const StatsCard = ({ title, personalProgress, teamProgress }) => (
   <View style={styles.statsCard}>
     <View style={styles.statsHeader}>
@@ -845,8 +754,6 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
 const HomeScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedChannel, setSelectedChannel] = useState({ type: 'public' });
-  const [selectedTeam, setSelectedTeam] = useState(null);
   const [showNewPostModal, setShowNewPostModal] = useState(false);
   const [postType, setPostType] = useState(null);
   const [contentType, setContentType] = useState(null);
@@ -867,21 +774,12 @@ const HomeScreen = () => {
   useEffect(() => {
     fetchUserStats();
     fetchPosts();
-  }, [selectedChannel]);
+  }, []);
 
   const fetchPosts = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      let url = `${API_CONFIG.API_URL}/posts`;
-      
-      // Add query parameters based on selected channel
-      if (selectedChannel.type === 'team' && selectedChannel.teamId) {
-        url += `?teamId=${selectedChannel.teamId}`;
-      } else {
-        url += '?visibility=public';
-      }
-
-      const response = await fetch(url, {
+      const response = await fetch(`${API_CONFIG.API_URL}/posts`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -919,18 +817,6 @@ const HomeScreen = () => {
     } catch (error) {
       console.error('Error fetching user stats:', error);
     }
-  };
-
-  const handleChannelSelect = (channel) => {
-    setSelectedChannel(channel);
-  };
-
-  const handleTeamSelect = (teamId) => {
-    setSelectedTeam(teamId);
-  };
-
-  const getCurrentPosts = () => {
-    return posts;
   };
 
   return (
@@ -1011,14 +897,8 @@ const HomeScreen = () => {
               </View>
             </View>
 
-            {/* Rest of the content */}
-            <ChannelSelector 
-              selectedChannel={selectedChannel}
-              onChannelSelect={handleChannelSelect}
-            />
-
             <ScrollView style={styles.scrollView}>
-              {getCurrentPosts().map(post => (
+              {posts.map(post => (
                 <PostCard key={post._id} post={post} />
               ))}
             </ScrollView>
@@ -1178,74 +1058,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     textAlign: 'right',
-  },
-  channelSelectorContainer: {
-    padding: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    zIndex: 1,
-  },
-  channelButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-  },
-  channelButton: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    flex: 1,
-    marginHorizontal: 5,
-    justifyContent: 'center',
-  },
-  selectedChannelButton: {
-    backgroundColor: '#6c63ff',
-  },
-  channelButtonText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
-  },
-  selectedChannelButtonText: {
-    color: '#fff',
-  },
-  teamList: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    zIndex: 2,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  teamItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 15,
-    marginBottom: 5,
-    backgroundColor: '#f5f5f0',
-  },
-  selectedTeamItem: {
-    backgroundColor: '#6c63ff',
-  },
-  teamItemText: {
-    color: '#666',
-    textAlign: 'center',
-  },
-  selectedTeamItemText: {
-    color: '#fff',
   },
   scrollView: {
     flex: 1, 
