@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Image, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Image, ScrollView, Alert, ActivityIndicator, Picker } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import teamService from "../../services/teamService";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 export default function TeamsScreen() {
   const [teams, setTeams] = useState([]);
   const [userTeam, setUserTeam] = useState(null);
   const [search, setSearch] = useState("");
-  const [newTeam, setNewTeam] = useState("");
+  const [newTeam, setNewTeam] = useState({
+    name: '',
+    description: '',
+    targetName: '',
+    targetMentalValue: 0,
+    targetPhysicalValue: 0,
+    dailyLimitPhysical: 7,
+    dailyLimitMental: 7
+  });
   const [modalVisible, setModalVisible] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
   const [forfeitsModalVisible, setForfeitsModalVisible] = useState(false);
@@ -19,125 +28,262 @@ export default function TeamsScreen() {
   const [teamProgress, setTeamProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
+  const navigation = useNavigation();
 
   useEffect(() => {
     loadUserData();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadTeams();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
   const loadUserData = async () => {
     try {
-      console.log('Loading user data from AsyncStorage...');
       const userData = await AsyncStorage.getItem('user');
-      console.log('User data from AsyncStorage:', userData);
-      
       if (userData) {
-        const parsedData = JSON.parse(userData);
-        console.log('Parsed user data:', parsedData);
-        const { id } = parsedData;
-        setUserId(id);
-        loadTeams(id);
-      } else {
-        console.log('No user data found in AsyncStorage');
-        Alert.alert("Error", "Please login first");
+        const parsedUser = JSON.parse(userData);
+        setUserId(parsedUser.id);
+        await loadTeams();
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      Alert.alert("Error", "Failed to load user data");
     }
   };
 
-  const loadTeams = async (currentUserId) => {
+  const loadTeams = async () => {
     try {
-      const teamsData = await teamService.getAllTeams();
-      setTeams(teamsData);
-      // Find user's team
-      const userTeamData = teamsData.find(team => 
-        team.members.some(member => member.user._id === currentUserId || member.user.id === currentUserId)
-      );
-      if (userTeamData) {
-        setUserTeam(userTeamData);
-        calculateTeamProgress(userTeamData);
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.log('No token found');
+        return;
+      }
+
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Loading teams from:', `${apiUrl}/groups/all`);
+      
+      const response = await fetch(`${apiUrl}/groups/all`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Response status:', response.status);
+      const data = await response.json();
+      console.log('Response data:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to load teams');
+      }
+
+      if (!Array.isArray(data)) {
+        console.error('Teams data is not an array:', data);
+        setTeams([]);
+        return;
+      }
+
+      // 过滤掉没有成员的团队
+      const activeTeams = data.filter(team => team.members && team.members.length > 0);
+      setTeams(activeTeams);
+
+      // 查找用户所在的团队
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        console.log('Current user ID:', parsedUser.id);
+        
+        const userTeam = activeTeams.find(team => {
+          console.log('Checking team:', team._id);
+          console.log('Team members:', team.members);
+          return team.members && team.members.some(member => {
+            console.log('Member user:', member.user);
+            return member.user && (member.user._id === parsedUser.id || member.user.id === parsedUser.id);
+          });
+        });
+        
+        console.log('Found user team:', userTeam);
+        setUserTeam(userTeam);
       }
     } catch (error) {
       console.error('Error loading teams:', error);
-      Alert.alert("Error", "Failed to load teams");
-    }
-  };
-
-  const calculateTeamProgress = (team) => {
-    if (!team.goals.length) return;
-    const totalProgress = team.goals.reduce((sum, goal) => {
-      return sum + (parseInt(goal.current) / parseInt(goal.target)) * 100;
-    }, 0);
-    setTeamProgress(Math.round(totalProgress / team.goals.length));
-  };
-
-  const handleCreateTeam = async () => {
-    console.log('Creating team...', { userId, newTeam });
-    
-    if (!userId) {
-      Alert.alert("Error", "Please login first");
-      return;
-    }
-
-    if (!newTeam.trim()) {
-      Alert.alert("Error", "Please enter a team name");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      console.log('Sending request to create team...');
-      
-      const teamData = await teamService.createTeam({ 
-        name: newTeam,
-        userId: userId
-      });
-      
-      console.log('Team created successfully:', teamData);
-      
-      if (teamData) {
-        setTeams([...teams, teamData]);
-        setUserTeam(teamData);
-        setNewTeam("");
-        setModalVisible(false);
-        Alert.alert("Success", "Team created successfully!");
-      } else {
-        throw new Error("Failed to create team");
-      }
-    } catch (error) {
-      console.error('Error creating team:', error);
-      Alert.alert(
-        "Error", 
-        error.message || "Failed to create team. Please check console for details."
-      );
+      Alert.alert('Error', error.message || 'Failed to load teams');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleJoinTeam = async (team) => {
-    if (!userTeam) {
-      try {
-        const updatedTeam = await teamService.joinTeam(team._id);
-        setTeams(teams.map(t => (t._id === team._id ? updatedTeam : t)));
-        setUserTeam(updatedTeam);
-        calculateTeamProgress(updatedTeam);
-      } catch (error) {
-        Alert.alert("Error", "Failed to join team");
+  const handleCreateTeam = async () => {
+    if (!newTeam.name.trim()) {
+      Alert.alert('Error', 'Please enter a team name');
+      return;
+    }
+
+    if (!newTeam.targetName) {
+      Alert.alert('Error', 'Please select a target category');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
       }
+
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      const response = await fetch(`${apiUrl}/groups`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: newTeam.name,
+          description: newTeam.description,
+          targetName: newTeam.targetName,
+          targetMentalValue: parseInt(newTeam.targetMentalValue),
+          targetPhysicalValue: parseInt(newTeam.targetPhysicalValue),
+          dailyLimitPhysical: parseInt(newTeam.dailyLimitPhysical),
+          dailyLimitMental: parseInt(newTeam.dailyLimitMental)
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to create team');
+      }
+
+      setModalVisible(false);
+      setNewTeam({
+        name: '',
+        description: '',
+        targetName: '',
+        targetMentalValue: 0,
+        targetPhysicalValue: 0,
+        dailyLimitPhysical: 7,
+        dailyLimitMental: 7
+      });
+      Alert.alert('Success', 'Team created successfully');
+      await loadTeams();
+    } catch (error) {
+      console.error('Error creating team:', error);
+      Alert.alert('Error', error.message || 'Failed to create team');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJoinTeam = async (teamId) => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Joining team:', teamId);
+      
+      const response = await fetch(`${apiUrl}/groups/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          groupId: teamId
+        })
+      });
+
+      console.log('Join response status:', response.status);
+      const data = await response.json();
+      console.log('Join response data:', data);
+
+      if (response.status === 400 && data.message === 'Already a member') {
+        // 如果已经是成员，直接更新状态
+        const team = teams.find(t => t._id === teamId);
+        if (team) {
+          setUserTeam(team);
+          Alert.alert('Info', 'You are already a member of this team');
+          return;
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to join team');
+      }
+
+      // 更新用户团队状态
+      const team = teams.find(t => t._id === teamId);
+      if (team) {
+        setUserTeam(team);
+      }
+
+      Alert.alert('Success', 'Successfully joined the team');
+      await loadTeams(); // 重新加载团队列表
+    } catch (error) {
+      console.error('Error joining team:', error);
+      Alert.alert('Error', error.message || 'Failed to join team');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLeaveTeam = async () => {
-    if (userTeam) {
-      try {
-        await teamService.leaveTeam(userTeam._id);
-        setTeams(teams.map(t => (t._id === userTeam._id ? { ...t, members: t.members.filter(m => m.user._id !== "currentUserId") } : t)));
-        setUserTeam(null);
-      } catch (error) {
-        Alert.alert("Error", "Failed to leave team");
+    if (!userTeam) return;
+    
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
       }
+
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Leaving team:', userTeam._id);
+      
+      const response = await fetch(`${apiUrl}/groups/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          groupId: userTeam._id
+        })
+      });
+
+      console.log('Leave response status:', response.status);
+      const data = await response.json();
+      console.log('Leave response data:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to leave team');
+      }
+
+      // 检查团队是否为空
+      const updatedTeams = teams.filter(team => team._id !== userTeam._id);
+      setTeams(updatedTeams);
+      
+      // 清除用户团队状态
+      setUserTeam(null);
+      
+      Alert.alert('Success', 'Successfully left the team');
+    } catch (error) {
+      console.error('Error leaving team:', error);
+      Alert.alert('Error', error.message || 'Failed to leave team');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -278,32 +424,108 @@ export default function TeamsScreen() {
     }
   };
 
+  const calculateTeamProgress = (team) => {
+    if (!team.goals.length) return;
+    const totalProgress = team.goals.reduce((sum, goal) => {
+      return sum + (parseInt(goal.current) / parseInt(goal.target)) * 100;
+    }, 0);
+    setTeamProgress(Math.round(totalProgress / team.goals.length));
+  };
+
+  const renderTeamCard = ({ item }) => (
+    <View style={styles.teamCard}>
+      <View style={styles.teamCardHeader}>
+        <Ionicons name="people" size={24} color="#4A90E2" />
+        <Text style={styles.teamName}>{item.name}</Text>
+      </View>
+      <View style={styles.teamCardBody}>
+        <Text style={styles.memberCount}>
+          {item.members?.length || 0} members
+        </Text>
+        <Text style={styles.targetInfo}>
+          Target: {item.targetName}
+        </Text>
+        <Text style={styles.description}>
+          {item.description || 'No description provided'}
+        </Text>
+      </View>
+      {!userTeam && (
+        <TouchableOpacity 
+          style={styles.joinButton} 
+          onPress={() => handleJoinTeam(item._id)}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.joinButtonText}>Join Team</Text>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Ionicons name="people-outline" size={64} color="#4A90E2" />
+      <Text style={styles.emptyStateTitle}>No Teams Found</Text>
+      <Text style={styles.emptyStateText}>
+        Create a new team or join an existing one to get started!
+      </Text>
+    </View>
+  );
+
   const renderTeamDashboard = () => (
-    <View style={styles.dashboardContainer}>
+    <View style={styles.teamDashboard}>
+      <View style={styles.teamHeader}>
+        <Text style={styles.teamTitle}>{userTeam.name}</Text>
+        <Text style={styles.teamDescription}>{userTeam.description}</Text>
+      </View>
+      
       <View style={styles.progressContainer}>
-        <Text style={styles.progressTitle}>Team Progress</Text>
+        <Text style={styles.sectionTitle}>Team Progress</Text>
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${teamProgress}%` }]} />
+          <View style={[styles.progressFill, { width: '50%' }]} />
         </View>
-        <Text style={styles.progressText}>{teamProgress}% Complete</Text>
+        <Text style={styles.progressText}>50% Complete</Text>
       </View>
 
       <View style={styles.membersContainer}>
-        <Text style={styles.sectionTitle}>Team Members</Text>
-        <FlatList
-          data={userTeam.members}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item }) => (
-            <View style={styles.memberCard}>
-              <Image source={{ uri: item.avatar }} style={styles.avatar} />
-              <View style={styles.memberInfo}>
-                <Text style={styles.memberName}>{item.name}</Text>
-                <Text style={styles.memberRole}>{item.role}</Text>
-                <Text style={styles.memberPoints}>{item.points} points</Text>
-              </View>
+        <Text style={styles.sectionTitle}>Team Members ({userTeam.members?.length || 0})</Text>
+        {userTeam.members?.map((member, index) => (
+          <View key={index} style={styles.memberCard}>
+            <Ionicons name="person-circle" size={40} color="#4A90E2" />
+            <View style={styles.memberInfo}>
+              <Text style={styles.memberName}>{member.name || 'Anonymous'}</Text>
+              <Text style={styles.memberRole}>{member.role || 'Member'}</Text>
             </View>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.targetsContainer}>
+        <Text style={styles.sectionTitle}>Team Targets</Text>
+        <View style={styles.targetCard}>
+          <Text style={styles.targetName}>{userTeam.targetName}</Text>
+          <View style={styles.targetValues}>
+            <Text style={styles.targetValue}>Mental: {userTeam.targetMentalValue}</Text>
+            <Text style={styles.targetValue}>Physical: {userTeam.targetPhysicalValue}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.teamActions}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.leaveButton]}
+          onPress={handleLeaveTeam}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.actionButtonText}>Leave Team</Text>
           )}
-        />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -337,75 +559,6 @@ export default function TeamsScreen() {
         keyExtractor={(item) => item._id}
         renderItem={renderForfeitCard}
       />
-    </View>
-  );
-
-  const renderCreateTeamModal = () => (
-    <Modal visible={modalVisible} transparent animationType="slide">
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Create New Team</Text>
-          <TextInput
-            style={styles.input}
-            value={newTeam}
-            onChangeText={setNewTeam}
-            placeholder="Enter team name"
-            placeholderTextColor="#999"
-          />
-          <View style={styles.modalButtons}>
-            <TouchableOpacity 
-              style={[styles.modalButton, loading && styles.disabledButton]} 
-              onPress={handleCreateTeam}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Create Team</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.modalButton, styles.closeButton]} 
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={styles.buttonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const renderTeamCard = ({ item }) => (
-    <View style={styles.teamCard}>
-      <View style={styles.teamCardHeader}>
-        <Ionicons name="people" size={24} color="#4A90E2" />
-        <Text style={styles.teamName}>{item.name}</Text>
-      </View>
-      <View style={styles.teamCardBody}>
-        <Text style={styles.memberCount}>
-          {item.members?.length || 0} members
-        </Text>
-        <Text style={styles.goalCount}>
-          {item.goals?.length || 0} active goals
-        </Text>
-      </View>
-      <TouchableOpacity 
-        style={styles.joinButton} 
-        onPress={() => handleJoinTeam(item)}
-      >
-        <Text style={styles.joinButtonText}>Join Team</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="people-outline" size={64} color="#4A90E2" />
-      <Text style={styles.emptyStateTitle}>No Teams Found</Text>
-      <Text style={styles.emptyStateText}>
-        Create a new team or join an existing one to get started!
-      </Text>
     </View>
   );
 
@@ -564,6 +717,154 @@ export default function TeamsScreen() {
     </Modal>
   );
 
+  const renderCreateTeamModal = () => (
+    <Modal
+      visible={modalVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Create a New Team</Text>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Team Name *</Text>
+            <TextInput
+              style={styles.input}
+              value={newTeam.name}
+              onChangeText={(text) => setNewTeam({ ...newTeam, name: text })}
+              placeholder="Enter a name for your team"
+              maxLength={30}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Team Description</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={newTeam.description}
+              onChangeText={(text) => setNewTeam({ ...newTeam, description: text })}
+              placeholder="Describe your team's purpose or goals"
+              multiline
+              numberOfLines={4}
+              maxLength={200}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Target Name</Text>
+            <Picker
+              selectedValue={newTeam.targetName}
+              onValueChange={(itemValue) => setNewTeam({ ...newTeam, targetName: itemValue })}
+              style={styles.picker}
+            >
+              <Picker.Item label="Select a category" value="" />
+              <Picker.Item label="Target 1" value="Target 1" />
+              <Picker.Item label="Target 2" value="Target 2" />
+              <Picker.Item label="Target 3" value="Target 3" />
+              <Picker.Item label="Target 4" value="Target 4" />
+              <Picker.Item label="Target 5" value="Target 5" />
+              <Picker.Item label="Target 6" value="Target 6" />
+              <Picker.Item label="Target 7" value="Target 7" />
+              <Picker.Item label="Target 8" value="Target 8" />
+              <Picker.Item label="Target 9" value="Target 9" />
+              <Picker.Item label="Target 10" value="Target 10" />
+            </Picker>
+          </View>
+
+          <View style={[styles.formGroup, styles.row]}>
+            <View style={styles.halfWidth}>
+              <Text style={styles.label}>Mental Target Value</Text>
+              <TextInput
+                style={styles.input}
+                value={String(newTeam.targetMentalValue)}
+                onChangeText={(text) => {
+                  const intValue = text.replace(/[^0-9]/g, '');
+                  setNewTeam({ ...newTeam, targetMentalValue: intValue });
+                }}
+                placeholder="e.g., 50, 100"
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.halfWidth}>
+              <Text style={styles.label}>Daily Mental Limit</Text>
+              <Picker
+                selectedValue={newTeam.dailyLimitMental}
+                onValueChange={(itemValue) => setNewTeam({ ...newTeam, dailyLimitMental: itemValue })}
+                style={styles.picker}
+              >
+                <Picker.Item label="0" value={0} />
+                <Picker.Item label="1" value={1} />
+                <Picker.Item label="2" value={2} />
+                <Picker.Item label="3" value={3} />
+                <Picker.Item label="4" value={4} />
+                <Picker.Item label="5" value={5} />
+                <Picker.Item label="6" value={6} />
+                <Picker.Item label="7" value={7} />
+              </Picker>
+            </View>
+          </View>
+
+          <View style={[styles.formGroup, styles.row]}>
+            <View style={styles.halfWidth}>
+              <Text style={styles.label}>Physical Target Value</Text>
+              <TextInput
+                style={styles.input}
+                value={String(newTeam.targetPhysicalValue)}
+                onChangeText={(text) => {
+                  const intValue = text.replace(/[^0-9]/g, '');
+                  setNewTeam({ ...newTeam, targetPhysicalValue: intValue });
+                }}
+                placeholder="e.g., 200, 300"
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.halfWidth}>
+              <Text style={styles.label}>Daily Physical Limit</Text>
+              <Picker
+                selectedValue={newTeam.dailyLimitPhysical}
+                onValueChange={(itemValue) => setNewTeam({ ...newTeam, dailyLimitPhysical: itemValue })}
+                style={styles.picker}
+              >
+                <Picker.Item label="0" value={0} />
+                <Picker.Item label="1" value={1} />
+                <Picker.Item label="2" value={2} />
+                <Picker.Item label="3" value={3} />
+                <Picker.Item label="4" value={4} />
+                <Picker.Item label="5" value={5} />
+                <Picker.Item label="6" value={6} />
+                <Picker.Item label="7" value={7} />
+              </Picker>
+            </View>
+          </View>
+
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.saveButton]}
+              onPress={handleCreateTeam}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Create Team</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -584,22 +885,6 @@ export default function TeamsScreen() {
           {renderTeamDashboard()}
           {renderGoals()}
           {renderForfeits()}
-          <View style={styles.teamActions}>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.leaveButton]}
-              onPress={handleLeaveTeam}
-            >
-              <Text style={styles.actionButtonText}>Leave Team</Text>
-            </TouchableOpacity>
-            {userTeam.members.find(m => m.user._id === userId)?.role === 'leader' && (
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.deleteButton]}
-                onPress={handleDeleteTeam}
-              >
-                <Text style={styles.actionButtonText}>Delete Team</Text>
-              </TouchableOpacity>
-            )}
-          </View>
         </ScrollView>
       ) : (
         <>
@@ -619,6 +904,8 @@ export default function TeamsScreen() {
             renderItem={renderTeamCard}
             ListEmptyComponent={renderEmptyState}
             contentContainerStyle={styles.teamList}
+            refreshing={loading}
+            onRefresh={loadTeams}
           />
         </>
       )}
@@ -716,7 +1003,12 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 4,
   },
-  goalCount: {
+  targetInfo: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 4,
+  },
+  description: {
     fontSize: 14,
     color: "#666",
   },
@@ -796,20 +1088,81 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.7,
   },
-  dashboardContainer: { marginBottom: 20 },
-  progressContainer: { backgroundColor: "#fff", padding: 15, borderRadius: 10, marginBottom: 15 },
-  progressTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
-  progressBar: { height: 20, backgroundColor: "#E8F0F2", borderRadius: 10, overflow: "hidden" },
-  progressFill: { height: "100%", backgroundColor: "#4A90E2" },
-  progressText: { textAlign: "center", marginTop: 5 },
-  membersContainer: { backgroundColor: "#fff", padding: 15, borderRadius: 10, marginBottom: 15 },
+  scrollView: { padding: 16 },
+  teamDashboard: { marginBottom: 20 },
+  teamHeader: {
+    marginBottom: 20,
+  },
+  teamTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 8,
+  },
+  teamDescription: {
+    fontSize: 16,
+    color: '#666',
+  },
+  progressContainer: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
-  memberCard: { flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderBottomColor: "#E8F0F2" },
+  progressBar: {
+    height: 10,
+    backgroundColor: '#E8F0F2',
+    borderRadius: 5,
+    marginVertical: 10,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4A90E2',
+  },
+  progressText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 14,
+  },
+  membersContainer: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  memberCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8F0F2',
+  },
   avatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
-  memberInfo: { flex: 1 },
-  memberName: { fontSize: 16, fontWeight: "bold" },
-  memberRole: { fontSize: 14, color: "#666" },
-  memberPoints: { fontSize: 14, color: "#4A90E2" },
+  memberInfo: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  memberRole: {
+    fontSize: 14,
+    color: '#666',
+  },
   goalsContainer: { backgroundColor: "#fff", padding: 15, borderRadius: 10, marginBottom: 15 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   goalCard: { backgroundColor: "#F8F9FA", padding: 15, borderRadius: 10, marginBottom: 10 },
@@ -824,28 +1177,84 @@ const styles = StyleSheet.create({
   forfeitDescription: { fontSize: 16 },
   forfeitPoints: { fontSize: 14, color: "#E74C3C", marginTop: 5 },
   forfeitActions: { flexDirection: "row", alignItems: "center" },
-  scrollView: { padding: 16 },
   teamActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginTop: 20,
   },
   actionButton: {
-    backgroundColor: "#4A90E2",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
+    backgroundColor: '#4A90E2',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  leaveButton: {
+    backgroundColor: '#E74C3C',
   },
   actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: "top",
+  },
+  buttonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
   },
-  leaveButton: {
-    backgroundColor: "#E74C3C",
+  targetsContainer: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  deleteButton: {
-    backgroundColor: "#E74C3C",
+  targetCard: {
+    backgroundColor: '#F8F9FA',
+    padding: 15,
+    borderRadius: 10,
+  },
+  targetName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 10,
+  },
+  targetValues: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  targetValue: {
+    fontSize: 14,
+    color: '#666',
+  },
+  picker: {
+    width: "100%",
+    height: 50,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#F5F7FA",
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  halfWidth: {
+    width: "48%",
   },
 });
