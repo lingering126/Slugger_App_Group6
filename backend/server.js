@@ -975,6 +975,10 @@ app.post('/api/test/email', async (req, res) => {
   }
 });
 
+// Import and use group routes
+const groupRoutes = require('./routes/group');
+app.use('/api/groups', groupRoutes);
+
 // Start server
 // Note: PORT is set to 5001 in the .env file, which overrides this default
 const PORT = process.env.PORT || 5000;
