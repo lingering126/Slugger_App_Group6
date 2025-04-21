@@ -12,6 +12,7 @@ export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,6 +60,7 @@ export default function SignupScreen() {
       setError('');
       
       // Validate inputs
+
       if (!email || !password || !confirmPassword || !name) {
         setError('Please fill in all fields');
         setLoading(false);
@@ -394,6 +396,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     fontSize: 16,
   },
+
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 25,
+    marginBottom: 15,
+  },
+  passwordInput: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 20,
+    fontSize: 16,
+  },
+  
   eyeIcon: {
     padding: 10,
     marginRight: 5,

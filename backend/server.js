@@ -10,6 +10,7 @@ const os = require('os');
 const teamRoutes = require('./src/routes/team');
 const authRoutes = require('./src/routes/auth');
 
+
 // Function to get all server IP addresses
 const getServerIPs = () => {
   const networkInterfaces = os.networkInterfaces();
@@ -110,10 +111,12 @@ transporter.verify()
 
 // CORS configuration
 const corsOptions = {
-  origin: 'http://localhost:8081',
+  origin: '*', // Allow all origins in development
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 // Middleware
@@ -132,6 +135,44 @@ mongoose.connect(process.env.MONGODB_URI)
     console.error('Could not connect to MongoDB Atlas:', err.message);
     // Continue with in-memory storage as fallback
   });
+
+
+// Define User Schema
+const userSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true
+  },
+  password: {
+    type: String,
+    required: true
+  },
+  isVerified: {
+    type: Boolean,
+    default: false // Changed to false to require verification
+  },
+  verificationToken: {
+    type: String,
+    default: null
+  },
+  verificationTokenExpires: {
+    type: Date,
+    default: null
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// Create User model
+const User = mongoose.model('User', userSchema);
+
+// In-memory user storage as fallback
+const inMemoryUsers = [];
 
 // Add request logging middleware
 app.use((req, res, next) => {
@@ -160,8 +201,10 @@ app.use((err, req, res, next) => {
 });
 
 // Routes
+
 app.use('/api/teams', teamRoutes);
 app.use('/api/auth', authRoutes);
+
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -724,9 +767,11 @@ app.post('/api/auth/login', async (req, res) => {
       token,
       user: {
         id: user.id || user._id,
+
         email: user.email,
         name: user.name,
         avatar: user.avatar
+
       }
     });
   } catch (error) {
