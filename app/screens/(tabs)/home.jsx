@@ -373,26 +373,86 @@ const PostCard = ({ post }) => {
   const [comment, setComment] = useState('');
   const [localComments, setLocalComments] = useState(post?.comments || []);
   const [showCommentInput, setShowCommentInput] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(post?.likes || 0);
   const [showShareOptions, setShowShareOptions] = useState(false);
+  const [isLiked, setIsLiked] = useState(post?.isLikedByUser || false);
+  const [likesCount, setLikesCount] = useState(post?.likesCount || 0);
 
-  // 安全地获取作者名字的第一个字符
-  const getAuthorInitial = () => {
-    if (!post?.author?.name) {
-      return '?';
+  // 检查点赞状态
+  useEffect(() => {
+    if (!post) return;
+
+    console.log('Initializing post like status:', {
+      postId: post._id,
+      likesCount: post.likesCount,
+      isLikedByUser: post.isLikedByUser
+    });
+    
+    // 直接使用帖子的点赞状态
+    setIsLiked(post.isLikedByUser || false);
+    setLikesCount(post.likesCount || 0);
+  }, [post?._id, post?.likesCount, post?.isLikedByUser]);
+
+  const handleLike = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const userId = await AsyncStorage.getItem('userId');
+      if (!token || !userId) {
+        console.error('No token or userId found');
+        return;
+      }
+
+      // 乐观更新
+      const prevIsLiked = isLiked;
+      const prevLikesCount = likesCount;
+      
+      console.log('Before like update:', {
+        postId: post._id,
+        currentUserId: userId,
+        isLiked: isLiked,
+        likesCount: likesCount
+      });
+
+      setIsLiked(!isLiked);
+      setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
+
+      console.log('Sending like request for post:', post._id);
+      const response = await fetch(`${API_CONFIG.API_URL}/posts/${post._id}/like`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      console.log('Like response:', data);
+
+      if (response.ok && data.success) {
+        // 使用服务器返回的状态更新
+        const serverLikeStatus = data.liked || data.likeStatus === 'Liked';
+        const serverLikesCount = data.likesCount || data.totalLikes || 0;
+
+        console.log('Server returned like status:', {
+          liked: serverLikeStatus,
+          likesCount: serverLikesCount
+        });
+
+        setIsLiked(serverLikeStatus);
+        setLikesCount(serverLikesCount);
+      } else {
+        // 如果请求失败，恢复之前的状态
+        console.error('Failed to update like status:', data);
+        setIsLiked(prevIsLiked);
+        setLikesCount(prevLikesCount);
+        Alert.alert('Error', 'Failed to update like status');
+      }
+    } catch (error) {
+      // 发生错误时恢复之前的状态
+      console.error('Error updating like status:', error);
+      setIsLiked(prevIsLiked);
+      setLikesCount(prevLikesCount);
+      Alert.alert('Error', 'Failed to update like status');
     }
-    return post.author.name[0] || '?';
-  };
-
-  // 安全地获取作者名字
-  const getAuthorName = () => {
-    return post?.author?.name || 'Anonymous';
-  };
-
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
   };
 
   const handleShare = async (destination) => {
@@ -501,9 +561,9 @@ const PostCard = ({ post }) => {
       <View style={styles.postHeader}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getAuthorInitial()}</Text>
+            <Text style={styles.avatarText}>{post.author?.[0] || '?'}</Text>
           </View>
-          <Text style={styles.username}>{getAuthorName()}</Text>
+          <Text style={styles.username}>{post.author?.name || 'Anonymous'}</Text>
         </View>
       </View>
       {renderContent()}
@@ -547,8 +607,10 @@ const PostCard = ({ post }) => {
           />
           <Text style={[
             styles.socialButtonText,
-            isLiked && styles.likedText
-          ]}>{likesCount}</Text>
+            isLiked && { color: '#ff4b4b' }
+          ]}>
+            {likesCount}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.socialButton}
@@ -665,12 +727,7 @@ const StatsCard = ({ title, personalProgress, teamProgress }) => (
 const AddContentModal = ({ visible, onClose, onPostCreated }) => {
   const [selectedChannel, setSelectedChannel] = useState('public');
   const [selectedTeam, setSelectedTeam] = useState(null);
-  const [contentType, setContentType] = useState('text');
-  const [showTeamList, setShowTeamList] = useState(false);
   const [content, setContent] = useState('');
-  const [selectedActivity, setSelectedActivity] = useState(null);
-  const [activityType, setActivityType] = useState('');
-  const [duration, setDuration] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -697,30 +754,10 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
         return;
       }
 
-      if (!contentType) {
-        console.error('Content type not selected');
-        setError('Please select a post type');
-        setLoading(false);
-        return;
-      }
-
       const postData = {
-        type: contentType,
         content: content.trim(),
         channelType: selectedChannel?.type || 'public'
       };
-
-      // Add activity specific fields if it's an activity post
-      if (contentType === 'activity') {
-        if (!activityType || !duration) {
-          console.error('Missing activity fields');
-          setError('Activity type and duration are required');
-          setLoading(false);
-          return;
-        }
-        postData.activityType = activityType;
-        postData.duration = parseInt(duration, 10);
-      }
 
       // Add teamId if it's a team post
       if (selectedChannel?.type === 'team' && selectedChannel?.teamId) {
@@ -748,8 +785,6 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
 
       // Clear form and close modal
       setContent('');
-      setActivityType('');
-      setDuration('');
       onClose();
       
       // Refresh posts list
@@ -774,32 +809,6 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Create New Post</Text>
-          
-          {/* Content Type Selection */}
-          <View style={styles.typeSelection}>
-            <TouchableOpacity
-              style={[
-                styles.typeOption,
-                contentType === 'text' && styles.selectedOption
-              ]}
-              onPress={() => setContentType('text')}
-            >
-              <Text style={contentType === 'text' ? styles.selectedOptionText : styles.optionText}>
-                Text Post
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.typeOption,
-                contentType === 'activity' && styles.selectedOption
-              ]}
-              onPress={() => setContentType('activity')}
-            >
-              <Text style={contentType === 'activity' ? styles.selectedOptionText : styles.optionText}>
-                Activity Post
-              </Text>
-            </TouchableOpacity>
-          </View>
 
           {/* Error Message */}
           {error ? (
@@ -809,30 +818,11 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
           {/* Content Input */}
           <TextInput
             style={styles.contentInput}
-            placeholder={contentType === 'text' ? "What's on your mind?" : "Describe your activity"}
+            placeholder="What's on your mind?"
             multiline
             value={content}
             onChangeText={setContent}
           />
-
-          {/* Activity Fields */}
-          {contentType === 'activity' && (
-            <View style={styles.activityFields}>
-              <TextInput
-                style={styles.activityInput}
-                placeholder="Activity Type (e.g., running, cycling)"
-                value={activityType}
-                onChangeText={setActivityType}
-              />
-              <TextInput
-                style={styles.activityInput}
-                placeholder="Duration (minutes)"
-                value={duration}
-                onChangeText={setDuration}
-                keyboardType="numeric"
-              />
-            </View>
-          )}
 
           {/* Action Buttons */}
           <View style={styles.modalButtons}>
@@ -909,15 +899,30 @@ const HomeScreen = () => {
   const fetchPosts = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
+      const userId = await AsyncStorage.getItem('userId');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      console.log('Fetching posts...');
       const response = await fetch(`${API_CONFIG.API_URL}/posts`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
       
       if (response.ok) {
         const data = await response.json();
-        setPosts(data);
+        console.log('Fetched posts:', data);
+        // 确保每个帖子都有正确的点赞信息
+        const postsWithLikeInfo = data.map(post => ({
+          ...post,
+          isLikedByUser: post.isLikedByUser || false,
+          likesCount: post.likesCount || 0
+        }));
+        setPosts(postsWithLikeInfo);
       } else {
         console.error('Failed to fetch posts:', await response.text());
       }
@@ -998,6 +1003,15 @@ const HomeScreen = () => {
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
+  };
+
+  // Add a function to refresh all data
+  const refreshData = async () => {
+    await Promise.all([
+      fetchUserStats(),
+      fetchPosts(),
+      fetchActivities()
+    ]);
   };
 
   return (
@@ -1147,7 +1161,7 @@ const HomeScreen = () => {
             <AddContentModal
               visible={showNewPostModal}
               onClose={() => setShowNewPostModal(false)}
-              onPostCreated={fetchPosts}
+              onPostCreated={refreshData}
             />
           </View>
         </LinearGradient>
@@ -1497,7 +1511,7 @@ const styles = StyleSheet.create({
   teamOption: {
     padding: 10,
     borderRadius: 8,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f5f5f0',
     marginBottom: 5,
   },
   contentTypeSelection: {
@@ -1614,7 +1628,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   likedText: {
-    color: '#ff4b4b',
+    color: '#ff4b4b'
   },
   errorText: {
     color: '#ff4b4b',

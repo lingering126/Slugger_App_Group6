@@ -1,17 +1,11 @@
 const Post = require('../models/Post');
-const Activity = require('../../models/Activity');
 const User = require('../../models/User');
 
 // 创建新帖子
 exports.createPost = async (req, res) => {
   try {
-    const { type, content, activityType, duration, points, progress } = req.body;
+    const { content } = req.body;
     const userId = req.user._id || req.user.id;
-
-    // Validate post type
-    if (!['text', 'activity'].includes(type)) {
-      return res.status(400).json({ message: 'Invalid post type' });
-    }
 
     // Get user information first
     const user = await User.findById(userId);
@@ -21,37 +15,21 @@ exports.createPost = async (req, res) => {
 
     const postData = {
       userId,
-      type,
+      type: 'text',
       content
     };
-
-    // Add activity-specific fields if type is 'activity'
-    if (type === 'activity') {
-      postData.activityType = activityType;
-      postData.duration = duration;
-      postData.points = points || 0;
-      postData.progress = progress || 0;
-    }
 
     const post = await Post.create(postData);
     
     // Format the response
     const response = {
       id: post._id,
-      type: post.type,
       author: user.name,
       content: post.content,
       likes: 0,
       comments: [],
       createdAt: post.createdAt
     };
-
-    if (type === 'activity') {
-      response.activityType = post.activityType;
-      response.duration = post.duration;
-      response.points = post.points;
-      response.progress = post.progress;
-    }
 
     res.status(201).json(response);
   } catch (error) {
@@ -63,7 +41,7 @@ exports.createPost = async (req, res) => {
   }
 };
 
-// 获取帖子列表（支持公共和团队频道）
+// 获取帖子列表
 exports.getPosts = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -92,7 +70,6 @@ exports.getPosts = async (req, res) => {
 
     const formattedPosts = posts.map(post => ({
       id: post._id,
-      type: post.type,
       author: userMap.get(post.userId.toString())?.name || 'Unknown User',
       content: post.content,
       likes: post.likes.length,
@@ -102,13 +79,7 @@ exports.getPosts = async (req, res) => {
         content: comment.content,
         createdAt: comment.createdAt
       })),
-      createdAt: post.createdAt,
-      ...(post.type === 'activity' && {
-        activityType: post.activityType,
-        duration: post.duration,
-        points: post.points,
-        progress: post.progress
-      })
+      createdAt: post.createdAt
     }));
 
     res.json({

@@ -97,24 +97,10 @@ activitySchema.pre('save', function(next) {
   try {
     console.log('\n=== Calculating Activity Points ===');
     console.log('Activity type:', this.type);
-    console.log('Duration:', this.duration);
-
-    let pointsPerMinute = 0;
-    switch (this.type) {
-      case 'Physical':
-        pointsPerMinute = 2;
-        break;
-      case 'Mental':
-        pointsPerMinute = 1.5;
-        break;
-      case 'Bonus':
-        pointsPerMinute = 3;
-        break;
-      default:
-        pointsPerMinute = 1;
-    }
-
-    this.points = Math.round(this.duration * pointsPerMinute);
+    
+    // Set points to 1 for each activity submission
+    this.points = 1;
+    
     console.log('Points calculated:', this.points);
     console.log('=== Points Calculation Complete ===\n');
     next();
@@ -131,21 +117,8 @@ activitySchema.index({ userId: 1, createdAt: -1 });
 
 // Static method to calculate points
 activitySchema.statics.calculatePoints = function(type, duration) {
-  let pointsPerMinute = 0;
-  switch (type) {
-    case 'Physical':
-      pointsPerMinute = 2;
-      break;
-    case 'Mental':
-      pointsPerMinute = 1.5;
-      break;
-    case 'Bonus':
-      pointsPerMinute = 3;
-      break;
-    default:
-      pointsPerMinute = 1;
-  }
-  return Math.round(duration * pointsPerMinute);
+  // Return 1 point for each activity
+  return 1;
 };
 
 // Static method to get user's total points

@@ -10,7 +10,8 @@ const ActivityCard = ({ activity, onRefresh }) => {
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [comments, setComments] = useState(activity.comments || []);
   const [isLiked, setIsLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(activity.likes ? activity.likes.length : 0);
+  const [likesCount, setLikesCount] = useState(0);
+  const [isLikeError, setIsLikeError] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
 
@@ -22,8 +23,10 @@ const ActivityCard = ({ activity, onRefresh }) => {
         const likes = Array.isArray(activity.likes) ? activity.likes : [];
         setIsLiked(likes.includes(userId));
         setLikesCount(likes.length);
+        setIsLikeError(false);
       } catch (error) {
         console.error('Error checking like status:', error);
+        setIsLikeError(true);
       }
     };
     checkLikeStatus();
@@ -64,6 +67,12 @@ const ActivityCard = ({ activity, onRefresh }) => {
         return;
       }
 
+      // Optimistic update
+      const prevIsLiked = isLiked;
+      const prevLikesCount = likesCount;
+      setIsLiked(!isLiked);
+      setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
+
       console.log('Sending like request for activity:', activity.id);
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIKE.replace(':id', activity.id)}`, {
         method: 'POST',
@@ -76,15 +85,22 @@ const ActivityCard = ({ activity, onRefresh }) => {
       const data = await response.json();
       console.log('Like response:', data);
 
-      if (response.ok) {
-        setIsLiked(!isLiked);
-        setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
-      } else {
+      if (!response.ok) {
+        // Revert optimistic update on error
+        setIsLiked(prevIsLiked);
+        setLikesCount(prevLikesCount);
+        setIsLikeError(true);
         console.error('Failed to like activity:', data.message);
         Alert.alert('Error', data.message || 'Failed to like activity');
+      } else {
+        setIsLikeError(false);
       }
     } catch (error) {
       console.error('Error toggling like:', error);
+      // Revert optimistic update on error
+      setIsLiked(prevIsLiked);
+      setLikesCount(prevLikesCount);
+      setIsLikeError(true);
       Alert.alert('Error', 'Failed to update like status');
     }
   };

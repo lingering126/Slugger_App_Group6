@@ -7,8 +7,12 @@ const mongoose = require('mongoose');
 // Get all posts
 router.get('/', async (req, res, next) => {
     try {
-        console.log('Fetching posts with query:', req.query);
+        console.log('\n=== Fetching Posts ===');
+        console.log('Query:', req.query);
+        console.log('User ID:', req.user.id);
+        
         const { visibility, teamId } = req.query;
+        const userId = req.user.id;
         
         const query = {};
         if (visibility) {
@@ -18,16 +22,46 @@ router.get('/', async (req, res, next) => {
             }
         }
 
-        console.log('Final query:', query);
+        console.log('Database query:', query);
         
         const posts = await Post.find(query)
-            .populate('userId', 'username')
+            .populate('userId', 'username name')
+            .populate('likes', 'name avatar')
             .sort({ createdAt: -1 });
             
         console.log(`Found ${posts.length} posts`);
-        res.json(posts);
+
+        // Format posts with like status
+        const formattedPosts = await Promise.all(posts.map(async post => {
+            const likesData = await post.getLikesData();
+            const isLiked = post.isLikedByUser(userId);
+            
+            console.log(`Post ${post._id} like status:`, {
+                likesCount: likesData.count,
+                isLikedByUser: isLiked
+            });
+
+            return {
+                _id: post._id,
+                content: post.content,
+                userId: post.userId,
+                createdAt: post.createdAt,
+                updatedAt: post.updatedAt,
+                comments: post.comments,
+                visibility: post.visibility,
+                teamId: post.teamId,
+                likesCount: likesData.count,
+                isLikedByUser: isLiked,
+                likes: likesData.users
+            };
+        }));
+
+        console.log('=== Posts Fetch Complete ===\n');
+        res.json(formattedPosts);
     } catch (error) {
-        console.error('Error fetching posts:', error);
+        console.error('\n=== Posts Fetch Error ===');
+        console.error('Error details:', error);
+        console.error('=== Error End ===\n');
         next(new AppError('Failed to fetch posts', 500));
     }
 });
@@ -52,12 +86,12 @@ router.post('/', async (req, res, next) => {
             throw new AppError('Invalid user ID format', 400);
         }
 
-        const { type, content, channelType, teamId } = req.body;
+        const { content, channelType, teamId } = req.body;
         
         // Validate required fields
-        if (!type || !content) {
-            console.error('Missing required fields:', { type, content });
-            throw new AppError('Type and content are required', 400);
+        if (!content) {
+            console.error('Missing required field: content');
+            throw new AppError('Content is required', 400);
         }
 
         // Map channelType to visibility
@@ -67,7 +101,7 @@ router.post('/', async (req, res, next) => {
         // Create post data
         const postData = {
             userId,
-            type,
+            type: 'text',
             content: content.trim(),
             visibility
         };
@@ -85,24 +119,6 @@ router.post('/', async (req, res, next) => {
             postData.teamId = teamId;
         }
 
-        // Handle activity type post
-        if (type === 'activity') {
-            const { activityType, duration } = req.body;
-            console.log('Activity details:', { activityType, duration });
-            
-            if (!activityType || duration === undefined) {
-                console.error('Missing activity details');
-                throw new AppError('Activity type and duration are required for activity posts', 400);
-            }
-            
-            postData.activityType = activityType;
-            postData.duration = parseInt(duration, 10);
-            
-            // Calculate points based on duration
-            postData.points = Math.floor(postData.duration);
-            console.log('Calculated points:', postData.points);
-        }
-
         console.log('Creating post with data:', postData);
         const post = new Post(postData);
         
@@ -116,7 +132,7 @@ router.post('/', async (req, res, next) => {
         const savedPost = await post.save();
         console.log('Post saved successfully with ID:', savedPost._id);
         
-        // Populate user information before sending response
+        // Populate user information and get like status
         const populatedPost = await Post.findById(savedPost._id)
             .populate('userId', 'username')
             .populate('comments.userId', 'username');
@@ -126,8 +142,19 @@ router.post('/', async (req, res, next) => {
             throw new AppError('Failed to retrieve created post', 500);
         }
 
+        // Get likes data and format response
+        const likesData = await populatedPost.getLikesData();
+        const isLiked = populatedPost.isLikedByUser(userId);
+
+        const response = {
+            ...populatedPost.toObject(),
+            likesCount: likesData.count,
+            isLikedByUser: isLiked,
+            likes: likesData.users
+        };
+
         console.log('Sending response with populated post');
-        res.status(201).json(populatedPost);
+        res.status(201).json(response);
         console.log('=== Post Creation Complete ===\n');
     } catch (error) {
         console.error('Post creation error:', error);
@@ -189,32 +216,38 @@ router.delete('/:id', async (req, res, next) => {
     }
 });
 
-// Like/Unlike a post
+// Like/unlike a post
 router.post('/:id/like', async (req, res, next) => {
     try {
+        console.log('\n=== Liking Post ===');
+        const postId = req.params.id;
         const userId = req.user.id;
-        const post = await Post.findById(req.params.id);
+
+        console.log('Post ID:', postId);
+        console.log('User ID:', userId);
+
+        const post = await Post.findById(postId);
         if (!post) {
             throw new AppError('Post not found', 404);
         }
 
-        const likeIndex = post.likes.indexOf(userId);
-        if (likeIndex === -1) {
-            // Like the post
-            post.likes.push(userId);
-        } else {
-            // Unlike the post
-            post.likes.splice(likeIndex, 1);
-        }
+        // Toggle like status
+        const liked = await post.toggleLike(userId);
+        const likesData = await post.getLikesData();
 
-        await post.save();
-        res.json({ likes: post.likes.length });
+        console.log('Like status:', liked ? 'Liked' : 'Unliked');
+        console.log('Total likes:', likesData.count);
+        console.log('=== Like Operation Complete ===\n');
+
+        res.json({
+            success: true,
+            liked: liked,
+            likesCount: likesData.count,
+            likes: likesData.users
+        });
     } catch (error) {
-        if (error instanceof AppError) {
-            next(error);
-        } else {
-            next(new AppError('Failed to update post likes', 500));
-        }
+        console.error('Like operation error:', error);
+        next(new AppError('Failed to update like status', 500));
     }
 });
 
