@@ -205,6 +205,15 @@ activitySchema.methods.toResponseFormat = function() {
     duration: this.duration,
     points: this.points,
     status: this.status,
+    userId: this.userId,
+    icon: this.icon,
+    likes: this.likes,
+    comments: this.comments.map(comment => ({
+      id: comment._id,
+      author: comment.userId?.name || 'Anonymous',
+      content: comment.content,
+      createdAt: comment.createdAt
+    })),
     createdAt: this.createdAt,
     updatedAt: this.updatedAt
   };

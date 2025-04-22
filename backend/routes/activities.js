@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Activity = require('../models/Activity');
 const mongoose = require('mongoose');
+const User = require('../models/User');
 
 // Create a new activity
 router.post('/', async (req, res) => {
@@ -77,13 +78,15 @@ router.get('/', async (req, res) => {
 
     // 执行查询
     const activities = await Activity.find(query)
+      .populate('userId', 'name')
+      .populate('comments.userId', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
     console.log(`Found ${activities.length} activities`);
     if (activities.length > 0) {
-      console.log('First activity:', activities[0].toResponseFormat());
+      console.log('First activity:', activities[0]);
     }
 
     const total = await Activity.countDocuments(query);
@@ -92,10 +95,22 @@ router.get('/', async (req, res) => {
     const totalPoints = await Activity.getUserTotalPoints(userId);
     console.log('Total points:', totalPoints);
 
+    // 格式化活动数据，包括评论
+    const formattedActivities = activities.map(activity => {
+      const formattedActivity = activity.toResponseFormat();
+      formattedActivity.comments = activity.comments.map(comment => ({
+        id: comment._id,
+        author: comment.userId?.name || 'Anonymous',
+        content: comment.content,
+        createdAt: comment.createdAt
+      }));
+      return formattedActivity;
+    });
+
     const response = {
       success: true,
       data: {
-        activities: activities.map(activity => activity.toResponseFormat()),
+        activities: formattedActivities,
         pagination: {
           total,
           page,
@@ -245,6 +260,10 @@ router.post('/:id/comment', async (req, res) => {
     }
 
     const comment = await activity.addComment(req.user.id, req.body.content.trim());
+    
+    // 获取用户信息
+    const user = await User.findById(req.user.id).select('name');
+    
     console.log('Comment added:', comment);
     console.log('Total comments:', activity.comments.length);
     console.log('=== Comment Addition Complete ===\n');
@@ -253,7 +272,7 @@ router.post('/:id/comment', async (req, res) => {
       success: true,
       comment: {
         id: comment._id,
-        userId: comment.userId,
+        author: user.name || 'Anonymous',
         content: comment.content,
         createdAt: comment.createdAt
       },

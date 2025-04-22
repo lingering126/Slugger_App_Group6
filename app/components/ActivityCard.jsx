@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../config/api';
 
-const ActivityCard = ({ activity }) => {
+const ActivityCard = ({ activity, onRefresh }) => {
   const [comment, setComment] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [comments, setComments] = useState(activity.comments || []);
@@ -113,9 +113,19 @@ const ActivityCard = ({ activity }) => {
       console.log('Comment response:', data);
 
       if (response.ok) {
-        setComments(prev => [...prev, data]);
+        const newComment = {
+          id: data.comment.id,
+          author: data.comment.author,
+          content: data.comment.content,
+          createdAt: data.comment.createdAt
+        };
+        
+        setComments(prev => [...prev, newComment]);
         setComment('');
         setShowCommentInput(false);
+        if (onRefresh) {
+          onRefresh();
+        }
       } else {
         console.error('Failed to add comment:', data.message);
         Alert.alert('Error', data.message || 'Failed to add comment');
@@ -165,23 +175,15 @@ const ActivityCard = ({ activity }) => {
       {comments.length > 0 && (
         <View style={styles.commentsSection}>
           {comments.map((comment, index) => (
-            <View key={index} style={styles.commentItem}>
-              <View style={styles.commentAvatar}>
-                <Text style={styles.commentAvatarText}>
-                  {comment.userId && typeof comment.userId === 'object' ? 
-                    comment.userId.name?.substring(0, 2).toUpperCase() || 'A' :
-                    'A'}
-                </Text>
-              </View>
-              <View style={styles.commentContent}>
-                <Text style={styles.commentAuthor}>
-                  {comment.userId && typeof comment.userId === 'object' ? 
-                    comment.userId.name || 'Anonymous' :
-                    'Anonymous'}
-                </Text>
-                <Text style={styles.commentText}>
-                  {typeof comment === 'string' ? comment : comment.content}
-                </Text>
+            <View key={index} style={styles.commentContainer}>
+              <View style={styles.commentHeader}>
+                <View style={styles.commentAvatar}>
+                  <Text style={styles.commentAvatarText}>
+                    {comment?.author?.[0] || 'A'}
+                  </Text>
+                </View>
+                <Text style={styles.commentAuthor}>{comment?.author || 'Anonymous'}</Text>
+                <Text style={styles.commentContent}>{comment?.content || ''}</Text>
               </View>
             </View>
           ))}
@@ -205,16 +207,16 @@ const ActivityCard = ({ activity }) => {
 
       {/* Comment Input */}
       {showCommentInput && (
-        <View style={styles.commentInputContainer}>
+        <View style={styles.commentInput}>
           <TextInput
-            style={styles.commentInput}
+            style={styles.input}
             placeholder="Add a comment..."
             value={comment}
             onChangeText={setComment}
             onSubmitEditing={handleAddComment}
           />
           <TouchableOpacity style={styles.sendButton} onPress={handleAddComment}>
-            <Ionicons name="send" size={24} color="#4A90E2" />
+            <Text style={styles.sendButtonText}>Send</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -336,43 +338,43 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   commentsSection: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 15,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#eee',
   },
-  commentItem: {
+  commentContainer: {
+    marginBottom: 10,
+  },
+  commentHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginVertical: 4,
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
   commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#4A90E2',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#6c63ff',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
   },
   commentAvatarText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
+  },
+  commentAuthor: {
+    fontWeight: '600',
+    fontSize: 14,
+    color: '#1a1a1a',
+    marginRight: 8,
   },
   commentContent: {
     flex: 1,
-  },
-  commentAuthor: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 2,
-  },
-  commentText: {
     fontSize: 14,
     color: '#4a4a4a',
-    lineHeight: 18,
   },
   socialButtons: {
     flexDirection: 'row',
@@ -395,34 +397,46 @@ const styles = StyleSheet.create({
   likedText: {
     color: '#ff4b4b',
   },
-  commentInputContainer: {
+  commentInput: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
+    marginTop: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#eee',
   },
-  commentInput: {
+  input: {
     flex: 1,
     height: 36,
     backgroundColor: '#f5f5f5',
     borderRadius: 18,
-    paddingHorizontal: 12,
-    marginRight: 8,
+    paddingHorizontal: 15,
+    marginRight: 10,
+    fontSize: 14,
   },
   sendButton: {
-    padding: 4,
+    backgroundColor: '#4A90E2',
+    borderRadius: 18,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+  },
+  sendButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shareModalContent: {
     backgroundColor: '#fff',
     padding: 16,
     borderRadius: 16,
     width: '80%',
-    alignSelf: 'center',
   },
   shareOption: {
     flexDirection: 'row',
@@ -433,7 +447,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: '#666',
     fontSize: 14,
-  },
+  }
 });
 
 export default ActivityCard; 
