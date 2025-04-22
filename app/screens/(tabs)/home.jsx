@@ -658,20 +658,6 @@ const PostCard = ({ post }) => {
           <View style={styles.shareModalContent}>
             <TouchableOpacity 
               style={styles.shareOption}
-              onPress={() => handleShare('public')}
-            >
-              <Ionicons name="globe-outline" size={24} color="#666" />
-              <Text style={styles.shareOptionText}>Share to Public</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.shareOption}
-              onPress={() => handleShare('team')}
-            >
-              <Ionicons name="people-outline" size={24} color="#666" />
-              <Text style={styles.shareOptionText}>Share to Team</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.shareOption}
               onPress={() => handleShare('github')}
             >
               <Ionicons name="logo-github" size={24} color="#666" />

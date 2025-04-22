@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, Linking } from 'react-native';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -148,6 +148,19 @@ const ActivityCard = ({ activity, onRefresh }) => {
     }
   };
 
+  const handleShare = async (destination) => {
+    try {
+      if (destination === 'github') {
+        const githubUrl = `https://github.com/share?text=${encodeURIComponent(`Activity: ${activity.name} - Duration: ${activity.duration} minutes - Points: ${activity.points}`)}`;
+        Linking.openURL(githubUrl);
+      }
+    } catch (error) {
+      console.error('Error sharing activity:', error);
+      Alert.alert('Error', 'Failed to share activity');
+    }
+    setShowShareOptions(false);
+  };
+
   return (
     <View style={styles.card}>
       {/* User Info Header */}
@@ -249,17 +262,10 @@ const ActivityCard = ({ activity, onRefresh }) => {
           <View style={styles.shareModalContent}>
             <TouchableOpacity 
               style={styles.shareOption}
-              onPress={() => handleShare('team')}
+              onPress={() => handleShare('github')}
             >
-              <Ionicons name="people-outline" size={24} color="#666" />
-              <Text style={styles.shareOptionText}>Share with Team</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.shareOption}
-              onPress={() => handleShare('public')}
-            >
-              <Ionicons name="globe-outline" size={24} color="#666" />
-              <Text style={styles.shareOptionText}>Share Publicly</Text>
+              <Ionicons name="logo-github" size={24} color="#666" />
+              <Text style={styles.shareOptionText}>Share to GitHub</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
