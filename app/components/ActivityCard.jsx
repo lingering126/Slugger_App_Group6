@@ -215,8 +215,11 @@ const ActivityCard = ({ activity, onRefresh }) => {
             onChangeText={setComment}
             onSubmitEditing={handleAddComment}
           />
-          <TouchableOpacity style={styles.sendButton} onPress={handleAddComment}>
-            <Text style={styles.sendButtonText}>Send</Text>
+          <TouchableOpacity 
+            style={styles.sendButton}
+            onPress={handleAddComment}
+          >
+            <Ionicons name="send" size={24} color="#4A90E2" />
           </TouchableOpacity>
         </View>
       )}
@@ -416,15 +419,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   sendButton: {
-    backgroundColor: '#4A90E2',
-    borderRadius: 18,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+    padding: 5,
   },
   modalOverlay: {
     flex: 1,
