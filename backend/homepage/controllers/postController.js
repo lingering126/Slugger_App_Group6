@@ -1,7 +1,7 @@
 const Post = require('../models/Post');
 const User = require('../../models/User');
 
-// 创建新帖子
+// Create new post
 exports.createPost = async (req, res) => {
   try {
     const { content } = req.body;
@@ -41,7 +41,7 @@ exports.createPost = async (req, res) => {
   }
 };
 
-// 获取帖子列表
+// Get posts list
 exports.getPosts = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -96,7 +96,7 @@ exports.getPosts = async (req, res) => {
   }
 };
 
-// 点赞帖子
+// Like post
 exports.likePost = async (req, res) => {
   try {
     const postId = req.params.id;
@@ -109,10 +109,10 @@ exports.likePost = async (req, res) => {
 
     const isLiked = post.likes.includes(userId);
     if (isLiked) {
-      // 取消点赞
+      // Unlike
       post.likes = post.likes.filter(id => !id.equals(userId));
     } else {
-      // 添加点赞
+      // Add like
       post.likes.push(userId);
     }
 
@@ -123,7 +123,7 @@ exports.likePost = async (req, res) => {
   }
 };
 
-// 评论帖子
+// Add comment to post
 exports.addComment = async (req, res) => {
   try {
     const { content } = req.body;

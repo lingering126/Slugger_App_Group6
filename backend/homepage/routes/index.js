@@ -5,7 +5,7 @@ const postController = require('../controllers/postController');
 const statsController = require('../controllers/statsController');
 const auth = require('../../middleware/auth');
 
-// 中间件：检查用户是否已认证
+// Middleware: Check if user is authenticated
 const isAuthenticated = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ message: 'Unauthorized' });
@@ -13,19 +13,19 @@ const isAuthenticated = (req, res, next) => {
   next();
 };
 
-// 活动相关路由
+// Activity-related routes
 router.get('/activities/types', activityController.getActivityTypes);
 router.post('/activities', auth, activityController.createActivity);
 router.get('/activities', auth, activityController.getUserActivities);
 router.get('/activities/:id', auth, activityController.getActivityById);
 router.put('/activities/:id/status', auth, activityController.updateActivityStatus);
 
-// 帖子相关路由
+// Post-related routes
 router.post('/posts', auth, postController.createPost);
 router.get('/posts', auth, postController.getPosts);
 router.post('/posts/:postId/comments', auth, postController.addComment);
 
-// 统计相关路由
+// Statistics-related routes
 router.get('/user', auth, statsController.getUserStats);
 router.put('/user/target', auth, statsController.updateUserTarget);
 

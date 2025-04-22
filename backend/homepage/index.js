@@ -1,6 +1,6 @@
 const routes = require('./routes');
 
 module.exports = (app) => {
-  // 将所有homepage相关的路由挂载到/api/homepage下
+  // Mount all homepage-related routes under /api/homepage
   app.use('/api/homepage', routes);
 }; 

@@ -2,7 +2,7 @@ const UserStats = require('../models/UserStats');
 const Activity = require('../../models/Activity');
 const mongoose = require('mongoose');
 
-// 获取用户统计数据
+// Get user statistics data
 exports.getUserStats = async (req, res) => {
   try {
     console.log('\n=== Fetching User Stats ===');
@@ -13,7 +13,7 @@ exports.getUserStats = async (req, res) => {
       throw new Error('User ID is required but not found in request');
     }
     
-    // 获取或创建用户统计数据
+    // Get or create user statistics data
     let userStats = await UserStats.findOne({ userId });
     if (!userStats) {
       console.log('Creating new UserStats record');
@@ -27,7 +27,7 @@ exports.getUserStats = async (req, res) => {
       });
     }
 
-    // 计算各类型活动的统计
+    // Calculate statistics for each activity type
     console.log('Calculating activity statistics...');
     const activityStats = await Activity.aggregate([
       { $match: { userId } },
@@ -39,7 +39,7 @@ exports.getUserStats = async (req, res) => {
     ]);
     console.log('Activity stats calculated:', activityStats);
 
-    // 格式化统计数据
+    // Format statistics data
     const stats = {
       personal: {
         totalPoints: userStats.totalPoints || 0,
@@ -80,7 +80,7 @@ exports.getUserStats = async (req, res) => {
   }
 };
 
-// 更新用户目标
+// Update user target
 exports.updateUserTarget = async (req, res) => {
   try {
     const userId = new mongoose.Types.ObjectId(req.user.id);

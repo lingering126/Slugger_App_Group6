@@ -2,7 +2,7 @@ const Activity = require('../../models/Activity');
 const User = require('../../models/User');
 const UserStats = require('../models/UserStats');
 
-// 获取活动类型列表
+// Get activity types list
 exports.getActivityTypes = async (req, res) => {
   try {
     const types = {
@@ -30,7 +30,7 @@ exports.getActivityTypes = async (req, res) => {
   }
 };
 
-// 创建新活动
+// Create new activity
 exports.createActivity = async (req, res) => {
   try {
     console.log('\n=== Creating New Activity ===');
@@ -44,7 +44,7 @@ exports.createActivity = async (req, res) => {
       throw new Error('User ID is required but not found in request');
     }
 
-    // 计算积分
+    // Calculate points
     console.log('\n=== Calculating Activity Points ===');
     console.log('Activity type:', type);
     console.log('Duration:', duration);
@@ -52,19 +52,19 @@ exports.createActivity = async (req, res) => {
     console.log('Points calculated:', points);
     console.log('=== Points Calculation Complete ===\n');
 
-    // 创建活动
+    // Create activity
     const activity = new Activity({
       userId,
       type,
       name,
       duration,
       points,
-      status: 'completed' // 默认设置为已完成
+      status: 'completed' // Default set to completed
     });
 
     await activity.save();
 
-    // 获取或创建用户统计数据
+    // Get or create user stats data
     let userStats = await UserStats.findOne({ userId });
     if (!userStats) {
       userStats = new UserStats({ 
@@ -77,7 +77,7 @@ exports.createActivity = async (req, res) => {
       });
     }
 
-    // 更新用户统计
+    // Update user stats
     await userStats.updateActivityStats(activity);
 
     console.log('\nActivity created successfully');
@@ -106,7 +106,7 @@ exports.createActivity = async (req, res) => {
   }
 };
 
-// 获取活动列表
+// Get activities list
 exports.getActivities = async (req, res) => {
   try {
     const activities = await Activity.find()
@@ -133,7 +133,7 @@ exports.getActivities = async (req, res) => {
   }
 };
 
-// 点赞活动
+// Like activity
 exports.likeActivity = async (req, res) => {
   try {
     const activity = await Activity.findById(req.params.id);
@@ -148,7 +148,7 @@ exports.likeActivity = async (req, res) => {
   }
 };
 
-// 评论活动
+// Comment on activity
 exports.commentActivity = async (req, res) => {
   try {
     const activity = await Activity.findById(req.params.id);
@@ -170,7 +170,7 @@ exports.commentActivity = async (req, res) => {
   }
 };
 
-// 分享活动
+// Share activity
 exports.shareActivity = async (req, res) => {
   try {
     const activity = await Activity.findById(req.params.id);
@@ -185,13 +185,13 @@ exports.shareActivity = async (req, res) => {
   }
 };
 
-// 获取用户活动列表
+// Get user activities list
 exports.getUserActivities = async (req, res) => {
   try {
     const userId = req.user._id;
     const { type, startDate, endDate } = req.query;
 
-    // 构建查询条件
+    // Build query conditions
     const query = { userId };
     if (type) query.type = type;
     if (startDate || endDate) {
@@ -200,12 +200,12 @@ exports.getUserActivities = async (req, res) => {
       if (endDate) query.date.$lte = new Date(endDate);
     }
 
-    // 获取活动列表
+    // Get activities list
     const activities = await Activity.find(query)
       .sort({ date: -1 })
       .limit(50);
 
-    // 获取活动统计
+    // Get activity statistics
     const stats = await Activity.aggregate([
       { $match: query },
       { $group: {
@@ -232,7 +232,7 @@ exports.getUserActivities = async (req, res) => {
   }
 };
 
-// 获取活动详情
+// Get activity details
 exports.getActivityById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -253,7 +253,7 @@ exports.getActivityById = async (req, res) => {
   }
 };
 
-// 更新活动状态
+// Update activity status
 exports.updateActivityStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -272,7 +272,7 @@ exports.updateActivityStatus = async (req, res) => {
     activity.status = status;
     await activity.save();
 
-    // 如果活动状态改变，更新统计
+    // If activity status changes, update stats
     if (status === 'completed' && activity.status !== 'completed') {
       const userStats = await UserStats.findOne({ userId });
       if (userStats) {

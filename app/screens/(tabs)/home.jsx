@@ -272,7 +272,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
       });
 
       console.log('Activity creation response:', response.status);
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log('Activity created:', data);
@@ -323,52 +323,52 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
 
           <Text style={styles.modalLabel}>Select Duration (Hours)</Text>
           <View style={styles.pickerContainer}>
-            <Picker 
-              selectedValue={selectedTime} 
-              style={styles.picker} 
+          <Picker 
+            selectedValue={selectedTime} 
+            style={styles.picker} 
               onValueChange={(itemValue) => {
                 setSelectedTime(itemValue);
                 console.log('选择的时间:', itemValue); // 添加日志
               }}
-            >
-              {[...Array(24).keys()].map((num) => (
-                <Picker.Item key={num + 1} label={`${num + 1} hour`} value={`${num + 1}`} />
-              ))}
-            </Picker>
+          >
+            {[...Array(24).keys()].map((num) => (
+              <Picker.Item key={num + 1} label={`${num + 1} hour`} value={`${num + 1}`} />
+            ))}
+          </Picker>
           </View>
 
           <Text style={styles.modalLabel}>Select Activity</Text>
           <ScrollView style={styles.activityList}>
             <View style={styles.activityGrid}>
-              {activities.map((activity, index) => (
-                <TouchableOpacity 
-                  key={index}
-                  style={[
+            {activities.map((activity, index) => (
+              <TouchableOpacity 
+                key={index}
+                style={[
                     styles.activityGridItem,
-                    selectedActivity === activity && styles.selectedActivity
-                  ]}
+                  selectedActivity === activity && styles.selectedActivity
+                ]}
                   onPress={() => {
                     setSelectedActivity(activity);
                     console.log('选择的活动:', activity); // 添加日志
                   }}
-                >
-                  <Text style={[
+              >
+                <Text style={[
                     styles.activityGridText,
-                    selectedActivity === activity && styles.selectedActivityText
-                  ]}>
-                    {activity}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                  selectedActivity === activity && styles.selectedActivityText
+                ]}>
+                  {activity}
+                </Text>
+              </TouchableOpacity>
+            ))}
             </View>
           </ScrollView>
 
-          <TouchableOpacity 
+            <TouchableOpacity
             style={[
               styles.confirmButton,
               (!selectedActivity || loading) && styles.disabledButton
             ]}
-            onPress={handleConfirm}
+              onPress={handleConfirm}
             disabled={!selectedActivity || loading}
           >
             {loading ? (
@@ -376,7 +376,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             ) : (
               <Text style={styles.confirmButtonText}>Confirm</Text>
             )}
-          </TouchableOpacity>
+            </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -426,8 +426,8 @@ const PostCard = ({ post }) => {
         likesCount: likesCount
       });
 
-      setIsLiked(!isLiked);
-      setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
+    setIsLiked(!isLiked);
+    setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
 
       console.log('Sending like request for post:', post._id);
       const response = await fetch(`${API_CONFIG.API_URL}/posts/${post._id}/like`, {
@@ -531,7 +531,7 @@ const PostCard = ({ post }) => {
 
     switch (post.type) {
       case 'activity':
-        return (
+  return (
           <View style={styles.activityCard}>
             <View style={styles.activityHeader}>
               <Text style={styles.activityTitle}>{post.activityType || 'Activity'}</Text>
@@ -554,10 +554,10 @@ const PostCard = ({ post }) => {
           <View>
             <Text style={styles.postContent}>{post.content}</Text>
             {post.imageUrl && (
-              <Image 
-                source={{ uri: post.imageUrl }}
-                style={styles.postImage}
-              />
+            <Image 
+              source={{ uri: post.imageUrl }}
+              style={styles.postImage}
+            />
             )}
           </View>
         );
@@ -587,8 +587,8 @@ const PostCard = ({ post }) => {
               })}
             </Text>
           </View>
+          </View>
         </View>
-      </View>
       {renderContent()}
       
       {/* 评论列表 */}
@@ -601,13 +601,13 @@ const PostCard = ({ post }) => {
                   <Text style={styles.commentAvatarText}>
                     {comment?.author?.[0] || '?'}
                   </Text>
-                </View>
+          </View>
                 <Text style={styles.commentAuthor}>{comment?.author || 'Anonymous'}</Text>
                 <Text style={styles.commentContent}>{comment?.content || ''}</Text>
-              </View>
-            </View>
-          ))}
+          </View>
         </View>
+          ))}
+      </View>
       )}
 
       {/* 评论按钮和输入框 */}
@@ -641,7 +641,7 @@ const PostCard = ({ post }) => {
         >
           <Ionicons name="share-social-outline" size={24} color="#666" />
         </TouchableOpacity>
-      </View>
+        </View>
 
       {/* 分享选项弹窗 */}
       <Modal
@@ -683,9 +683,9 @@ const PostCard = ({ post }) => {
           >
             <Ionicons name="send" size={24} color="#4A90E2" />
           </TouchableOpacity>
-        </View>
+            </View>
       )}
-    </View>
+      </View>
   );
 };
 
@@ -793,8 +793,8 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
       console.log('Server response:', responseData);
 
       // Clear form and close modal
-      setContent('');
-      onClose();
+        setContent('');
+        onClose();
       
       // Refresh posts list
       if (onPostCreated) {
@@ -815,23 +815,23 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
       visible={visible}
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Create New Post</Text>
-
+          
           {/* Error Message */}
           {error ? (
             <Text style={styles.errorText}>{error}</Text>
           ) : null}
 
           {/* Content Input */}
-          <TextInput
-            style={styles.contentInput}
-            placeholder="What's on your mind?"
-            multiline
-            value={content}
-            onChangeText={setContent}
-          />
+            <TextInput
+              style={styles.contentInput}
+              placeholder="What's on your mind?"
+              multiline
+              value={content}
+              onChangeText={setContent}
+            />
 
           {/* Action Buttons */}
           <View style={styles.modalButtons}>
@@ -843,7 +843,7 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.modalButtonText}>Share</Text>
+              <Text style={styles.modalButtonText}>Share</Text>
               )}
             </TouchableOpacity>
             <TouchableOpacity
@@ -853,8 +853,8 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
             >
               <Text style={styles.modalButtonText}>Cancel</Text>
             </TouchableOpacity>
-          </View>
         </View>
+    </View>
       </View>
     </Modal>
   );
@@ -988,7 +988,7 @@ const HomeScreen = () => {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       const data = await response.json();
       
       if (response.ok && data.success) {

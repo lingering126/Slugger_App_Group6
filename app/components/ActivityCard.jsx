@@ -5,7 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../config/api';
 
+// ActivityCard Component: Displays a single activity with social interactions
 const ActivityCard = ({ activity, onRefresh }) => {
+  // State management for comments, likes, and user interactions
   const [comment, setComment] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [comments, setComments] = useState(activity.comments || []);
@@ -15,6 +17,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
 
+  // Check and update like status when component mounts or activity changes
   useEffect(() => {
     const checkLikeStatus = async () => {
       try {
@@ -32,12 +35,14 @@ const ActivityCard = ({ activity, onRefresh }) => {
     checkLikeStatus();
   }, [activity.likes]);
 
+  // Update comments when activity comments change
   useEffect(() => {
     if (activity.comments) {
       setComments(Array.isArray(activity.comments) ? activity.comments : []);
     }
   }, [activity.comments]);
 
+  // Helper functions for UI elements
   const getActivityIcon = (type) => {
     switch (type) {
       case 'Physical':
@@ -52,9 +57,10 @@ const ActivityCard = ({ activity, onRefresh }) => {
   };
 
   const getAvatarText = () => {
-    return '?';  // 使用问号作为匿名用户的头像
+    return '?';  // Use question mark as avatar for anonymous users
   };
 
+  // Handle like/unlike functionality
   const handleLike = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -63,12 +69,13 @@ const ActivityCard = ({ activity, onRefresh }) => {
         return;
       }
 
-      // Optimistic update
+      // Optimistic update for better UX
       const prevIsLiked = isLiked;
       const prevLikesCount = likesCount;
       setIsLiked(!isLiked);
       setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
 
+      // API call to update like status
       console.log('Sending like request for activity:', activity.id);
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIKE.replace(':id', activity.id)}`, {
         method: 'POST',
@@ -101,6 +108,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
     }
   };
 
+  // Handle adding new comments
   const handleAddComment = async () => {
     if (!comment.trim()) return;
 
@@ -111,6 +119,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
         return;
       }
 
+      // API call to add comment
       console.log('Sending comment for activity:', activity.id);
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.COMMENT.replace(':id', activity.id)}`, {
         method: 'POST',
@@ -125,6 +134,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
       console.log('Comment response:', data);
 
       if (response.ok) {
+        // Update local state with new comment
         const newComment = {
           id: data.comment.id,
           author: data.comment.author,
@@ -148,6 +158,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
     }
   };
 
+  // Handle sharing activity
   const handleShare = async (destination) => {
     try {
       if (destination === 'github') {
@@ -161,9 +172,10 @@ const ActivityCard = ({ activity, onRefresh }) => {
     setShowShareOptions(false);
   };
 
+  // Main render function
   return (
     <View style={styles.card}>
-      {/* User Info Header */}
+      {/* User Info Header Section */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
@@ -176,7 +188,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
         </View>
       </View>
 
-      {/* Activity Content */}
+      {/* Activity Content Section */}
       <View style={styles.content}>
         <View style={styles.activityHeader}>
           <Text style={styles.icon}>{activity.icon || getActivityIcon(activity.type)}</Text>
@@ -213,7 +225,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
         </View>
       )}
 
-      {/* Social Buttons */}
+      {/* Social Interaction Buttons */}
       <View style={styles.socialButtons}>
         <TouchableOpacity style={styles.socialButton} onPress={() => setShowCommentInput(!showCommentInput)}>
           <Ionicons name="chatbubble-outline" size={24} color="#666" />
@@ -228,7 +240,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Comment Input */}
+      {/* Comment Input Section */}
       {showCommentInput && (
         <View style={styles.commentInput}>
           <TextInput

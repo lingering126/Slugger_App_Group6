@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../../models/User'); // 使用主服务器的User模型
+const User = require('../../models/User'); // Using the main server's User model
 
 const auth = async (req, res, next) => {
   try {

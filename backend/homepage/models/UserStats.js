@@ -35,31 +35,31 @@ const userStatsSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// 计算总体进度
+// Calculate overall progress
 userStatsSchema.methods.calculateProgress = function() {
-  return Math.min(100, (this.totalPoints / this.targetPoints) * 100);
+  return Math.min((this.totalPoints / this.targetPoints) * 100, 100);
 };
 
-// 计算特定类型活动的进度
+// Calculate progress for specific activity type
 userStatsSchema.methods.calculateTypeProgress = function(type) {
   const typePoints = this.pointsByType.get(type) || 0;
-  const typeTarget = this.targetPoints / 3; // 假设每种类型的目标是总目标的1/3
-  return Math.min(100, (typePoints / typeTarget) * 100);
+  const typeTarget = this.targetPoints / 3; // Assuming target for each type is 1/3 of total target
+  return Math.min((typePoints / typeTarget) * 100, 100);
 };
 
-// 更新活动统计
+// Update activity statistics
 userStatsSchema.methods.updateActivityStats = async function(activity) {
-  // 更新总积分
+  // Update total points
   this.totalPoints += activity.points;
   
-  // 更新类型积分
-  const currentTypePoints = this.pointsByType.get(activity.type) || 0;
-  this.pointsByType.set(activity.type, currentTypePoints + activity.points);
+  // Update type points
+  const type = activity.type;
+  this.pointsByType.set(type, (this.pointsByType.get(type) || 0) + activity.points);
   
-  // 更新活动完成数
+  // Update completed activities count
   this.activitiesCompleted += 1;
   
-  // 更新连续打卡天数
+  // Update consecutive check-in days
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
