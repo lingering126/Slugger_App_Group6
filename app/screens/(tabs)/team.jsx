@@ -4,11 +4,13 @@ import { Ionicons } from "@expo/vector-icons";
 import teamService from "../../services/teamService";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import * as Clipboard from 'expo-clipboard';
 
 export default function TeamsScreen() {
   const [teams, setTeams] = useState([]);
   const [userTeam, setUserTeam] = useState(null);
   const [search, setSearch] = useState("");
+  const [teamIdToJoin, setTeamIdToJoin] = useState("");
   const [newTeam, setNewTeam] = useState({
     name: '',
     description: '',
@@ -181,6 +183,55 @@ export default function TeamsScreen() {
     }
   };
 
+  // 通过小组ID加入小组
+  const handleJoinTeamById = async () => {
+    if (!teamIdToJoin.trim()) {
+      Alert.alert('Error', 'Please enter a team ID');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Joining team by ID:', teamIdToJoin);
+      
+      const response = await fetch(`${apiUrl}/groups/join-by-id`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ groupId: teamIdToJoin })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to join team');
+      }
+
+      Alert.alert('Success', 'Joined team successfully');
+      setTeamIdToJoin('');
+      await loadTeams();
+      
+      // 找到刚加入的团队并设置为当前团队
+      const joinedTeam = teams.find(team => team._id === teamIdToJoin);
+      if (joinedTeam) {
+        setUserTeam(joinedTeam);
+      }
+    } catch (error) {
+      console.error('Error joining team by ID:', error);
+      Alert.alert('Error', error.message || 'Failed to join team');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleJoinTeam = async (teamId) => {
     try {
       setLoading(true);
@@ -225,6 +276,12 @@ export default function TeamsScreen() {
       // 更新用户团队状态
       const team = teams.find(t => t._id === teamId);
       if (team) {
+        // 初始化编辑状态
+        setIsEditingTeam(false);
+        setEditedTeam({
+          name: team.name || '',
+          description: team.description || ''
+        });
         setUserTeam(team);
       }
 
@@ -457,6 +514,12 @@ export default function TeamsScreen() {
 
   // 进入团队而不是加入团队（已经是成员的情况）
   const handleEnterTeam = (team) => {
+    // 初始化编辑状态
+    setIsEditingTeam(false);
+    setEditedTeam({
+      name: team.name || '',
+      description: team.description || ''
+    });
     setUserTeam(team);
   };
   
@@ -483,30 +546,57 @@ export default function TeamsScreen() {
     return (
       <View style={styles.teamCard}>
         <View style={styles.teamCardHeader}>
-          <Ionicons name="people" size={24} color="#4A90E2" />
-          <Text style={styles.teamName}>{item.name}</Text>
+          <View style={styles.teamCardHeaderLeft}>
+            <View style={styles.teamIconContainer}>
+              <Ionicons name="people" size={24} color="#FFFFFF" />
+            </View>
+            <Text style={styles.teamName}>{item.name}</Text>
+          </View>
+          <View style={styles.teamIdBadge}>
+            <Text style={styles.teamIdBadgeText}>ID: {item.groupId}</Text>
+          </View>
         </View>
         <View style={styles.teamCardBody}>
-          <Text style={styles.memberCount}>
-            {item.members?.length || 0} members
-          </Text>
-          <Text style={styles.targetInfo}>
-            Target: {item.targetName}
-          </Text>
           <Text style={styles.description}>
             {item.description || 'No description provided'}
           </Text>
+          <View style={styles.teamMetaInfo}>
+            <View style={styles.metaItem}>
+              <Ionicons name="people-outline" size={16} color="#7F8C8D" />
+              <Text style={styles.metaText}>
+                {item.members?.length || 0} members
+              </Text>
+            </View>
+            {item.targetName && (
+              <View style={styles.metaItem}>
+                <Ionicons name="flag-outline" size={16} color="#7F8C8D" />
+                <Text style={styles.metaText}>
+                  {item.targetName}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
         {!userTeam && (
           <TouchableOpacity 
-            style={[styles.joinButton, isTeamMember ? styles.enterButton : styles.joinButton]} 
+            style={[styles.teamActionButton, isTeamMember ? styles.enterButton : styles.joinButton]} 
             onPress={() => isTeamMember ? handleEnterTeam(item) : handleJoinTeam(item._id)}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.joinButtonText}>{isTeamMember ? 'Enter Team' : 'Join Team'}</Text>
+              <>
+                <Ionicons 
+                  name={isTeamMember ? "enter-outline" : "add-circle-outline"} 
+                  size={18} 
+                  color="#FFFFFF" 
+                  style={{marginRight: 5}} 
+                />
+                <Text style={styles.teamActionButtonText}>
+                  {isTeamMember ? 'Enter' : 'Join'}
+                </Text>
+              </>
             )}
           </TouchableOpacity>
         )}
@@ -524,28 +614,279 @@ export default function TeamsScreen() {
     </View>
   );
 
-  const renderTeamDashboard = () => (
-    <View style={styles.teamDashboard}>
-      <View style={styles.teamHeader}>
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={handleBackToTeamList}
-          >
-            <Ionicons name="arrow-back" size={24} color="#4A90E2" />
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.teamTitle}>{userTeam.name}</Text>
-        <Text style={styles.teamDescription}>{userTeam.description}</Text>
-      </View>
+  // 添加编辑小组信息的状态
+  const [editingTeamInfo, setEditingTeamInfo] = useState(false);
+  const [editingTargets, setEditingTargets] = useState(false);
+  const [isEditingTeam, setIsEditingTeam] = useState(false);
+  const [editedTeam, setEditedTeam] = useState({
+    name: '',
+    description: ''
+  });
+  const [editedTeamInfo, setEditedTeamInfo] = useState({
+    name: '',
+    description: '',
+    targetName: '',
+    targetMentalValue: 0,
+    targetPhysicalValue: 0
+  });
+
+  // 处理编辑小组信息
+  const handleEditTeamInfo = () => {
+    setEditedTeamInfo({
+      name: userTeam.name,
+      description: userTeam.description,
+      targetName: userTeam.targetName,
+      targetMentalValue: userTeam.targetMentalValue,
+      targetPhysicalValue: userTeam.targetPhysicalValue
+    });
+    setEditingTeamInfo(true);
+  };
+
+  // 处理编辑小组目标
+  const handleEditTargets = () => {
+    setEditedTeamInfo({
+      ...editedTeamInfo,
+      targetName: userTeam.targetName,
+      targetMentalValue: userTeam.targetMentalValue,
+      targetPhysicalValue: userTeam.targetPhysicalValue
+    });
+    setEditingTargets(true);
+  };
+
+  // 处理更新团队信息
+  const handleUpdateTeam = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Updating team:', userTeam._id, editedTeam);
       
+      const response = await fetch(`${apiUrl}/groups/${userTeam._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editedTeam.name,
+          description: editedTeam.description
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update team');
+      }
+
+      // 更新本地团队信息
+      setUserTeam({
+        ...userTeam,
+        name: editedTeam.name,
+        description: editedTeam.description
+      });
+      
+      setIsEditingTeam(false);
+      Alert.alert('Success', 'Team information updated successfully');
+    } catch (error) {
+      console.error('Error updating team:', error);
+      Alert.alert('Error', error.message || 'Failed to update team');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 保存小组信息
+  const handleSaveTeamInfo = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      const response = await fetch(`${apiUrl}/groups/${userTeam._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editedTeamInfo.name,
+          description: editedTeamInfo.description
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update team info');
+      }
+
+      setUserTeam({...userTeam, name: editedTeamInfo.name, description: editedTeamInfo.description});
+      setEditingTeamInfo(false);
+      Alert.alert('Success', 'Team information updated successfully');
+    } catch (error) {
+      console.error('Error updating team info:', error);
+      Alert.alert('Error', error.message || 'Failed to update team info');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 保存小组目标
+  const handleSaveTargets = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      const response = await fetch(`${apiUrl}/groups/${userTeam._id}/targets`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          targetName: editedTeamInfo.targetName,
+          targetMentalValue: parseInt(editedTeamInfo.targetMentalValue),
+          targetPhysicalValue: parseInt(editedTeamInfo.targetPhysicalValue)
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update targets');
+      }
+
+      setUserTeam({
+        ...userTeam, 
+        targetName: editedTeamInfo.targetName,
+        targetMentalValue: parseInt(editedTeamInfo.targetMentalValue),
+        targetPhysicalValue: parseInt(editedTeamInfo.targetPhysicalValue)
+      });
+      setEditingTargets(false);
+      Alert.alert('Success', 'Team targets updated successfully');
+    } catch (error) {
+      console.error('Error updating targets:', error);
+      Alert.alert('Error', error.message || 'Failed to update targets');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 使用上面已经定义的handleBackToTeamList函数
+
+  const renderTeamDashboard = () => (
+    <ScrollView style={styles.teamDashboard}>
+      <View style={styles.headerActions}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={handleBackToTeamList}
+        >
+          <Ionicons name="arrow-back" size={24} color="#4A90E2" />
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.dashboardCard}>
+        <View style={styles.teamHeaderContainer}>
+          <View style={styles.teamHeader}>
+            <Text style={styles.teamName}>{userTeam.name}</Text>
+            <TouchableOpacity 
+              style={styles.editIconButton} 
+              onPress={() => setIsEditingTeam(true)}
+            >
+              <Ionicons name="create-outline" size={24} color="#4A90E2" />
+            </TouchableOpacity>
+          </View>
+
+          {isEditingTeam ? (
+            <View style={styles.editContainer}>
+              <TextInput
+                style={styles.editInput}
+                value={editedTeam.name}
+                onChangeText={(text) => setEditedTeam({...editedTeam, name: text})}
+                placeholder="Team Name"
+              />
+              <TextInput
+                style={[styles.editInput, styles.multilineInput]}
+                value={editedTeam.description}
+                onChangeText={(text) => setEditedTeam({...editedTeam, description: text})}
+                placeholder="Team Description"
+                multiline
+              />
+              <View style={styles.editActions}>
+                <TouchableOpacity 
+                  style={[styles.editButton, styles.cancelButton]}
+                  onPress={() => {
+                    setIsEditingTeam(false);
+                    setEditedTeam({
+                      name: userTeam.name,
+                      description: userTeam.description
+                    });
+                  }}
+                >
+                  <Text style={styles.editButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.editButton, styles.saveButton]}
+                  onPress={handleUpdateTeam}
+                >
+                  <Text style={styles.editButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View>
+              <Text style={styles.teamDescription}>{userTeam.description}</Text>
+            </View>
+          )}
+
+          <View style={styles.teamIdContainer}>
+            <View style={styles.teamIdInner}>
+              <Text style={styles.teamIdLabel}>Team ID:</Text>
+              <Text style={styles.teamId}>{userTeam.groupId}</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.copyButton}
+              onPress={async () => {
+                try {
+                  // 使用新安装的expo-clipboard包
+                  if (userTeam.groupId) {
+                    await Clipboard.setStringAsync(userTeam.groupId.toString());
+                    Alert.alert('Copied', 'Team ID copied to clipboard');
+                  } else {
+                    Alert.alert('Error', 'No team ID available to copy');
+                  }
+                } catch (error) {
+                  console.error('Error copying to clipboard:', error);
+                  Alert.alert('Error', 'Failed to copy to clipboard');
+                }
+              }}
+            >
+              <Ionicons name="copy-outline" size={20} color="#4A90E2" />
+              <Text style={styles.copyText}>Copy</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
       <View style={styles.progressContainer}>
         <Text style={styles.sectionTitle}>Team Progress</Text>
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: '50%' }]} />
+          <View style={[styles.progressFill, { width: `${teamProgress}%` }]} />
         </View>
-        <Text style={styles.progressText}>50% Complete</Text>
+        <Text style={styles.progressText}>{teamProgress}% Complete</Text>
       </View>
 
       <View style={styles.membersContainer}>
@@ -554,22 +895,104 @@ export default function TeamsScreen() {
           <View key={index} style={styles.memberCard}>
             <Ionicons name="person-circle" size={40} color="#4A90E2" />
             <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>{member.user?.name || (member.user?.email ? member.user.email.split('@')[0] : 'Anonymous')}</Text>
+              <Text style={styles.memberName}>
+                {member.name || // 直接访问name属性
+                 (member.email ? member.email.split('@')[0] : // 如果有email但没有name
+                  (member.user?.name || // 兼容旧数据结构
+                   (member.user?.email ? member.user.email.split('@')[0] : // 兼容旧数据结构
+                    'Anonymous')))}
+              </Text>
               <Text style={styles.memberRole}>{member.role || 'Member'}</Text>
             </View>
           </View>
         ))}
       </View>
 
+      {/* 小组目标部分 */}
       <View style={styles.targetsContainer}>
-        <Text style={styles.sectionTitle}>Team Targets</Text>
-        <View style={styles.targetCard}>
-          <Text style={styles.targetName}>{userTeam.targetName}</Text>
-          <View style={styles.targetValues}>
-            <Text style={styles.targetValue}>Mental: {userTeam.targetMentalValue}</Text>
-            <Text style={styles.targetValue}>Physical: {userTeam.targetPhysicalValue}</Text>
-          </View>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Team Targets</Text>
+          <TouchableOpacity onPress={handleEditTargets}>
+            <Ionicons name="create-outline" size={24} color="#4A90E2" />
+          </TouchableOpacity>
         </View>
+        
+        {!editingTargets ? (
+          <View style={styles.targetCard}>
+            <Text style={styles.targetName}>{userTeam.targetName}</Text>
+            <View style={styles.targetValues}>
+              <Text style={styles.targetValue}>Mental: {userTeam.targetMentalValue}</Text>
+              <Text style={styles.targetValue}>Physical: {userTeam.targetPhysicalValue}</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.editTargetsContainer}>
+            <Text style={styles.editSectionTitle}>Edit Team Targets</Text>
+            <View style={styles.editTargetField}>
+              <Text style={styles.editTargetLabel}>Target Name:</Text>
+              <Picker
+                selectedValue={editedTeamInfo.targetName}
+                onValueChange={(itemValue) => setEditedTeamInfo({...editedTeamInfo, targetName: itemValue})}
+                style={styles.targetPicker}
+              >
+                <Picker.Item label="Select a category" value="" />
+                <Picker.Item label="Target 1" value="Target 1" />
+                <Picker.Item label="Target 2" value="Target 2" />
+                <Picker.Item label="Target 3" value="Target 3" />
+                <Picker.Item label="Target 4" value="Target 4" />
+                <Picker.Item label="Target 5" value="Target 5" />
+                <Picker.Item label="Target 6" value="Target 6" />
+                <Picker.Item label="Target 7" value="Target 7" />
+                <Picker.Item label="Target 8" value="Target 8" />
+                <Picker.Item label="Target 9" value="Target 9" />
+                <Picker.Item label="Target 10" value="Target 10" />
+              </Picker>
+            </View>
+            <View style={styles.editTargetField}>
+              <Text style={styles.editTargetLabel}>Mental Value:</Text>
+              <TextInput
+                style={styles.targetInput}
+                value={String(editedTeamInfo.targetMentalValue)}
+                onChangeText={(text) => {
+                  const intValue = text.replace(/[^0-9]/g, '');
+                  setEditedTeamInfo({...editedTeamInfo, targetMentalValue: intValue});
+                }}
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.editTargetField}>
+              <Text style={styles.editTargetLabel}>Physical Value:</Text>
+              <TextInput
+                style={styles.targetInput}
+                value={String(editedTeamInfo.targetPhysicalValue)}
+                onChangeText={(text) => {
+                  const intValue = text.replace(/[^0-9]/g, '');
+                  setEditedTeamInfo({...editedTeamInfo, targetPhysicalValue: intValue});
+                }}
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.editActions}>
+              <TouchableOpacity 
+                style={[styles.editButton, styles.cancelButton]}
+                onPress={() => setEditingTargets(false)}
+              >
+                <Text style={styles.editButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.editButton, styles.saveButton]}
+                onPress={handleSaveTargets}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.editButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={styles.teamActions}>
@@ -585,7 +1008,7 @@ export default function TeamsScreen() {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 
   const renderGoals = () => (
@@ -923,21 +1346,70 @@ export default function TeamsScreen() {
     </Modal>
   );
 
-  return (
+  const renderTeamList = () => (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
         <Text style={styles.header}>Teams</Text>
-        {!userTeam && (
-          <TouchableOpacity 
-            style={styles.createButton}
-            onPress={() => setModalVisible(true)}
-          >
-            <Ionicons name="add-circle" size={24} color="#fff" />
-            <Text style={styles.createButtonText}>Create Team</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity 
+          style={styles.createButton}
+          onPress={() => setModalVisible(true)}
+        >
+          <Ionicons name="add-circle" size={20} color="#fff" />
+          <Text style={styles.createButtonText}>Create</Text>
+        </TouchableOpacity>
       </View>
 
+      {/* 通过ID加入小组 */}
+      <View style={styles.joinByIdCard}>
+        <Text style={styles.joinByIdTitle}>Join a Team</Text>
+        <Text style={styles.joinByIdSubtitle}>Enter a team ID to join an existing team</Text>
+        <View style={styles.joinByIdContainer}>
+          <TextInput
+            style={styles.joinByIdInput}
+            placeholder="Enter 6-digit Team ID..."
+            value={teamIdToJoin}
+            onChangeText={setTeamIdToJoin}
+            maxLength={6}
+            keyboardType="number-pad"
+          />
+          <TouchableOpacity 
+            style={styles.joinByIdButton}
+            onPress={handleJoinTeamById}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.joinByIdButtonText}>Join</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search teams..."
+          value={search}
+          onChangeText={setSearch}
+        />
+      </View>
+
+      <FlatList
+        data={teams.filter(team => team.name.toLowerCase().includes(search.toLowerCase()))}
+        keyExtractor={(item) => item._id}
+        renderItem={renderTeamCard}
+        ListEmptyComponent={renderEmptyState}
+        contentContainerStyle={styles.teamList}
+        refreshing={loading}
+        onRefresh={loadTeams}
+      />
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
       {userTeam ? (
         <ScrollView style={styles.scrollView}>
           {renderTeamDashboard()}
@@ -945,33 +1417,12 @@ export default function TeamsScreen() {
           {renderForfeits()}
         </ScrollView>
       ) : (
-        <>
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search teams..."
-              placeholderTextColor="#999"
-            />
-          </View>
-          <FlatList
-            data={teams.filter(team => team.name.toLowerCase().includes(search.toLowerCase()))}
-            keyExtractor={(item) => item._id}
-            renderItem={renderTeamCard}
-            ListEmptyComponent={renderEmptyState}
-            contentContainerStyle={styles.teamList}
-            refreshing={loading}
-            onRefresh={loadTeams}
-          />
-        </>
+        renderTeamList()
       )}
 
       {renderCreateTeamModal()}
 
       {renderGoalModal()}
-
       {renderForfeitModal()}
     </View>
   );
@@ -983,13 +1434,236 @@ const styles = StyleSheet.create({
     backgroundColor: "#F5F7FA",
     padding: 16,
   },
+  // 通过ID加入小组的样式
+  joinByIdCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  joinByIdTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 6,
+  },
+  joinByIdSubtitle: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginBottom: 16,
+  },
+  joinByIdContainer: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  joinByIdInput: {
+    flex: 1,
+    height: 50,
+    paddingHorizontal: 15,
+    backgroundColor: '#F8F9FA',
+    fontSize: 16,
+    color: '#2C3E50',
+  },
+  joinByIdButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  joinByIdButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  
+  // 团队信息卡片样式
+  dashboardCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  teamHeaderContainer: {
+    marginBottom: 15,
+  },
+  teamHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  teamName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  editIconButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+  },
+  teamDescription: {
+    fontSize: 16,
+    color: '#7F8C8D',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  teamIdContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 15,
+  },
+  teamIdInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  teamIdLabel: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginRight: 8,
+  },
+  teamId: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    letterSpacing: 1,
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECF0F1',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  copyText: {
+    fontSize: 14,
+    color: '#4A90E2',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  // 团队卡片样式
+  teamCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 16,
+    padding: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  teamCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  teamCardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  teamIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  teamName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  teamIdBadge: {
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  teamIdBadgeText: {
+    fontSize: 12,
+    color: '#7F8C8D',
+    fontWeight: '500',
+  },
+  teamCardBody: {
+    padding: 16,
+  },
+  description: {
+    fontSize: 14,
+    color: '#34495E',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  teamMetaInfo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    marginBottom: 8,
+  },
+  metaText: {
+    fontSize: 13,
+    color: '#7F8C8D',
+    marginLeft: 4,
+  },
+  teamActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  teamActionButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
   enterButton: {
     backgroundColor: "#2ECC71",
+  },
+  joinButton: {
+    backgroundColor: "#4A90E2",
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    marginRight: 15,
+  },
+  leaveButton: {
+    backgroundColor: '#FFEEEE',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
   },
   backButtonText: {
     marginLeft: 5,

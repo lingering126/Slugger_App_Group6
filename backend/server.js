@@ -174,13 +174,13 @@ app.use('/api/auth', authRoutes);
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, name } = req.body;
     
     console.log('Signup attempt for:', email);
     
-    if (!email || !password) {
-      console.log('Missing email or password');
-      return res.status(400).json({ message: 'Email and password are required' });
+    if (!email || !password || !name) {
+      console.log('Missing required fields');
+      return res.status(400).json({ message: 'Email, password, and name are required' });
     }
     
     // Validate email format
@@ -223,13 +223,14 @@ app.post('/api/auth/signup', async (req, res) => {
       const newUser = new User({
         email,
         password: hashedPassword, // Store the hashed password
+        name, // Store the user's name
         isVerified: false,
         verificationToken,
         verificationTokenExpires
       });
       
       await newUser.save();
-      console.log('User registered in MongoDB:', email);
+      console.log('User registered in MongoDB:', email, 'with name:', name);
     } else {
       // Fallback to in-memory storage
       const existingUser = inMemoryUsers.find(user => user.email === email);
@@ -262,8 +263,25 @@ app.post('/api/auth/signup', async (req, res) => {
     console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
     console.log('===============================');
     
+    // 确保有邮件发送配置
+    if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
+      console.warn('Email configuration missing. Setting up a default transporter for development.');
+      // 如果没有配置邮件服务，创建一个测试用的transporter
+      const testAccount = await nodemailer.createTestAccount();
+      transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      console.log('Using Ethereal test account:', testAccount.user);
+    }
+    
     const mailOptions = {
-      from: process.env.MAIL_FROM,
+      from: process.env.MAIL_FROM || 'test@example.com',
       to: email,
       subject: 'Verify your Slugger account',
       html: `
@@ -297,12 +315,18 @@ app.post('/api/auth/signup', async (req, res) => {
     
     try {
       console.log('Attempting to send verification email to:', email);
-      console.log('Using from address:', process.env.MAIL_FROM);
+      console.log('Using from address:', mailOptions.from);
       
       const info = await transporter.sendMail(mailOptions);
       console.log('Verification email sent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
+      
+      // 如果使用了Ethereal测试账户，提供预览链接
+      if (info.messageId && info.messageId.includes('ethereal')) {
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('IMPORTANT: This is a test email. Check the preview URL above to view it.');
+      }
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
       console.error('Error details:', emailError.message);
