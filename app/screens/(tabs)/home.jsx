@@ -909,10 +909,18 @@ const HomeScreen = () => {
     return allItems.sort((a, b) => b.createdAt - a.createdAt);
   };
 
+  // 在组件加载时获取数据
   useEffect(() => {
     const loadData = async () => {
-      await fetchUserStats();  // 先获取用户统计数据
-      await fetchActivities(); // 然后获取活动列表和统计
+      try {
+        // 并行获取数据以提高加载速度
+        await Promise.all([
+          fetchActivities(),
+          fetchPosts()
+        ]);
+      } catch (error) {
+        console.error('Error loading initial data:', error);
+      }
     };
     loadData();
   }, []);
@@ -1023,18 +1031,16 @@ const HomeScreen = () => {
     }
   };
 
-  // 在组件加载时获取数据
-  useEffect(() => {
-    fetchActivities();
-  }, []);
-
-  // Add a function to refresh all data
-  const refreshData = async () => {
-    await Promise.all([
-      fetchUserStats(),
-      fetchPosts(),
-      fetchActivities()
-    ]);
+  // 在创建新帖子后刷新数据
+  const handlePostCreated = async () => {
+    try {
+      await Promise.all([
+        fetchActivities(),
+        fetchPosts()
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data after post creation:', error);
+    }
   };
 
   return (
@@ -1184,7 +1190,7 @@ const HomeScreen = () => {
             <AddContentModal
               visible={showNewPostModal}
               onClose={() => setShowNewPostModal(false)}
-              onPostCreated={refreshData}
+              onPostCreated={handlePostCreated}
             />
           </View>
         </LinearGradient>
