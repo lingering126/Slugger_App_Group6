@@ -61,7 +61,7 @@ export const getApiUrl = () => {
     console.log('Detected web environment, using API config URL');
     return [API_CONFIG.API_URL];
   }
-
+  
   // Get the server URL from config
   return [API_CONFIG.API_URL];
 };

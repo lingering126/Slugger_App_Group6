@@ -1,51 +1,37 @@
 const jwt = require('jsonwebtoken');
-const { AppError } = require('./errorHandler');
 
 const auth = async (req, res, next) => {
   try {
-    // 获取并检查 Authorization header
-    const authHeader = req.header('Authorization');
-    if (!authHeader) {
-      throw new AppError('No Authorization header', 401);
+    console.log('\n=== Auth Middleware ===');
+    
+    // Get token from header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new Error('No token provided or invalid format');
     }
 
-    // 确保 header 格式正确
-    if (!authHeader.startsWith('Bearer ')) {
-      throw new AppError('Invalid Authorization format', 401);
-    }
+    const token = authHeader.split(' ')[1];
+    console.log('Token received');
 
-    const token = authHeader.replace('Bearer ', '');
-    if (!token) {
-      throw new AppError('No token provided', 401);
-    }
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key');
+    console.log('Token verified successfully');
+    console.log('User data:', decoded);
 
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key');
-      
-      // 确保解码后的数据包含必要信息
-      if (!decoded.userId) {
-        throw new AppError('Invalid token format', 401);
-      }
-
-      // Map userId to id for consistency
-      req.user = {
-        ...decoded,
-        id: decoded.userId
-      };
-
-      console.log('Authentication successful:', {
-        userId: req.user.id,
-        token: token.substring(0, 10) + '...' // 只记录 token 的前10个字符
-      });
-
-      next();
-    } catch (jwtError) {
-      console.error('JWT verification failed:', jwtError.message);
-      throw new AppError('Invalid or expired token', 401);
-    }
+    // Add user info to request with both id and userId for compatibility
+    req.user = {
+      ...decoded,
+      id: decoded.userId  // Add id field for compatibility
+    };
+    
+    console.log('Final user object:', req.user);
+    console.log('=== Auth Complete ===\n');
+    next();
   } catch (error) {
-    console.error('Authentication error:', error.message);
-    next(error);
+    console.error('\n=== Auth Error ===');
+    console.error('Error:', error.message);
+    console.error('=== Error End ===\n');
+    res.status(401).json({ message: 'Authentication failed' });
   }
 };
 

@@ -1,60 +1,94 @@
 const UserStats = require('../models/UserStats');
 const Team = require('../models/Team');
-const Activity = require('../models/Activity');
+const Activity = require('../../models/Activity');
+const mongoose = require('mongoose');
 
 // 获取用户统计数据
 exports.getUserStats = async (req, res) => {
   try {
-    const userId = req.user._id;
+    console.log('\n=== Fetching User Stats ===');
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    console.log('User ID:', userId);
+    
+    if (!userId) {
+      throw new Error('User ID is required but not found in request');
+    }
     
     // 获取或创建用户统计数据
     let userStats = await UserStats.findOne({ userId });
     if (!userStats) {
-      userStats = await UserStats.create({ userId });
+      console.log('Creating new UserStats record');
+      userStats = await UserStats.create({ 
+        userId,
+        totalPoints: 0,
+        pointsByType: new Map(),
+        activitiesCompleted: 0,
+        streak: 0,
+        targetPoints: 1000
+      });
     }
 
     // 获取用户所在的团队
     const teams = await Team.find({ 'members.userId': userId });
+    console.log('Found teams:', teams.length);
 
     // 计算各类型活动的统计
+    console.log('Calculating activity statistics...');
     const activityStats = await Activity.aggregate([
-      { $match: { userId: userId } },
+      { $match: { userId } },
       { $group: {
         _id: '$type',
         totalPoints: { $sum: '$points' },
         count: { $sum: 1 }
       }}
     ]);
+    console.log('Activity stats calculated:', activityStats);
 
     // 格式化统计数据
     const stats = {
       personal: {
-        totalPoints: userStats.totalPoints,
-        pointsByType: userStats.pointsByType,
-        activitiesCompleted: userStats.activitiesCompleted,
-        streak: userStats.streak,
-        progress: userStats.calculateProgress()
+        totalPoints: userStats.totalPoints || 0,
+        pointsByType: Object.fromEntries(userStats.pointsByType || new Map()),
+        activitiesCompleted: userStats.activitiesCompleted || 0,
+        streak: userStats.streak || 0,
+        progress: userStats.calculateProgress() || 0
       },
       teams: await Promise.all(teams.map(async team => ({
         teamId: team._id,
         teamName: team.name,
         progress: team.calculateProgress(),
-        currentPoints: team.currentPoints,
-        targetPoints: team.targetPoints
+        currentPoints: team.currentPoints || 0,
+        targetPoints: team.targetPoints || 1000
       }))),
       activityBreakdown: activityStats.reduce((acc, stat) => {
         acc[stat._id] = {
-          points: stat.totalPoints,
-          count: stat.count,
-          progress: userStats.calculateTypeProgress(stat._id)
+          points: stat.totalPoints || 0,
+          count: stat.count || 0,
+          progress: userStats.calculateTypeProgress(stat._id) || 0
         };
         return acc;
       }, {})
     };
 
-    res.json(stats);
+    console.log('Stats prepared successfully');
+    console.log('=== User Stats Fetch Complete ===\n');
+
+    res.json({
+      success: true,
+      data: stats
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('\n=== User Stats Error ===');
+    console.error('Error details:', error);
+    console.error('Stack trace:', error.stack);
+    console.error('Request user object:', req.user);
+    console.error('=== Error End ===\n');
+    
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching user statistics',
+      error: error.message 
+    });
   }
 };
 
@@ -62,7 +96,7 @@ exports.getUserStats = async (req, res) => {
 exports.getTeamStats = async (req, res) => {
   try {
     const { teamId } = req.params;
-    const userId = req.user._id;
+    const userId = new mongoose.Types.ObjectId(req.user.id);
 
     // 验证用户是否在团队中
     const team = await Team.findOne({
@@ -71,7 +105,10 @@ exports.getTeamStats = async (req, res) => {
     });
 
     if (!team) {
-      return res.status(404).json({ message: 'Team not found or user not in team' });
+      return res.status(404).json({
+        success: false,
+        message: 'Team not found or user not in team'
+      });
     }
 
     // 获取团队成员的统计数据
@@ -106,33 +143,48 @@ exports.getTeamStats = async (req, res) => {
       teamInfo: {
         name: team.name,
         progress: team.calculateProgress(),
-        currentPoints: team.currentPoints,
-        targetPoints: team.targetPoints
+        currentPoints: team.currentPoints || 0,
+        targetPoints: team.targetPoints || 1000
       },
       memberStats: memberStats,
       activityStats: teamActivities.reduce((acc, stat) => {
         acc[stat._id] = {
-          points: stat.totalPoints,
-          count: stat.count
+          points: stat.totalPoints || 0,
+          count: stat.count || 0
         };
         return acc;
       }, {})
     };
 
-    res.json(stats);
+    res.json({
+      success: true,
+      data: stats
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('\n=== Team Stats Error ===');
+    console.error('Error details:', error);
+    console.error('Stack trace:', error.stack);
+    console.error('=== Error End ===\n');
+    
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching team statistics',
+      error: error.message 
+    });
   }
 };
 
 // 更新用户目标
 exports.updateUserTarget = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = new mongoose.Types.ObjectId(req.user.id);
     const { targetPoints } = req.body;
 
     if (!targetPoints || targetPoints <= 0) {
-      return res.status(400).json({ message: 'Invalid target points' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid target points'
+      });
     }
 
     const userStats = await UserStats.findOneAndUpdate(
@@ -142,10 +194,22 @@ exports.updateUserTarget = async (req, res) => {
     );
 
     res.json({
-      targetPoints: userStats.targetPoints,
-      progress: userStats.calculateProgress()
+      success: true,
+      data: {
+        targetPoints: userStats.targetPoints,
+        progress: userStats.calculateProgress()
+      }
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('\n=== Update Target Error ===');
+    console.error('Error details:', error);
+    console.error('Stack trace:', error.stack);
+    console.error('=== Error End ===\n');
+    
+    res.status(400).json({
+      success: false,
+      message: 'Error updating target points',
+      error: error.message
+    });
   }
 }; 

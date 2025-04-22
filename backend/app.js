@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const { errorHandler } = require('./middleware/errorHandler');
 const auth = require('./middleware/auth');
+const activityRoutes = require('./routes/activities');
+const homepageRoutes = require('./homepage/routes');
 
 const app = express();
 
@@ -17,7 +19,9 @@ app.use((req, res, next) => {
   console.log(`Method: ${req.method}`);
   console.log(`URL: ${req.url}`);
   console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
+  if (req.method !== 'GET') {
+    console.log('Body:', req.body);
+  }
   console.log('======================\n');
   next();
 });
@@ -31,6 +35,8 @@ app.use('/api/auth', authRoutes);
 
 // Protected routes
 app.use('/api/posts', auth, postRoutes);
+app.use('/api/activities', auth, activityRoutes);
+app.use('/api/homepage', auth, homepageRoutes);
 
 // Error handling middleware
 app.use(errorHandler);

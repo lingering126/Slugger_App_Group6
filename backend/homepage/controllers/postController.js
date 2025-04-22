@@ -1,5 +1,5 @@
 const Post = require('../models/Post');
-const Activity = require('../models/Activity');
+const Activity = require('../../models/Activity');
 const User = require('../../models/User');
 
 // 创建新帖子

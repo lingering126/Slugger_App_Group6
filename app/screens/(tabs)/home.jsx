@@ -8,6 +8,7 @@ import { SocialButtons } from '../../components/SocialButtons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import API_CONFIG from '../../config/api';
+import ActivityCard from '../../components/ActivityCard';
 
 // 活动分类数据
 const activityData = {
@@ -154,17 +155,109 @@ const samplePosts = {
   }
 };
 
-const ActivityModal = ({ visible, category, onClose }) => {
+const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
   const [selectedTime, setSelectedTime] = useState('1');
   const [selectedActivity, setSelectedActivity] = useState(null);
-  const activities = activityData[category] || [];
+  const [loading, setLoading] = useState(false);
+  const activities = category ? activityData[category] || [] : [];
+
+  const getActivityIcon = (type, name) => {
+    switch (type) {
+      case 'Mental':
+        switch (name) {
+          case 'Meditation':
+            return '🧘';
+          case 'Reading':
+            return '📚';
+          case 'Writing':
+            return '✍️';
+          case 'Music Practice':
+            return '🎵';
+          case 'Mental Gym':
+            return '🧠';
+          case 'Duolingo':
+            return '🦉';
+          case 'Language Training':
+            return '🗣️';
+          case 'Cold shower':
+            return '🚿';
+          case 'Journal':
+            return '📓';
+          case 'Breathing exercise':
+            return '💨';
+          default:
+            return '🧠';
+        }
+      case 'Physical':
+        switch (name) {
+          case 'Cricket':
+            return '🏏';
+          case 'Soccer':
+            return '⚽';
+          case 'Run':
+            return '🏃';
+          case 'Walk':
+            return '🚶';
+          case 'HIIT':
+            return '🔥';
+          case 'Gym Workout':
+            return '💪';
+          case 'Cycle':
+            return '🚴';
+          case 'Swim':
+            return '🏊';
+          case 'Home Workout':
+            return '🏠';
+          case 'Physio':
+            return '🧑‍⚕️';
+          case 'Yoga':
+            return '🧘';
+          case 'Squash':
+            return '🎾';
+          case 'Rugby':
+            return '🏉';
+          case 'Touch Rugby':
+            return '👐';
+          case 'Steps goal':
+            return '👣';
+          case 'DIY':
+            return '🔨';
+          case 'Gardening':
+            return '🌱';
+          default:
+            return '💪';
+        }
+      case 'Bonus':
+        switch (name) {
+          case 'Community Service':
+            return '🤝';
+          case 'Family':
+            return '👨‍👩‍👧‍👦';
+          case 'Personal Best':
+            return '🏆';
+          case 'Personal Goal':
+            return '🎯';
+          default:
+            return '⭐';
+        }
+      default:
+        return '📝';
+    }
+  };
 
   const handleConfirm = async () => {
-    if (!selectedActivity) return;
+    if (!selectedActivity) {
+      Alert.alert('Error', 'Please select an activity');
+      return;
+    }
 
+    setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`${API_CONFIG.API_URL}/activities`, {
+      // 将小时转换为分钟
+      const durationInMinutes = parseInt(selectedTime) * 60;
+      
+      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.CREATE}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -173,26 +266,28 @@ const ActivityModal = ({ visible, category, onClose }) => {
         body: JSON.stringify({
           type: category,
           name: selectedActivity,
-          duration: parseInt(selectedTime),
-          description: `${selectedActivity} activity for ${selectedTime} hour(s)`
+          duration: durationInMinutes,
+          icon: getActivityIcon(category, selectedActivity)
         })
       });
 
+      console.log('Activity creation response:', response.status);
+      
       if (response.ok) {
-        const result = await response.json();
-        console.log('Activity logged successfully:', result);
-        // 重置表单
-        setSelectedTime('1');
-        setSelectedActivity(null);
-        // 关闭模态框
+        const data = await response.json();
+        console.log('Activity created:', data);
+        onActivityCreated && onActivityCreated(data);
         onClose();
-        // 刷新统计数据
-        fetchUserStats();
       } else {
-        console.error('Failed to log activity:', await response.text());
+        const error = await response.text();
+        console.error('Failed to create activity:', error);
+        Alert.alert('Error', 'Failed to create activity');
       }
     } catch (error) {
-      console.error('Error logging activity:', error);
+      console.error('Error creating activity:', error);
+      Alert.alert('Error', 'Failed to create activity');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -205,54 +300,69 @@ const ActivityModal = ({ visible, category, onClose }) => {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Log {category} Activity</Text>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Log {category || 'Activity'}</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.modalLabel}>Select Duration (Hours)</Text>
-          <Picker 
-            selectedValue={selectedTime} 
-            style={styles.picker} 
-            onValueChange={(itemValue) => setSelectedTime(itemValue)}
-          >
-            {[...Array(24).keys()].map((num) => (
-              <Picker.Item key={num + 1} label={`${num + 1} hour`} value={`${num + 1}`} />
-            ))}
-          </Picker>
+          <View style={styles.pickerContainer}>
+            <Picker 
+              selectedValue={selectedTime} 
+              style={styles.picker} 
+              onValueChange={(itemValue) => {
+                setSelectedTime(itemValue);
+                console.log('选择的时间:', itemValue); // 添加日志
+              }}
+            >
+              {[...Array(24).keys()].map((num) => (
+                <Picker.Item key={num + 1} label={`${num + 1} hour`} value={`${num + 1}`} />
+              ))}
+            </Picker>
+          </View>
 
           <Text style={styles.modalLabel}>Select Activity</Text>
           <ScrollView style={styles.activityList}>
-            {activities.map((activity, index) => (
-              <TouchableOpacity 
-                key={index}
-                style={[
-                  styles.activityOption,
-                  selectedActivity === activity && styles.selectedActivity
-                ]}
-                onPress={() => setSelectedActivity(activity)}
-              >
-                <Text style={[
-                  styles.activityOptionText,
-                  selectedActivity === activity && styles.selectedActivityText
-                ]}>
-                  {activity}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.activityGrid}>
+              {activities.map((activity, index) => (
+                <TouchableOpacity 
+                  key={index}
+                  style={[
+                    styles.activityGridItem,
+                    selectedActivity === activity && styles.selectedActivity
+                  ]}
+                  onPress={() => {
+                    setSelectedActivity(activity);
+                    console.log('选择的活动:', activity); // 添加日志
+                  }}
+                >
+                  <Text style={[
+                    styles.activityGridText,
+                    selectedActivity === activity && styles.selectedActivityText
+                  ]}>
+                    {activity}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </ScrollView>
 
-          <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.confirmButton]}
-              onPress={handleConfirm}
-            >
-              <Text style={styles.modalButtonText}>Confirm</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.cancelButton]}
-              onPress={onClose}
-            >
-              <Text style={styles.modalButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity 
+            style={[
+              styles.confirmButton,
+              (!selectedActivity || loading) && styles.disabledButton
+            ]}
+            onPress={handleConfirm}
+            disabled={!selectedActivity || loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.confirmButtonText}>Confirm</Text>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -769,11 +879,31 @@ const HomeScreen = () => {
       personalTarget: 68
     }
   });
+  const [activities, setActivities] = useState([]);
   const router = useRouter();
+
+  // 合并并排序所有内容
+  const getSortedFeed = () => {
+    const allItems = [
+      ...activities.map(activity => ({
+        ...activity,
+        itemType: 'activity',
+        createdAt: new Date(activity.createdAt)
+      })),
+      ...posts.map(post => ({
+        ...post,
+        itemType: 'post',
+        createdAt: new Date(post.createdAt)
+      }))
+    ];
+
+    return allItems.sort((a, b) => b.createdAt - a.createdAt);
+  };
 
   useEffect(() => {
     fetchUserStats();
     fetchPosts();
+    fetchActivities();
   }, []);
 
   const fetchPosts = async () => {
@@ -799,7 +929,7 @@ const HomeScreen = () => {
   const fetchUserStats = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`${API_CONFIG.API_URL}/homepage/stats/user`, {
+      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.USER.STATS}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -816,6 +946,57 @@ const HomeScreen = () => {
       }
     } catch (error) {
       console.error('Error fetching user stats:', error);
+    }
+  };
+
+  const fetchActivities = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Fetching activities...');
+      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIST}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      console.log('Activities response status:', response.status);
+      const data = await response.json();
+      console.log('Activities data:', data);
+
+      if (response.ok) {
+        if (data.success && Array.isArray(data.data?.activities)) {
+          setActivities(data.data.activities);
+          // 更新用户统计数据
+          if (data.data.stats) {
+            setUserStats(prevStats => ({
+              ...prevStats,
+              totalPoints: data.data.stats.totalPoints || 0
+            }));
+          }
+        } else {
+          console.error('Invalid activities data format:', data);
+          setActivities([]);
+        }
+      } else {
+        console.error('Failed to fetch activities:', data);
+        setActivities([]);
+      }
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+      setActivities([]);
+    }
+  };
+
+  const handleActivityCreated = async () => {
+    try {
+      await fetchActivities();
+      await fetchUserStats();
+    } catch (error) {
+      console.error('Error refreshing data:', error);
     }
   };
 
@@ -897,13 +1078,24 @@ const HomeScreen = () => {
               </View>
             </View>
 
-            <ScrollView style={styles.scrollView}>
-              {posts.map(post => (
-                <PostCard key={post._id} post={post} />
+            {/* Combined Feed */}
+            <ScrollView style={styles.feed}>
+              {getSortedFeed().map((item) => (
+                item.itemType === 'activity' ? (
+                  <ActivityCard
+                    key={`activity-${item.id}`}
+                    activity={item}
+                  />
+                ) : (
+                  <PostCard 
+                    key={`post-${item._id}`}
+                    post={item}
+                  />
+                )
               ))}
             </ScrollView>
 
-            {/* Activity Buttons and Add Post Button */}
+            {/* Bottom Buttons */}
             <View style={styles.bottomContainer}>
               <View style={styles.activityButtonsContainer}>
                 <TouchableOpacity 
@@ -946,7 +1138,10 @@ const HomeScreen = () => {
             <ActivityModal
               visible={modalVisible}
               category={selectedCategory}
-              onClose={() => setModalVisible(false)}
+              onClose={() => {
+                setModalVisible(false);
+              }}
+              onActivityCreated={handleActivityCreated}
             />
 
             <AddContentModal
@@ -1059,7 +1254,7 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'right',
   },
-  scrollView: {
+  feed: {
     flex: 1, 
     marginBottom: 60,
   },
@@ -1424,6 +1619,73 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#ff4b4b',
     marginBottom: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  closeButton: {
+    padding: 5,
+  },
+  pickerContainer: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  picker: {
+    height: 50,
+  },
+  modalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+    color: '#333',
+  },
+  activityList: {
+    maxHeight: '50%',
+  },
+  activityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 5,
+  },
+  activityGridItem: {
+    width: '48%',
+    backgroundColor: '#f5f5f5',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityGridText: {
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+  },
+  selectedActivity: {
+    backgroundColor: '#4A90E2',
+  },
+  selectedActivityText: {
+    color: '#fff',
+  },
+  confirmButton: {
+    backgroundColor: '#4A90E2',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
   },
 });
 

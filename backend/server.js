@@ -10,6 +10,8 @@ const os = require('os');
 const User = require('./models/User');
 const postsRouter = require('./homepage/routes/posts');
 const auth = require('./middleware/auth');
+const activityRoutes = require('./routes/activities');
+const statsRoutes = require('./homepage/routes/index');
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
@@ -127,71 +129,7 @@ app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
-// Routes
-app.use('/api/posts', auth, postsRouter);
-
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-})
-.then(() => {
-  console.log('Successfully connected to MongoDB Atlas');
-  console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
-})
-.catch(err => {
-  console.error('MongoDB connection error:', err);
-  console.error('Error code:', err.code);
-  console.error('Error name:', err.name);
-  console.error('Full error:', err);
-  // Continue with in-memory storage as fallback
-  console.log('Falling back to in-memory storage');
-});
-
-// Add MongoDB connection error handlers
-mongoose.connection.on('error', err => {
-  console.error('MongoDB connection error:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB disconnected');
-});
-
-mongoose.connection.on('reconnected', () => {
-  console.log('MongoDB reconnected');
-});
-
-// In-memory user storage as fallback
-const inMemoryUsers = [];
-
-// Add request logging middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} from ${req.ip}`);
-  console.log('Headers:', JSON.stringify(req.headers));
-  
-  // Add CORS headers to every response
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  // Log response
-  const originalSend = res.send;
-  res.send = function(body) {
-    console.log(`[${new Date().toISOString()}] Response: ${res.statusCode}`);
-    return originalSend.call(this, body);
-  };
-  
-  next();
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Server error:', err);
-  res.status(500).json({ message: 'Internal server error', error: err.message });
-});
-
-// Routes
+// Auth routes (no auth middleware)
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -346,7 +284,76 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-// Email verification endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    console.log('Login attempt for:', email);
+    
+    if (!email || !password) {
+      console.log('Missing email or password');
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+    
+    let user;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      // Find user in MongoDB
+      user = await User.findOne({ email });
+      console.log('MongoDB user found:', !!user);
+    } else {
+      // Fallback to in-memory storage
+      user = inMemoryUsers.find(user => user.email === email);
+      console.log('In-memory user found:', !!user);
+    }
+    
+    if (!user) {
+      console.log('User not found');
+      return res.status(400).json({ message: 'Invalid email or password' });
+    }
+    
+    // Check if user is verified
+    if (!user.isVerified) {
+      console.log('User not verified');
+      return res.status(403).json({ 
+        message: 'Please verify your email before logging in',
+        requiresVerification: true,
+        email: email
+      });
+    }
+    
+    // Check password using bcrypt to compare the hashed password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    console.log('Password valid:', isPasswordValid);
+    
+    if (!isPasswordValid) {
+      console.log('Invalid password');
+      return res.status(400).json({ message: 'Invalid email or password' });
+    }
+    
+    // Create JWT token
+    const token = jwt.sign(
+      { userId: user.id || user._id },
+      process.env.JWT_SECRET || 'fallback_secret_key',
+      { expiresIn: '7d' }
+    );
+    
+    console.log('Login successful for:', email);
+    
+    res.status(200).json({
+      token,
+      user: {
+        id: user.id || user._id,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 app.get('/api/auth/verify-email', async (req, res) => {
   try {
     const { token, email } = req.query;
@@ -568,7 +575,6 @@ app.get('/api/auth/verify-email', async (req, res) => {
   }
 });
 
-// Resend verification email
 app.post('/api/auth/resend-verification', async (req, res) => {
   try {
     const { email } = req.body;
@@ -693,74 +699,70 @@ app.post('/api/auth/resend-verification', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    console.log('Login attempt for:', email);
-    
-    if (!email || !password) {
-      console.log('Missing email or password');
-      return res.status(400).json({ message: 'Email and password are required' });
-    }
-    
-    let user;
-    
-    // Check if MongoDB is connected
-    if (mongoose.connection.readyState === 1) {
-      // Find user in MongoDB
-      user = await User.findOne({ email });
-      console.log('MongoDB user found:', !!user);
-    } else {
-      // Fallback to in-memory storage
-      user = inMemoryUsers.find(user => user.email === email);
-      console.log('In-memory user found:', !!user);
-    }
-    
-    if (!user) {
-      console.log('User not found');
-      return res.status(400).json({ message: 'Invalid email or password' });
-    }
-    
-    // Check if user is verified
-    if (!user.isVerified) {
-      console.log('User not verified');
-      return res.status(403).json({ 
-        message: 'Please verify your email before logging in',
-        requiresVerification: true,
-        email: email
-      });
-    }
-    
-    // Check password using bcrypt to compare the hashed password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    console.log('Password valid:', isPasswordValid);
-    
-    if (!isPasswordValid) {
-      console.log('Invalid password');
-      return res.status(400).json({ message: 'Invalid email or password' });
-    }
-    
-    // Create JWT token
-    const token = jwt.sign(
-      { userId: user.id || user._id },
-      process.env.JWT_SECRET || 'fallback_secret_key',
-      { expiresIn: '7d' }
-    );
-    
-    console.log('Login successful for:', email);
-    
-    res.status(200).json({
-      token,
-      user: {
-        id: user.id || user._id,
-        email: user.email
-      }
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
+// Protected routes (with auth middleware)
+app.use('/api/posts', auth, postsRouter);
+app.use('/api/activities', auth, activityRoutes);
+app.use('/api/stats', auth, statsRoutes);
+
+// Connect to MongoDB Atlas
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+})
+.then(() => {
+  console.log('Successfully connected to MongoDB Atlas');
+  console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
+})
+  .catch(err => {
+  console.error('MongoDB connection error:', err);
+  console.error('Error code:', err.code);
+  console.error('Error name:', err.name);
+  console.error('Full error:', err);
+    // Continue with in-memory storage as fallback
+  console.log('Falling back to in-memory storage');
+  });
+
+// Add MongoDB connection error handlers
+mongoose.connection.on('error', err => {
+  console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('MongoDB reconnected');
+});
+
+// In-memory user storage as fallback
+const inMemoryUsers = [];
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} from ${req.ip}`);
+  console.log('Headers:', JSON.stringify(req.headers));
+  
+  // Add CORS headers to every response
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Log response
+  const originalSend = res.send;
+  res.send = function(body) {
+    console.log(`[${new Date().toISOString()}] Response: ${res.statusCode}`);
+    return originalSend.call(this, body);
+  };
+  
+  next();
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ message: 'Internal server error', error: err.message });
 });
 
 // Health check route

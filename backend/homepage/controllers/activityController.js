@@ -1,4 +1,5 @@
-const Activity = require('../models/Activity');
+const Activity = require('../../models/Activity');
+const User = require('../../models/User');
 const UserStats = require('../models/UserStats');
 const Team = require('../models/Team');
 
@@ -33,25 +34,153 @@ exports.getActivityTypes = async (req, res) => {
 // 创建新活动
 exports.createActivity = async (req, res) => {
   try {
-    const { type, name, duration, description } = req.body;
-    const userId = req.user._id;
+    console.log('\n=== Creating New Activity ===');
+    const { type, name, duration } = req.body;
+    const userId = req.user.id;
 
-    // 验证活动类型
-    const activityTypes = await Activity.getActivityTypes();
-    if (!activityTypes[type]?.some(t => t.name === name)) {
-      return res.status(400).json({ message: 'Invalid activity type or name' });
+    console.log('Request body:', { type, name, duration });
+    console.log('User ID from auth:', userId);
+
+    if (!userId) {
+      throw new Error('User ID is required but not found in request');
     }
 
-    // 创建活动并更新统计
-    const activity = await Activity.createActivity({
+    // 计算积分
+    console.log('\n=== Calculating Activity Points ===');
+    console.log('Activity type:', type);
+    console.log('Duration:', duration);
+    const points = Activity.calculatePoints(type, duration);
+    console.log('Points calculated:', points);
+    console.log('=== Points Calculation Complete ===\n');
+
+    // 创建活动
+    const activity = new Activity({
       userId,
       type,
       name,
       duration,
-      description
+      points,
+      status: 'completed' // 默认设置为已完成
     });
 
-    res.status(201).json(activity);
+    await activity.save();
+
+    // 获取或创建用户统计数据
+    let userStats = await UserStats.findOne({ userId });
+    if (!userStats) {
+      userStats = new UserStats({ 
+        userId,
+        totalPoints: 0,
+        pointsByType: new Map(),
+        activitiesCompleted: 0,
+        streak: 0,
+        targetPoints: 1000
+      });
+    }
+
+    // 更新用户统计
+    await userStats.updateActivityStats(activity);
+
+    console.log('\nActivity created successfully');
+    console.log('Activity details:', activity.toResponseFormat());
+    console.log('User stats updated:', {
+      totalPoints: userStats.totalPoints,
+      activitiesCompleted: userStats.activitiesCompleted,
+      streak: userStats.streak
+    });
+    console.log('=== Activity Creation Complete ===\n');
+
+    res.status(201).json({
+      success: true,
+      data: activity.toResponseFormat()
+    });
+  } catch (error) {
+    console.error('\n=== Activity Creation Error ===');
+    console.error('Error details:', error);
+    console.error('Stack trace:', error.stack);
+    console.error('Request user object:', req.user);
+    console.error('=== Error End ===\n');
+    res.status(400).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+// 获取活动列表
+exports.getActivities = async (req, res) => {
+  try {
+    const activities = await Activity.find()
+      .populate('userId', 'username')
+      .sort({ date: -1 })
+      .limit(20);
+
+    const formattedActivities = activities.map(activity => ({
+      id: activity._id,
+      username: activity.userId.username,
+      activityType: activity.type,
+      name: activity.name,
+      duration: activity.duration,
+      points: activity.points,
+      timestamp: activity.date,
+      likes: activity.likes.length,
+      comments: activity.comments.length,
+      shares: activity.shares.length
+    }));
+
+    res.json(formattedActivities);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 点赞活动
+exports.likeActivity = async (req, res) => {
+  try {
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) {
+      return res.status(404).json({ message: 'Activity not found' });
+    }
+
+    const isLiked = await activity.toggleLike(req.user._id);
+    res.json({ liked: isLiked, likesCount: activity.likes.length });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// 评论活动
+exports.commentActivity = async (req, res) => {
+  try {
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) {
+      return res.status(404).json({ message: 'Activity not found' });
+    }
+
+    const comment = await activity.addComment(req.user._id, req.body.content);
+    const user = await User.findById(req.user._id);
+
+    res.json({
+      id: comment._id,
+      content: comment.content,
+      username: user.username,
+      createdAt: comment.createdAt
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// 分享活动
+exports.shareActivity = async (req, res) => {
+  try {
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) {
+      return res.status(404).json({ message: 'Activity not found' });
+    }
+
+    const sharesCount = await activity.addShare(req.user._id);
+    res.json({ sharesCount });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
