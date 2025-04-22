@@ -49,6 +49,23 @@ const groupSchema = new mongoose.Schema({
     required: true,
     default: 0
   },
+  targetStartDate: {
+    type: Date,
+    required: true,
+    default: Date.now // Set to the exact time of creation
+  },
+  targetEndDate: {
+    type: Date,
+    required: true,
+    default: function() {
+      // `this.targetStartDate` should be set by the default above
+      const startDate = this.targetStartDate || new Date(); // Fallback just in case
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 7);
+      endDate.setMilliseconds(endDate.getMilliseconds() - 1); // End exactly 7 days later
+      return endDate;
+    }
+  },
   dailyLimitPhysical: {
     type: Number, // Daily physical limit
     required: true,

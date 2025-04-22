@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Group = require('../models/group');
+const GroupCycleHistory = require('../src/models/group-cycle-history');
 const authMiddleware = require('../middleware/auth');
 
 // Create a new group
@@ -151,7 +152,7 @@ router.put('/:groupId', authMiddleware, async (req, res) => {
   }
 });
 
-// Update group targets
+// Update group targets AND reset cycle
 router.put('/:groupId/targets', authMiddleware, async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -172,7 +173,29 @@ router.put('/:groupId/targets', authMiddleware, async (req, res) => {
       console.error(`User ${userId} is not a member of group ${groupId}`);
       return res.status(403).json({ message: 'Not authorized to update this group' });
     }
-    
+
+    const now = new Date(); // Use exact time for new cycle start
+
+    // 1. Archive the current cycle (ending now)
+    const historyEntry = new GroupCycleHistory({
+      groupId: group._id, // Use the group's actual ObjectId
+      startDate: group.targetStartDate,
+      endDate: now, // Cycle ends now
+      targetValue: group.targetValue, // Archive the old target
+    });
+    await historyEntry.save();
+    console.log(`Archived cycle for group ${group.groupId} (${group._id}) due to manual reset.`);
+
+    // 2. Calculate new end date (7 days from now)
+    const newEndDate = new Date(now);
+    newEndDate.setDate(now.getDate() + 7);
+    newEndDate.setMilliseconds(newEndDate.getMilliseconds() - 1);
+
+    // 3. Update group document
+    group.targetStartDate = now; // New cycle starts now
+    group.targetEndDate = newEndDate;
+
+        
     // Update group targets
     if (targetName) group.targetName = targetName;
     if (targetMentalValue !== undefined) group.targetMentalValue = targetMentalValue;

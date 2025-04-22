@@ -154,6 +154,45 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 - `GET /api/test`: Test API connectivity and get request info
 - `POST /api/test/email`: Test email configuration
 
+### Analytics (`/api/analytics`)
+*(Requires Authentication)*
+
+*   **Get Group Overview Summary:** `GET /api/analytics/overview/:groupId`
+    *   Fetches summary stats for the current cycle (target, total, percentages). Handles cycle archiving.
+    *   Params: `:groupId` (6-char string ID)
+    *   Success (200): `{ success: true, data: { groupTarget, currentTotal, percentOfTarget, percentOfTimeGone }, message }`
+    *   Error (403): Not a member.
+    *   Error (404): Group not found.
+
+*   **Get Member Progress:** `GET /api/analytics/member-progress/:groupId`
+    *   Fetches individual member progress (name, avatar, points) for the current cycle.
+    *   Params: `:groupId` (6-char string ID)
+    *   Success (200): `{ success: true, data: { membersProgress: [...] }, message }`
+    *   Error (403/404): See above.
+
+*   **Get Timeline Data:** `GET /api/analytics/timeline/:groupId?range=<range>`
+    *   Fetches aggregated timeline data for charts.
+    *   Params: `:groupId` (6-char string ID)
+    *   Query: `range` ('6H', '12H', '24H', '1W', '1Y')
+    *   Success (200): `{ success: true, data: { labels, fullLabels, isoTimestamps, data, cycleIndices? }, message }`
+    *   Error (400): Invalid range.
+    *   Error (403/404): See above.
+
+### Activity Log (`/api/activity-log`)
+*(Requires Authentication)*
+
+*   **Log Activity:** `POST /api/activity-log`
+    *   Records a new activity log for the current user.
+    *   Body: `{ groupId (ObjectId), activityType ('Mental'|'Physical'|'Bonus'), points?, activityName?, duration?, timestamp? }`
+    *   Success (201): `{ success: true, message, data: { newLog } }`
+    *   Error (400): Missing fields or invalid type.
+
+*   **Get User Activity Logs:** `GET /api/activity-log/user/:groupId`
+    *   Fetches user's activity logs for a specific group, paginated.
+    *   Params: `:groupId` (MongoDB ObjectId)
+    *   Query: `limit?` (default 20), `skip?` (default 0)
+    *   Success (200): `{ success: true, data: [...logs], meta: { totalCount, limit, skip } }`
+
 ## Development Notes
 
 - **Frontend Framework**: React Native with Expo

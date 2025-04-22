@@ -10,6 +10,8 @@ const os = require('os');
 const teamRoutes = require('./src/routes/team');
 const authRoutes = require('./src/routes/auth');
 const User = require('./src/models/user');
+const analyticsRoutes = require('./src/analytics/analytics.controller');
+const activityLogRoutes = require('./src/routes/activity-log');
 
 
 // Function to get all server IP addresses
@@ -171,6 +173,8 @@ app.use((err, req, res, next) => {
 
 app.use('/api/teams', teamRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/activity-log', activityLogRoutes);
 
 app.post('/api/auth/signup', async (req, res) => {
   try {

@@ -1,20 +1,36 @@
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 
-export default function StatBox() {
+// Function to safely format numbers, handling null/undefined
+const formatNumber = (num) => {
+  return (typeof num === 'number' && !isNaN(num)) ? num.toFixed(0) : '...';
+};
+
+// Function to safely format percentages
+const formatPercent = (num) => {
+  return (typeof num === 'number' && !isNaN(num)) ? `${num.toFixed(0)}%` : '...';
+};
+
+export default function StatBox({ groupTarget, currentTotal, percentOfTarget, percentOfTimeGone }) {
+  // Optional: Add a console log here to verify props are received
+  // console.log('StatBox props:', { groupTarget, currentTotal, percentOfTarget, percentOfTimeGone });
+  
   return (
     <View style={styles.statBox}>
       <View style={styles.statColumn}>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Total</Text>
           <View style={styles.statHeader}>
-            <Text style={styles.statValue}>46</Text>
-            <Ionicons name="trending-up" size={20} color="#3A8891" />
+            {/* Use currentTotal prop */}
+            <Text style={styles.statValue}>{formatNumber(currentTotal)}</Text>
+            {/* Icon logic might need adjustment based on data trends if available */}
+            <Ionicons name="trending-up" size={20} color="#3A8891" /> 
           </View>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Group target</Text>
-          <Text style={styles.groupTarget}>68</Text>
+          {/* Use groupTarget prop */}
+          <Text style={styles.groupTarget}>{formatNumber(groupTarget)}</Text>
         </View>
       </View>
 
@@ -23,11 +39,13 @@ export default function StatBox() {
       <View style={styles.statColumn}>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>% of target</Text>
-          <Text style={[styles.percentValue, { color: '#3A8891' }]}>68%</Text>
+          {/* Use percentOfTarget prop and format */}
+          <Text style={[styles.percentValue, { color: '#3A8891' }]}>{formatPercent(percentOfTarget)}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>% of time gone</Text>
-          <Text style={styles.percentValue}>65%</Text>
+          {/* Use percentOfTimeGone prop and format */}
+          <Text style={styles.percentValue}>{formatPercent(percentOfTimeGone)}</Text>
         </View>
       </View>
     </View>
@@ -38,7 +56,7 @@ const styles = StyleSheet.create({
   statBox: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: "#E8F0F2",
+    backgroundColor: "#E8F0F2", 
     borderRadius: 15,
     padding: 15,
     marginBottom: 20,
@@ -59,6 +77,8 @@ const styles = StyleSheet.create({
   },
   statItem: {
     marginBottom: 15,
+    // Ensure items don't push divider away if text gets long
+    minHeight: 50, 
   },
   statHeader: {
     flexDirection: 'row',
@@ -89,7 +109,8 @@ const styles = StyleSheet.create({
   },
   divider: {
     width: 1,
-    height: "100%",
+    // Make divider stretch to full height
+    alignSelf: 'stretch',
     backgroundColor: "#D8E1E5",
   },
 });
