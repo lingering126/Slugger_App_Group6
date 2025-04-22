@@ -78,7 +78,7 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 
 2. Install additional required packages:
    ```
-   npm install expo-clipboard
+   npm install expo-clipboard @react-native-picker/picker
    ```
 
 3. Start the Expo development server:

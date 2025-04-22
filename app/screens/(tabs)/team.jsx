@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Image, ScrollView, Alert, ActivityIndicator, Picker } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Image, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from "@expo/vector-icons";
 import teamService from "../../services/teamService";
 import AsyncStorage from '@react-native-async-storage/async-storage';
