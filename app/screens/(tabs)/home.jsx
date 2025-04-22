@@ -276,7 +276,21 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('Activity created:', data);
-        onActivityCreated && onActivityCreated(data);
+
+        // 构建完整的活动数据，使用 Anonymous 作为默认用户名
+        const activityData = {
+          ...data.data,
+          type: category,
+          name: selectedActivity,
+          duration: durationInMinutes,
+          icon: getActivityIcon(category, selectedActivity),
+          createdAt: new Date().toISOString(),
+          author: 'Anonymous',  // 使用 Anonymous 作为默认用户名
+          userId: 'anonymous'   // 使用小写的 anonymous 作为默认用户ID
+        };
+
+        // 调用父组件的回调函数
+        onActivityCreated && onActivityCreated(activityData);
         onClose();
       } else {
         const error = await response.text();
@@ -872,11 +886,7 @@ const HomeScreen = () => {
     totalPoints: 0,
     totalActivities: 0,
     currentStreak: 0,
-    monthlyProgress: 0,
-    mentalPoints: {
-      teamTarget: 65,
-      personalTarget: 68
-    }
+    monthlyProgress: 0
   });
   const [activities, setActivities] = useState([]);
   const router = useRouter();
@@ -900,9 +910,11 @@ const HomeScreen = () => {
   };
 
   useEffect(() => {
-    fetchUserStats();
-    fetchPosts();
-    fetchActivities();
+    const loadData = async () => {
+      await fetchUserStats();  // 先获取用户统计数据
+      await fetchActivities(); // 然后获取活动列表和统计
+    };
+    loadData();
   }, []);
 
   const fetchPosts = async () => {
@@ -943,20 +955,26 @@ const HomeScreen = () => {
   const fetchUserStats = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
+      console.log('Fetching user stats...');
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.USER.STATS}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       const data = await response.json();
+      console.log('User stats response:', data);
+
       if (response.ok) {
-        setUserStats({
-          ...data,
-          mentalPoints: {
-            teamTarget: 65,
-            personalTarget: 68
-          }
-        });
+        // 确保我们使用正确的数据更新状态
+        setUserStats(prevStats => ({
+          ...prevStats,
+          totalPoints: data.totalPoints || 0,
+          totalActivities: data.totalActivities || 0,
+          currentStreak: data.currentStreak || 0,
+          monthlyProgress: data.monthlyProgress || 0
+        }));
+      } else {
+        console.error('Failed to fetch user stats:', data);
       }
     } catch (error) {
       console.error('Error fetching user stats:', error);
@@ -977,42 +995,38 @@ const HomeScreen = () => {
         }
       });
       
-      console.log('Activities response status:', response.status);
       const data = await response.json();
-      console.log('Activities data:', data);
-
-      if (response.ok) {
-        if (data.success && Array.isArray(data.data?.activities)) {
-          setActivities(data.data.activities);
-          // 更新用户统计数据
-          if (data.data.stats) {
-            setUserStats(prevStats => ({
-              ...prevStats,
-              totalPoints: data.data.stats.totalPoints || 0
-            }));
-          }
-        } else {
-          console.error('Invalid activities data format:', data);
-          setActivities([]);
-        }
-      } else {
-        console.error('Failed to fetch activities:', data);
-        setActivities([]);
+      
+      if (response.ok && data.success) {
+        setActivities(data.data?.activities || []);
+        
+        // 使用 pagination.total 作为活动总数，stats.totalPoints 作为总积分
+        setUserStats(prevStats => ({
+          ...prevStats,
+          totalPoints: data.data?.stats?.totalPoints || 0,
+          totalActivities: data.data?.pagination?.total || 0
+        }));
       }
     } catch (error) {
       console.error('Error fetching activities:', error);
-      setActivities([]);
     }
   };
 
-  const handleActivityCreated = async () => {
+  const handleActivityCreated = async (newActivity) => {
     try {
+      // 更新活动列表
+      setActivities(prevActivities => [newActivity, ...prevActivities]);
+      // 重新获取最新数据
       await fetchActivities();
-      await fetchUserStats();
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      console.error('Error handling new activity:', error);
     }
   };
+
+  // 在组件加载时获取数据
+  useEffect(() => {
+    fetchActivities();
+  }, []);
 
   // Add a function to refresh all data
   const refreshData = async () => {
@@ -1049,17 +1063,17 @@ const HomeScreen = () => {
               <View style={styles.statsRow}>
                 <View style={styles.statCard}>
                   <Ionicons name="trophy" size={20} color="#007AFF" />
-                  <Text style={styles.statValue}>{userStats.totalPoints}</Text>
+                  <Text style={styles.statValue}>{userStats?.totalPoints || 0}</Text>
                   <Text style={styles.statLabel}>Points</Text>
                 </View>
                 <View style={styles.statCard}>
                   <Ionicons name="calendar" size={20} color="#007AFF" />
-                  <Text style={styles.statValue}>{userStats.totalActivities}</Text>
+                  <Text style={styles.statValue}>{userStats?.totalActivities || 0}</Text>
                   <Text style={styles.statLabel}>Activities</Text>
                 </View>
                 <View style={styles.statCard}>
                   <Ionicons name="flame" size={20} color="#007AFF" />
-                  <Text style={styles.statValue}>{userStats.currentStreak}</Text>
+                  <Text style={styles.statValue}>{userStats?.currentStreak || 0}</Text>
                   <Text style={styles.statLabel}>Streak</Text>
                 </View>
               </View>
@@ -1075,11 +1089,11 @@ const HomeScreen = () => {
                     <View 
                       style={[
                         styles.progressFill,
-                        { width: `${userStats.monthlyProgress}%` }
+                        { width: `${userStats?.monthlyProgress || 0}%` }
                       ]} 
                     />
                   </View>
-                  <Text style={styles.progressText}>{userStats.monthlyProgress}%</Text>
+                  <Text style={styles.progressText}>{userStats?.monthlyProgress || 0}%</Text>
                 </View>
 
                 {/* Personal Progress */}
@@ -1090,13 +1104,13 @@ const HomeScreen = () => {
                       style={[
                         styles.progressFill,
                         { 
-                          width: `${userStats.monthlyProgress}%`,
+                          width: `${userStats?.monthlyProgress || 0}%`,
                           backgroundColor: '#ff9800'
                         }
                       ]} 
                     />
                   </View>
-                  <Text style={styles.progressText}>{userStats.monthlyProgress}%</Text>
+                  <Text style={styles.progressText}>{userStats?.monthlyProgress || 0}%</Text>
                 </View>
               </View>
             </View>

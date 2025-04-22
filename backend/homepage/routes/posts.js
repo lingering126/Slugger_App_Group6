@@ -11,15 +11,12 @@ router.get('/', async (req, res, next) => {
         console.log('Query:', req.query);
         console.log('User ID:', req.user.id);
         
-        const { visibility, teamId } = req.query;
+        const { visibility } = req.query;
         const userId = req.user.id;
         
         const query = {};
         if (visibility) {
             query.visibility = visibility;
-            if (visibility === 'team' && teamId) {
-                query.teamId = teamId;
-            }
         }
 
         console.log('Database query:', query);
@@ -49,7 +46,6 @@ router.get('/', async (req, res, next) => {
                 updatedAt: post.updatedAt,
                 comments: post.comments,
                 visibility: post.visibility,
-                teamId: post.teamId,
                 likesCount: likesData.count,
                 isLikedByUser: isLiked,
                 likes: likesData.users
@@ -86,7 +82,7 @@ router.post('/', async (req, res, next) => {
             throw new AppError('Invalid user ID format', 400);
         }
 
-        const { content, channelType, teamId } = req.body;
+        const { content, visibility = 'public' } = req.body;
         
         // Validate required fields
         if (!content) {
@@ -94,30 +90,12 @@ router.post('/', async (req, res, next) => {
             throw new AppError('Content is required', 400);
         }
 
-        // Map channelType to visibility
-        const visibility = channelType || 'public';
-        console.log('Post visibility:', visibility);
-
         // Create post data
         const postData = {
             userId,
-            type: 'text',
             content: content.trim(),
             visibility
         };
-
-        // Add teamId if visibility is team
-        if (visibility === 'team') {
-            if (!teamId) {
-                console.error('Missing teamId for team post');
-                throw new AppError('Team ID is required for team posts', 400);
-            }
-            if (!mongoose.Types.ObjectId.isValid(teamId)) {
-                console.error('Invalid team ID format:', teamId);
-                throw new AppError('Invalid team ID format', 400);
-            }
-            postData.teamId = teamId;
-        }
 
         console.log('Creating post with data:', postData);
         const post = new Post(postData);

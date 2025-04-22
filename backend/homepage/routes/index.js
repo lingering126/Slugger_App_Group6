@@ -27,7 +27,6 @@ router.post('/posts/:postId/comments', auth, postController.addComment);
 
 // 统计相关路由
 router.get('/user', auth, statsController.getUserStats);
-router.get('/team/:teamId', auth, statsController.getTeamStats);
 router.put('/user/target', auth, statsController.updateUserTarget);
 
 module.exports = router; 

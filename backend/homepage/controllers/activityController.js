@@ -1,7 +1,6 @@
 const Activity = require('../../models/Activity');
 const User = require('../../models/User');
 const UserStats = require('../models/UserStats');
-const Team = require('../models/Team');
 
 // 获取活动类型列表
 exports.getActivityTypes = async (req, res) => {

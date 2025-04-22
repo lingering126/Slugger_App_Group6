@@ -36,15 +36,8 @@ const postSchema = new mongoose.Schema({
   comments: [commentSchema],
   visibility: {
     type: String,
-    enum: ['public', 'team', 'private'],
+    enum: ['public', 'private'],
     default: 'public'
-  },
-  teamId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Team',
-    required: function() {
-      return this.visibility === 'team';
-    }
   }
 }, {
   timestamps: true
@@ -61,7 +54,6 @@ postSchema.virtual('commentCount').get(function() {
 
 // Indexes for better query performance
 postSchema.index({ createdAt: -1 });
-postSchema.index({ teamId: 1, visibility: 1 });
 postSchema.index({ userId: 1 });
 
 // Format post data for response

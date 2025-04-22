@@ -1,5 +1,4 @@
 const UserStats = require('../models/UserStats');
-const Team = require('../models/Team');
 const Activity = require('../../models/Activity');
 const mongoose = require('mongoose');
 
@@ -28,10 +27,6 @@ exports.getUserStats = async (req, res) => {
       });
     }
 
-    // 获取用户所在的团队
-    const teams = await Team.find({ 'members.userId': userId });
-    console.log('Found teams:', teams.length);
-
     // 计算各类型活动的统计
     console.log('Calculating activity statistics...');
     const activityStats = await Activity.aggregate([
@@ -53,13 +48,6 @@ exports.getUserStats = async (req, res) => {
         streak: userStats.streak || 0,
         progress: userStats.calculateProgress() || 0
       },
-      teams: await Promise.all(teams.map(async team => ({
-        teamId: team._id,
-        teamName: team.name,
-        progress: team.calculateProgress(),
-        currentPoints: team.currentPoints || 0,
-        targetPoints: team.targetPoints || 1000
-      }))),
       activityBreakdown: activityStats.reduce((acc, stat) => {
         acc[stat._id] = {
           points: stat.totalPoints || 0,
@@ -92,88 +80,6 @@ exports.getUserStats = async (req, res) => {
   }
 };
 
-// 获取团队统计数据
-exports.getTeamStats = async (req, res) => {
-  try {
-    const { teamId } = req.params;
-    const userId = new mongoose.Types.ObjectId(req.user.id);
-
-    // 验证用户是否在团队中
-    const team = await Team.findOne({
-      _id: teamId,
-      'members.userId': userId
-    });
-
-    if (!team) {
-      return res.status(404).json({
-        success: false,
-        message: 'Team not found or user not in team'
-      });
-    }
-
-    // 获取团队成员的统计数据
-    const memberStats = await Promise.all(team.members.map(async member => {
-      const userStats = await UserStats.findOne({ userId: member.userId });
-      return {
-        userId: member.userId,
-        totalPoints: userStats ? userStats.totalPoints : 0,
-        joinDate: member.joinDate
-      };
-    }));
-
-    // 获取团队活动统计
-    const teamActivities = await Activity.aggregate([
-      { 
-        $match: { 
-          userId: { 
-            $in: team.members.map(m => m.userId) 
-          }
-        } 
-      },
-      {
-        $group: {
-          _id: '$type',
-          totalPoints: { $sum: '$points' },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const stats = {
-      teamInfo: {
-        name: team.name,
-        progress: team.calculateProgress(),
-        currentPoints: team.currentPoints || 0,
-        targetPoints: team.targetPoints || 1000
-      },
-      memberStats: memberStats,
-      activityStats: teamActivities.reduce((acc, stat) => {
-        acc[stat._id] = {
-          points: stat.totalPoints || 0,
-          count: stat.count || 0
-        };
-        return acc;
-      }, {})
-    };
-
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (error) {
-    console.error('\n=== Team Stats Error ===');
-    console.error('Error details:', error);
-    console.error('Stack trace:', error.stack);
-    console.error('=== Error End ===\n');
-    
-    res.status(500).json({ 
-      success: false,
-      message: 'Error fetching team statistics',
-      error: error.message 
-    });
-  }
-};
-
 // 更新用户目标
 exports.updateUserTarget = async (req, res) => {
   try {
@@ -201,14 +107,10 @@ exports.updateUserTarget = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('\n=== Update Target Error ===');
-    console.error('Error details:', error);
-    console.error('Stack trace:', error.stack);
-    console.error('=== Error End ===\n');
-    
-    res.status(400).json({
+    console.error('Error updating user target:', error);
+    res.status(500).json({
       success: false,
-      message: 'Error updating target points',
+      message: 'Error updating user target',
       error: error.message
     });
   }

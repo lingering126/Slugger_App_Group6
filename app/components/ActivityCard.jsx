@@ -52,11 +52,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
   };
 
   const getAvatarText = () => {
-    const userId = activity.userId;
-    if (!userId) return '?';
-    return typeof userId === 'object' ? 
-      (userId.name ? userId.name.substring(0, 2).toUpperCase() : '?') :
-      userId.substring(0, 2).toUpperCase();
+    return '?';  // 使用问号作为匿名用户的头像
   };
 
   const handleLike = async () => {
@@ -161,9 +157,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
             <Text style={styles.avatarText}>{getAvatarText()}</Text>
           </View>
           <View style={styles.userDetails}>
-            <Text style={styles.username}>
-              {typeof activity.userId === 'object' ? activity.userId.name || 'Anonymous' : activity.userId || 'Anonymous'}
-            </Text>
+            <Text style={styles.username}>Anonymous</Text>
             <Text style={styles.timestamp}>{format(new Date(activity.createdAt), 'dd/MM/yyyy')}</Text>
           </View>
         </View>
