@@ -563,7 +563,16 @@ const PostCard = ({ post }) => {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{post.author?.[0] || '?'}</Text>
           </View>
-          <Text style={styles.username}>{post.author?.name || 'Anonymous'}</Text>
+          <View style={styles.userInfoText}>
+            <Text style={styles.username}>{post.author?.name || 'Anonymous'}</Text>
+            <Text style={styles.postTime}>
+              {new Date(post.createdAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+              })}
+            </Text>
+          </View>
         </View>
       </View>
       {renderContent()}
@@ -1700,6 +1709,14 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#ccc',
+  },
+  userInfoText: {
+    flex: 1,
+  },
+  postTime: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
 });
 
