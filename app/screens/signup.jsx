@@ -12,6 +12,8 @@ export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState('checking');
@@ -58,7 +60,8 @@ export default function SignupScreen() {
       setError('');
       
       // Validate inputs
-      if (!email || !password || !confirmPassword) {
+
+      if (!email || !password || !confirmPassword || !name) {
         setError('Please fill in all fields');
         setLoading(false);
         return;
@@ -114,7 +117,8 @@ export default function SignupScreen() {
           },
           body: JSON.stringify({
             email,
-            password
+            password,
+            name
           }),
           signal: controller.signal
         });
@@ -259,6 +263,14 @@ export default function SignupScreen() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
+              placeholder="Name"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+            />
+            
+            <TextInput
+              style={styles.input}
               placeholder="Email"
               value={email}
               onChangeText={setEmail}
@@ -360,12 +372,13 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     height: 50,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    marginBottom: 15,
+    fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 25,
-    marginBottom: 15,
-    paddingHorizontal: 20,
-    fontSize: 16,
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -383,6 +396,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     fontSize: 16,
   },
+
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 25,
+    marginBottom: 15,
+  },
+  passwordInput: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 20,
+    fontSize: 16,
+  },
+  
   eyeIcon: {
     padding: 10,
     marginRight: 5,
