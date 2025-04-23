@@ -8,23 +8,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import api from "../../services/api";
 // import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const avatars = {
-  john: "https://randomuser.me/api/portraits/men/1.jpg",
-  jim: "https://randomuser.me/api/portraits/men/2.jpg",
-  you: "https://randomuser.me/api/portraits/women/1.jpg",
-  alice: "https://randomuser.me/api/portraits/women/2.jpg",
-  cleo: "https://randomuser.me/api/portraits/women/3.jpg",
-  sam: "https://randomuser.me/api/portraits/men/3.jpg",
-  jade: "https://randomuser.me/api/portraits/women/4.jpg",
-};
-
-// const mockData = {
-//   "24H": [0, 20, 40, 50, 88, 90, 87, 85, 92, 95, 93, 90, 88, 85, 87, 90, 92, 95, 93, 90, 88, 85, 87, 90], // 24 hours data
-//   "1W": [65, 68, 70, 72, 75, 78, 80], // 1 week data
-//   "1M": [65, 75, 72, 86, 77, 82, 74], // 1 month data (was 12H before)
-//   "1Y": [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 92, 88], // 1 year data
-// };
-
 export default function AnalyticsScreen() {
   const [groups, setGroups] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState(null);
@@ -164,6 +147,77 @@ export default function AnalyticsScreen() {
       setLoading(false);
     }
   }, []);
+
+  const handleTimeRangeChange = useCallback((range) => {
+    setTimeRange(range);
+  }, []);
+
+  // 处理横轴标签，根据时间范围进行优化
+  const getOptimizedTimelineData = useCallback((data) => {
+    if (!data || !data.labels || data.labels.length === 0) {
+      return data;
+    }
+
+    // 创建数据的深拷贝，避免修改原始数据
+    const optimizedData = JSON.parse(JSON.stringify(data));
+    const totalPoints = optimizedData.labels.length;
+    let interval = 1; // 默认显示所有标签
+
+    // 根据不同的时间范围和数据点数量进行标签优化
+    if (timeRange === "24H") {
+      // 24小时模式
+      if (totalPoints >= 24) {
+        interval = 4; // 24个点或更多时，每4个点显示一个标签 (0h, 4h, 8h...)
+      } else if (totalPoints >= 12) {
+        interval = 3; // 12-23个点时，每3个点显示一个标签 (0h, 3h, 6h...)
+      } else if (totalPoints > 6) {
+        interval = 2; // 7-11个点时，每2个点显示一个标签
+      }
+    } else if (timeRange === "1W") {
+      // 一周模式，转换为相对时间标签（Now, 1d, 2d, 3d...）
+      let newLabels = [];
+      
+      // 计算相对时间标签
+      for (let i = 0; i < totalPoints; i++) {
+        let daysAgo = totalPoints - 1 - i;
+        if (daysAgo === 0) {
+          newLabels.push("Now");
+        } else if (daysAgo === 1) {
+          newLabels.push("1d");
+        } else {
+          newLabels.push(`${daysAgo}d`);
+        }
+      }
+      
+      optimizedData.labels = newLabels;
+      
+      // 如果标签太多，还需要进行间隔优化
+      if (totalPoints > 10) {
+        interval = Math.ceil(totalPoints / 6); // 尝试显示约6个标签
+      }
+    } else if (timeRange === "1M" && totalPoints > 10) {
+      // 一个月模式，数据点多时优化
+      interval = Math.ceil(totalPoints / 6); // 尝试显示约6个标签
+    } else if (timeRange === "1Y" && totalPoints > 6) {
+      // 一年模式，数据点多时优化
+      interval = Math.ceil(totalPoints / 6); // 尝试显示约6个标签
+    }
+    
+    // 如果需要优化标签间隔，应用间隔（对于1W已经替换了标签内容，但仍可能需要间隔）
+    if (interval > 1) {
+      const finalLabels = optimizedData.labels.map((label, index) => {
+        // 始终显示第一个和最后一个标签，其他按间隔显示
+        if (index === 0 || index === totalPoints - 1) {
+          return label;
+        }
+        return index % interval === 0 ? label : "";
+      });
+      
+      optimizedData.labels = finalLabels;
+    }
+
+    return optimizedData;
+  }, [timeRange]);
 
   useEffect(() => {
     fetchGroups();
@@ -369,24 +423,87 @@ export default function AnalyticsScreen() {
                     
                     <View style={styles.avatarSectionInner}>
                         <ScrollView 
-                            horizontal 
-                            showsHorizontalScrollIndicator={false} 
-                            contentContainerStyle={styles.avatarScrollContainer}
+                            showsVerticalScrollIndicator={false}
+                            style={styles.memberScrollView}
+                            contentContainerStyle={styles.memberScrollContent}
                         >
-                            {memberProgressData.membersProgress.map((member) => (
-                                <View key={member.userId} style={styles.avatarContainer}>
-                                    <Image 
-                                        source={
-                                            member.avatar ? 
-                                            { uri: member.avatar } : 
-                                            { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || 'User')}&color=fff&background=random&size=64&format=png` }
-                                        }
-                                        style={styles.avatar} 
-                                    />
-                                    <Text style={styles.avatarName} numberOfLines={1}>{member.name}</Text>
-                                    <Text style={styles.avatarScore}>{member.completed}</Text>
-                                </View>
-                            ))}
+                            <View style={styles.memberGrid}>
+                                {(() => {
+                                  // 预先处理排名，处理同分情况
+                                  const sortedMembers = memberProgressData.membersProgress
+                                    .slice() // 创建副本
+                                    .sort((a, b) => b.completed - a.completed); // 按积分从高到低排序
+                                  
+                                  // 计算每个成员的实际排名（考虑同分情况）
+                                  const membersWithRank = [];
+                                  let currentRank = 0;
+                                  let prevScore = -1;
+                                  
+                                  // 处理排名逻辑
+                                  sortedMembers.forEach((member, index) => {
+                                    if (member.completed === 0) {
+                                      // 0分没有排名
+                                      membersWithRank.push({ ...member, actualRank: 0 });
+                                    } else if (member.completed !== prevScore) {
+                                      // 新的分数，获得新的排名
+                                      currentRank = index + 1;
+                                      membersWithRank.push({ ...member, actualRank: currentRank });
+                                      prevScore = member.completed;
+                                    } else {
+                                      // 与前一个分数相同，排名也相同
+                                      membersWithRank.push({ ...member, actualRank: currentRank });
+                                    }
+                                  });
+                                  
+                                  return membersWithRank.map((member) => {
+                                    const isTop3WithScore = member.actualRank > 0 && member.actualRank <= 3;
+                                    
+                                    return (
+                                      <View key={member.userId} style={[
+                                          styles.memberItem,
+                                          isTop3WithScore && styles.topMemberItem,
+                                      ]}>
+                                          <View style={styles.avatarContainer}>
+                                              {member.actualRank === 1 && (
+                                                  <View style={styles.rankingBadge}>
+                                                      <Ionicons name="trophy" size={14} color="#FFFFFF" />
+                                                  </View>
+                                              )}
+                                              {member.actualRank === 2 && (
+                                                  <View style={[styles.rankingBadge, styles.secondRankBadge]}>
+                                                      <Ionicons name="trophy" size={14} color="#FFFFFF" />
+                                                  </View>
+                                              )}
+                                              {member.actualRank === 3 && (
+                                                  <View style={[styles.rankingBadge, styles.thirdRankBadge]}>
+                                                      <Ionicons name="trophy" size={14} color="#FFFFFF" />
+                                                  </View>
+                                              )}
+                                              <Image 
+                                                  source={
+                                                      member.avatar ? 
+                                                      { uri: member.avatar } : 
+                                                      { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || 'User')}&color=fff&background=random&size=64&format=png` }
+                                                  }
+                                                  style={[
+                                                      styles.memberAvatar,
+                                                      isTop3WithScore && styles.topMemberAvatar,
+                                                  ]} 
+                                              />
+                                          </View>
+                                          <Text style={[
+                                              styles.memberName,
+                                              isTop3WithScore && styles.topMemberName,
+                                          ]} numberOfLines={1}>{member.name}</Text>
+                                          <Text style={[
+                                              styles.memberScore,
+                                              isTop3WithScore && styles.topMemberScore,
+                                          ]}>{member.completed}</Text>
+                                      </View>
+                                    );
+                                  });
+                                })()}
+                            </View>
                         </ScrollView>
                     </View>
                 </View>
@@ -396,7 +513,7 @@ export default function AnalyticsScreen() {
             <View style={styles.graphSection}>
               <View style={styles.chartContainer}>
                 <LineChart
-                      data={timelineData}
+                      data={getOptimizedTimelineData(timelineData)}
                   width={Dimensions.get("window").width - (Platform.OS === 'web' ? 50 : 30)}
                   height={220}
                   yAxisLabel=""
@@ -656,7 +773,7 @@ const styles = StyleSheet.create({
   avatarSection: {
     backgroundColor: "#FFF",
     borderRadius: 15,
-    paddingVertical: 30,
+    paddingVertical: 15,
     borderWidth: 0,
     marginBottom: 20,
     shadowColor: "#000",
@@ -667,48 +784,132 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
+  avatarSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 5,
+    marginBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(106, 90, 205, 0.1)',
+  },
+  avatarSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#345C6F',
+  },
   avatarSectionInner: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 10,
-  },
-  avatarScrollContainer: {
-    paddingHorizontal: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  topBorder: { position: 'absolute', top: 0, left: 18, right: 18, height: 3, zIndex: 10 },
-  bottomBorder: { position: 'absolute', bottom: 0, left: 18, right: 18, height: 3, zIndex: 10 },
-  leftBorder: { position: 'absolute', left: 0, top: 30, bottom: 30, width: 3, zIndex: 10 },
-  rightBorder: { position: 'absolute', right: 0, top: 30, bottom: 30, width: 3, zIndex: 10 },
-  borderGradient: { flex: 1, width: '100%', height: '100%' },
-  avatarContainer: {
-    alignItems: "center",
-    justifyContent: 'center',
-    marginHorizontal: 10,
-    width: 70,
     paddingVertical: 5,
+    maxHeight: 200,
   },
-  avatar: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
-    marginBottom: 10,
-    backgroundColor: '#F5F5FF',
-  },
-  avatarName: {
-    fontSize: 13,
-    color: "#333",
-    marginBottom: 4,
-    textAlign: 'center',
+  memberScrollView: {
     width: '100%',
   },
-  avatarScore: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#6A5ACD",
+  memberScrollContent: {
+    paddingBottom: 10,
+  },
+  memberGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 5,
+  },
+  memberItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 8,
+    width: Dimensions.get('window').width > 500 ? '20%' : '25%', // 根据屏幕宽度调整每行显示数量
+    maxWidth: 90,
+    minWidth: 60,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 5,
+  },
+  rankingBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    zIndex: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFD700',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  secondRankBadge: {
+    backgroundColor: '#C0C0C0',
+    borderColor: '#FFFFFF',
+  },
+  thirdRankBadge: {
+    backgroundColor: '#CD7F32',
+    borderColor: '#FFFFFF',
+  },
+  topMemberItem: {
+    backgroundColor: 'rgba(106, 90, 205, 0.045)',
+    borderRadius: 10,
+    padding: 6,
+    margin: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(106, 90, 205, 0.2)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  topMemberAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    shadowColor: "#FFD700",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  topMemberName: {
+    fontWeight: 'bold',
+    fontSize: 12,
+    color: '#345C6F',
+  },
+  topMemberScore: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#6A5ACD',
+  },
+  memberScore: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#6A5ACD',
+  },
+  memberAvatar: {
+    width: 45,
+    height: 45,
+    borderRadius: 23,
+    marginBottom: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(106, 90, 205, 0.3)',
+  },
+  memberName: {
+    fontSize: 11,
+    color: '#333',
+    textAlign: 'center',
+    width: '100%',
+    marginBottom: 2,
   },
   graphSection: {
     backgroundColor: "#FFF",
@@ -868,4 +1069,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
   },
+  topBorder: { position: 'absolute', top: 0, left: 18, right: 18, height: 3, zIndex: 10 },
+  bottomBorder: { position: 'absolute', bottom: 0, left: 18, right: 18, height: 3, zIndex: 10 },
+  leftBorder: { position: 'absolute', left: 0, top: 30, bottom: 30, width: 3, zIndex: 10 },
+  rightBorder: { position: 'absolute', right: 0, top: 30, bottom: 30, width: 3, zIndex: 10 },
+  borderGradient: { flex: 1, width: '100%', height: '100%' },
 });
