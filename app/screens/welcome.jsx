@@ -12,7 +12,7 @@ import {
   Platform,
   ScrollView
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { FontAwesome, FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -69,6 +69,25 @@ export default function WelcomeScreen() {
   const flatListRef = useRef(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+  const { initialIndex } = useLocalSearchParams();
+
+  // Check for initialIndex parameter in the URL
+  useEffect(() => {
+    if (initialIndex) {
+      const index = parseInt(initialIndex, 10);
+      if (!isNaN(index) && index >= 0 && index < slides.length) {
+        setCurrentIndex(index);
+        
+        // If on mobile, scroll to the specified index
+        if (Platform.OS !== 'web' && flatListRef.current) {
+          flatListRef.current.scrollToIndex({
+            index,
+            animated: false
+          });
+        }
+      }
+    }
+  }, [initialIndex]);
 
   // Update scrollX when currentIndex changes (for web platform)
   useEffect(() => {
