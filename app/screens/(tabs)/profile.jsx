@@ -1,14 +1,7 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList } from 'react-native'
-import React, { useState } from 'react'
-import { useNavigation } from '@react-navigation/native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-
-// Mock data (would normally come from a database)
-const mockUserData = {
-  name: "Huixian",
-  status: "Active",
-  joinDate: "March 2025"
-}
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Physical activities library
 const physicalActivities = [
@@ -30,7 +23,7 @@ const physicalActivities = [
   { id: 16, name: 'DIY', icon: '🔨' },
   { id: 17, name: 'Gardening', icon: '🌱' },
   { id: 18, name: 'Physical other', icon: '❓' }
-]
+];
 
 // Mental activities library
 const mentalActivities = [
@@ -45,7 +38,7 @@ const mentalActivities = [
   { id: 9, name: 'Mental other', icon: '❓' },
   { id: 10, name: 'Journal', icon: '📓' },
   { id: 11, name: 'Breathing exercise', icon: '💨' }
-]
+];
 
 // Bonus activities library
 const bonusActivities = [
@@ -54,31 +47,114 @@ const bonusActivities = [
   { id: 3, name: 'Personal Best', icon: '🏆' },
   { id: 4, name: 'Personal Goal', icon: '🎯' },
   { id: 5, name: 'Bonus other', icon: '✨' }
-]
+];
 
 const Profile = () => {
-  const navigation = useNavigation()
-  const [selectedPhysicalActivities, setSelectedPhysicalActivities] = useState([])
-  const [physicalModalVisible, setPhysicalModalVisible] = useState(false)
-  const [selectedMentalActivities, setSelectedMentalActivities] = useState([])
-  const [mentalModalVisible, setMentalModalVisible] = useState(false)
-  const [selectedBonusActivities, setSelectedBonusActivities] = useState([])
-  const [bonusModalVisible, setBonusModalVisible] = useState(false)
+  const navigation = useNavigation();
+  
+  // User data state
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Activity selection states (unchanged)
+  const [selectedPhysicalActivities, setSelectedPhysicalActivities] = useState([]);
+  const [physicalModalVisible, setPhysicalModalVisible] = useState(false);
+  const [selectedMentalActivities, setSelectedMentalActivities] = useState([]);
+  const [mentalModalVisible, setMentalModalVisible] = useState(false);
+  const [selectedBonusActivities, setSelectedBonusActivities] = useState([]);
+  const [bonusModalVisible, setBonusModalVisible] = useState(false);
+  
+  // Load user data when component mounts
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        setLoading(true);
+        
+        // Get user data from AsyncStorage
+        const userJson = await AsyncStorage.getItem('user');
+        const user = userJson ? JSON.parse(userJson) : null;
+        
+        if (!user) {
+          throw new Error('User data not found');
+        }
+        
+        setUserData(user);
+      } catch (err) {
+        console.error('Error loading user data:', err);
+        setError('Failed to load profile data');
+        
+        // Use default values if unable to get user data
+        setUserData({
+          name: "Guest User",
+          status: "Inactive",
+          createdAt: new Date().toISOString()
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadUserData();
+  }, []);
+  
+  // Generate avatar text from user's name
+  const getAvatarText = () => {
+    if (!userData || !userData.name) return "??";
+    return userData.name.substring(0, 2).toUpperCase();
+  };
+  
+  // Format join date for display
+  const getFormattedJoinDate = () => {
+    if (!userData || !userData.createdAt) {
+      return "April 2025"; // Default date
+    }
+    
+    return new Date(userData.createdAt).toLocaleDateString('en-US', { 
+      month: 'long', 
+      year: 'numeric' 
+    });
+  };
+  
+  // Show loading placeholder while fetching user data
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerContainer}>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatarPlaceholder}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            </View>
+            <View style={styles.userInfoContainer}>
+              <Text style={styles.userName}>Loading...</Text>
+              <Text style={styles.userStatus}>Please wait</Text>
+            </View>
+          </View>
+        </View>
+        
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3A8891" />
+        </View>
+      </View>
+    );
+  }
   
   return (
     <View style={styles.container}>
-      {/* Header/Top Information Area */}
+      {/* Header/Top Information Area - replaced with dynamic user data */}
       <View style={styles.headerContainer}>
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>{mockUserData.name.substring(0, 2).toUpperCase()}</Text>
+              <Text style={styles.avatarText}>{getAvatarText()}</Text>
             </View>
           </View>
           <View style={styles.userInfoContainer}>
-            <Text style={styles.userName}>{mockUserData.name}</Text>
-            <Text style={styles.userStatus}>Status: {mockUserData.status}</Text>
-            <Text style={styles.userJoinDate}>Member since: {mockUserData.joinDate}</Text>
+            <Text style={styles.userName}>{userData?.name || "Unknown User"}</Text>
+            <Text style={styles.userStatus}>Status: {userData?.status || "Active"}</Text>
+            <Text style={styles.userJoinDate}>Member since: {getFormattedJoinDate()}</Text>
           </View>
         </View>
         <TouchableOpacity style={styles.editButton}>
@@ -86,7 +162,7 @@ const Profile = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Rest of the profile content */}
+      {/* Rest of the profile content - unchanged */}
       <ScrollView style={styles.content}>
         <Text style={styles.sectionTitle}>My Groups</Text>
         {/* Group list would go here */}
@@ -702,4 +778,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-})
+  // Added loading style
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
