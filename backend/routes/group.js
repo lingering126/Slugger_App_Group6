@@ -3,6 +3,8 @@ const router = express.Router();
 const Group = require('../models/group');
 const GroupCycleHistory = require('../src/models/group-cycle-history');
 const authMiddleware = require('../middleware/auth');
+const AnalyticsService = require('../src/analytics/analytics.service');
+const analyticsService = new AnalyticsService();
 
 // Create a new group
 router.post('/', authMiddleware, async (req, res) => {
@@ -176,15 +178,26 @@ router.put('/:groupId/targets', authMiddleware, async (req, res) => {
 
     const now = new Date(); // Use exact time for new cycle start
 
+    // Calculate completion percentage for the ending cycle *before* archiving
+    let finalPercentage = 0; // Default to 0
+    try {
+      // Use the group's actual ObjectId (_id)
+      finalPercentage = await analyticsService.calculateTargetPercentage(group._id, now);
+    } catch (calcError) {
+      console.error(`Error calculating final percentage for group ${group._id} before reset:`, calcError);
+      // Decide how to handle - maybe proceed with 0%? For now, log and continue.
+    }
+
     // 1. Archive the current cycle (ending now)
     const historyEntry = new GroupCycleHistory({
       groupId: group._id, // Use the group's actual ObjectId
       startDate: group.targetStartDate,
       endDate: now, // Cycle ends now
       targetValue: group.targetValue, // Archive the old target
+      completionPercentage: finalPercentage, // Save calculated percentage
     });
     await historyEntry.save();
-    console.log(`Archived cycle for group ${group.groupId} (${group._id}) due to manual reset.`);
+    console.log(`Archived cycle for group ${group.groupId} (${group._id}) due to manual reset with ${finalPercentage}% completion.`);
 
     // 2. Calculate new end date (7 days from now)
     const newEndDate = new Date(now);

@@ -68,9 +68,9 @@ router.get('/timeline/:groupId', authMiddleware, async (req, res, next) => {
     const userId = req.user._id;
 
     // Validate range parameter
-    const validRanges = ['6H', '12H', '24H', '1W', '1Y'];
+    const validRanges = ['24H', '1W', '1M', '1Y'];
     if (!range || !validRanges.includes(range)) {
-      return res.status(400).json({ success: false, message: 'Invalid or missing time range parameter. Use one of: 6H, 12H, 24H, 1W, 1Y' });
+      return res.status(400).json({ success: false, message: 'Invalid or missing time range parameter. Use one of: 24H, 1W, 1M, 1Y' });
     }
 
     // Verify whether the user is a member of the group (optional but good practice)

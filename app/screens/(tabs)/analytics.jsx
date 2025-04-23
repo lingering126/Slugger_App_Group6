@@ -18,13 +18,12 @@ const avatars = {
   jade: "https://randomuser.me/api/portraits/women/4.jpg",
 };
 
-const mockData = {
-  "6H": [75, 78, 80, 82, 85, 88], // 6 hours data
-  "12H": [65, 75, 72, 86, 77, 82, 74, 75, 72, 80, 82, 78], // 12 hours data
-  "24H": [0, 20, 40, 50, 88, 90, 87, 85, 92, 95, 93, 90, 88, 85, 87, 90, 92, 95, 93, 90, 88, 85, 87, 90], // 24 hours data
-  "1W": [65, 68, 70, 72, 75, 78, 80], // 1 week data
-  "1Y": [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 92, 88], // 1 year data
-};
+// const mockData = {
+//   "24H": [0, 20, 40, 50, 88, 90, 87, 85, 92, 95, 93, 90, 88, 85, 87, 90, 92, 95, 93, 90, 88, 85, 87, 90], // 24 hours data
+//   "1W": [65, 68, 70, 72, 75, 78, 80], // 1 week data
+//   "1M": [65, 75, 72, 86, 77, 82, 74], // 1 month data (was 12H before)
+//   "1Y": [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 92, 88], // 1 year data
+// };
 
 export default function AnalyticsScreen() {
   const [groups, setGroups] = useState([]);
@@ -32,7 +31,7 @@ export default function AnalyticsScreen() {
   const [overviewData, setOverviewData] = useState(null);
   const [memberProgressData, setMemberProgressData] = useState({ membersProgress: [] });
   const [timelineData, setTimelineData] = useState({ labels: [], datasets: [{ data: [] }], fullLabels: [], rawData: [], groupTarget: 0 });
-  const [timeRange, setTimeRange] = useState("6H");
+  const [timeRange, setTimeRange] = useState("1W");
   const [tooltipData, setTooltipData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -102,33 +101,51 @@ export default function AnalyticsScreen() {
       if (timelineRes.status === 'fulfilled' && timelineRes.value.data.success) {
         const apiTimeline = timelineRes.value.data.data;
         
-        // Invert the data to percentage form
-        let percentData = apiTimeline.data;
-        if (apiTimeline.groupTarget && apiTimeline.groupTarget > 0) {
-          // If there is a target value, convert the data to completion percentage
-          percentData = apiTimeline.data.map(value => 
-            Math.min(Math.round((value / apiTimeline.groupTarget) * 100), 100)
+        const timelineLabels = apiTimeline.labels || [];
+        const timelineFullLabels = apiTimeline.fullLabels || [];
+        const rawData = apiTimeline.data || [];
+        let percentData = [...rawData];
+        const groupTarget = apiTimeline.groupTarget || 0;
+        
+        if (groupTarget > 0 && !apiTimeline.isPercentage) {
+          percentData = rawData.map(value => 
+            Math.min(Math.round((value / groupTarget) * 100), 100)
           );
         }
         
         setTimelineData({
-          labels: apiTimeline.labels || [],
+          labels: timelineLabels,
           datasets: [
             {
-              data: percentData || [], // Use percentage data
+              data: percentData,
               color: (opacity = 1) => `rgba(58, 136, 145, ${opacity})`,
               strokeWidth: 2,
             },
           ],
-          fullLabels: apiTimeline.fullLabels || [],
-          rawData: apiTimeline.data || [], // Save the original data for future reference
-          groupTarget: apiTimeline.groupTarget || 0, // Save the target value
+          fullLabels: timelineFullLabels,
+          rawData: rawData,
+          groupTarget: groupTarget,
+          meta: apiTimeline.meta || {
+            completedCycles: [],
+            totalCycles: []
+          },
+          isoTimestamps: apiTimeline.isoTimestamps || [],
+          currentRange: range
         });
         timelineSuccess = true;
       } else {
         console.error("Error fetching timeline:", timelineRes.reason || timelineRes.value?.data?.message);
         setError(prev => prev ? prev + '\nFailed to fetch timeline.' : 'Failed to fetch timeline.');
-        setTimelineData({ labels: [], datasets: [{ data: [] }], fullLabels: [], rawData: [], groupTarget: 0 });
+        setTimelineData({ 
+          labels: [], 
+          datasets: [{ data: [] }], 
+          fullLabels: [], 
+          rawData: [], 
+          groupTarget: 0,
+          meta: { completedCycles: [], totalCycles: [] },
+          isoTimestamps: [],
+          currentRange: range
+        });
       }
 
        if (fetchAll && (!overviewSuccess || !membersSuccess || !timelineSuccess)) {
@@ -191,7 +208,7 @@ export default function AnalyticsScreen() {
     const isTopHalf = data.y < chartMidPoint;
     
     // Calculate the x position, ensure the tooltip does not exceed the screen boundaries
-    let xPosition = data.x - 50 - 15; // Increase the left offset, from -5 to -15, to make the tooltip closer to the left
+    let xPosition = data.x - 75; // Increase the left offset, from -5 to -15, to make the tooltip closer to the left
     if (xPosition < 20) xPosition = 20; // Prevent exceeding the left boundary
     if (xPosition > screenWidth - 120) xPosition = screenWidth - 120; // Prevent exceeding the right boundary
     
@@ -208,6 +225,19 @@ export default function AnalyticsScreen() {
     // Prevent the tooltip from exceeding the upper boundary
     if (yPosition < 10) yPosition = 10;
     
+    let cycleInfo = null;
+    if (timelineData.currentRange === "1Y" && 
+        timelineData.meta && 
+        timelineData.meta.completedCycles && 
+        timelineData.meta.totalCycles &&
+        timelineData.meta.completedCycles.length > index &&
+        timelineData.meta.totalCycles.length > index) {
+      cycleInfo = {
+        completedCycles: timelineData.meta.completedCycles[index],
+        totalCycles: timelineData.meta.totalCycles[index]
+      };
+    }
+    
     setTooltipData({
       percentValue,
       rawValue,
@@ -220,7 +250,8 @@ export default function AnalyticsScreen() {
       groupTarget: timelineData.groupTarget,
       tooltipX: xPosition,
       tooltipY: yPosition,
-      isTopHalf // Record whether it is in the upper half, to decide the arrow direction
+      isTopHalf,
+      cycleInfo
     });
     
     setTimeout(() => {
@@ -405,6 +436,7 @@ export default function AnalyticsScreen() {
                     borderRadius: 15,
                     marginLeft: -15,
                     marginRight: -10,
+                    alignSelf: 'center',
                   }}
                   decorator={() => null}
                 />
@@ -442,6 +474,14 @@ export default function AnalyticsScreen() {
                             {tooltipData.rawValue}/{tooltipData.groupTarget || '?'}
                           </Text>
                         )}
+                        {tooltipData.cycleInfo && (
+                          <View style={styles.tooltipCyclesContainer}>
+                            <Text style={styles.tooltipCyclesLabel}>Completed:</Text>
+                            <Text style={styles.tooltipCycles}>
+                              {tooltipData.cycleInfo.completedCycles}/{tooltipData.cycleInfo.totalCycles}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                       {!tooltipData.isTopHalf && (
                         // When in the lower half, the arrow is placed below the tooltip (arrow pointing down)
@@ -453,7 +493,7 @@ export default function AnalyticsScreen() {
               </View>
 
               <View style={styles.timeRangeContainer}>
-                {["6H", "12H", "24H", "1W", "1Y"].map((range) => (
+                {["24H", "1W", "1M", "1Y"].map((range) => (
                   <TouchableOpacity
                     key={range}
                     style={[
@@ -684,11 +724,13 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
     alignItems: 'center',
+    justifyContent: 'center',
     width: '100%',
     overflow: 'visible',
   },
   chartContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
     width: '100%',
     position: 'relative',
   },
@@ -759,15 +801,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999,
-    width: 100,
+    width: 120,
     overflow: 'visible',
   },
   tooltipContent: {
     backgroundColor: '#6A5ACD',
-    borderRadius: 6,
-    padding: 8,
-    minWidth: 80,
+    borderRadius: 8,
+    padding: 10,
+    minWidth: 100,
     alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   tooltipLabel: {
     color: 'rgba(255, 255, 255, 0.8)',
@@ -804,5 +851,21 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 11,
     marginTop: 2,
+  },
+  tooltipCyclesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  tooltipCyclesLabel: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginRight: 4,
+  },
+  tooltipCycles: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
 });
