@@ -65,29 +65,28 @@ const slides = [
 ];
 
 export default function WelcomeScreen() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const flatListRef = useRef(null);
-  const scrollX = useRef(new Animated.Value(0)).current;
-  const router = useRouter();
   const { initialIndex } = useLocalSearchParams();
-
-  // Check for initialIndex parameter in the URL
-  useEffect(() => {
+  // Initialize currentIndex directly with initialIndex if available
+  const [currentIndex, setCurrentIndex] = useState(() => {
     if (initialIndex) {
       const index = parseInt(initialIndex, 10);
       if (!isNaN(index) && index >= 0 && index < slides.length) {
-        setCurrentIndex(index);
-        
-        // If on mobile, scroll to the specified index
-        if (Platform.OS !== 'web' && flatListRef.current) {
-          flatListRef.current.scrollToIndex({
-            index,
-            animated: false
-          });
-        }
+        return index;
       }
     }
-  }, [initialIndex]);
+    return 0;
+  });
+  const flatListRef = useRef(null);
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const router = useRouter();
+
+  // Initialize scrollX for web
+  useEffect(() => {
+    if (Platform.OS === 'web' && currentIndex > 0) {
+      // Set initial value for scrollX when starting with non-zero index
+      scrollX.setValue(currentIndex * width);
+    }
+  }, []);
 
   // Update scrollX when currentIndex changes (for web platform)
   useEffect(() => {
@@ -100,6 +99,23 @@ export default function WelcomeScreen() {
       }).start();
     }
   }, [currentIndex]);
+
+  // Scroll FlatList to initial position on mount (for mobile)
+  useEffect(() => {
+    if (Platform.OS !== 'web' && currentIndex > 0 && flatListRef.current) {
+      // Use a short delay to ensure the FlatList is fully rendered
+      const timer = setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToIndex({
+            index: currentIndex,
+            animated: false
+          });
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Function to handle joining a group
   const handleJoinGroup = async () => {
@@ -338,19 +354,29 @@ export default function WelcomeScreen() {
           
           {renderPagination()}
           
-          {currentIndex < slides.length - 1 && (
-            <View style={styles.navigationButtons}>
-              {currentIndex > 0 && (
-                <TouchableOpacity style={styles.navButton} onPress={handlePrev}>
-                  <Ionicons name="chevron-back" size={24} color="#4CAF50" />
-                </TouchableOpacity>
-              )}
-              
-              <TouchableOpacity style={styles.navButton} onPress={handleNext}>
+          {/* Always display the navigation buttons container, with improved visibility */}
+          <View style={[styles.navigationButtons, { zIndex: 100 }]}>
+            {currentIndex > 0 ? (
+              <TouchableOpacity 
+                style={[styles.navButton, { backgroundColor: '#e0f2e0' }]} 
+                onPress={handlePrev}
+              >
+                <Ionicons name="chevron-back" size={24} color="#4CAF50" />
+              </TouchableOpacity>
+            ) : (
+              // Empty view to maintain layout
+              <View style={{ width: 50 }} />
+            )}
+            
+            {currentIndex < slides.length - 1 && (
+              <TouchableOpacity 
+                style={[styles.navButton, { backgroundColor: '#e0f2e0' }]} 
+                onPress={handleNext}
+              >
                 <Ionicons name="chevron-forward" size={24} color="#4CAF50" />
               </TouchableOpacity>
-            </View>
-          )}
+            )}
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -376,23 +402,47 @@ export default function WelcomeScreen() {
           setCurrentIndex(index);
         }}
         scrollEventThrottle={16}
+        getItemLayout={(data, index) => (
+          {length: width, offset: width * index, index}
+        )}
+        onScrollToIndexFailed={info => {
+          const wait = new Promise(resolve => setTimeout(resolve, 500));
+          wait.then(() => {
+            if (flatListRef.current) {
+              flatListRef.current.scrollToIndex({ 
+                index: info.index, 
+                animated: true 
+              });
+            }
+          });
+        }}
       />
       
       {renderPagination()}
       
-      {currentIndex < slides.length - 1 && (
-        <View style={styles.navigationButtons}>
-          {currentIndex > 0 && (
-            <TouchableOpacity style={styles.navButton} onPress={handlePrev}>
-              <Ionicons name="chevron-back" size={24} color="#4CAF50" />
-            </TouchableOpacity>
-          )}
-          
-          <TouchableOpacity style={styles.navButton} onPress={handleNext}>
+      {/* Always display the navigation buttons container, with improved visibility */}
+      <View style={[styles.navigationButtons, { zIndex: 100 }]}>
+        {currentIndex > 0 ? (
+          <TouchableOpacity 
+            style={[styles.navButton, { backgroundColor: '#e0f2e0' }]} 
+            onPress={handlePrev}
+          >
+            <Ionicons name="chevron-back" size={24} color="#4CAF50" />
+          </TouchableOpacity>
+        ) : (
+          // Empty view to maintain layout
+          <View style={{ width: 50 }} />
+        )}
+        
+        {currentIndex < slides.length - 1 && (
+          <TouchableOpacity 
+            style={[styles.navButton, { backgroundColor: '#e0f2e0' }]} 
+            onPress={handleNext}
+          >
             <Ionicons name="chevron-forward" size={24} color="#4CAF50" />
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -481,6 +531,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
   },
   buttonContainer: {
     width: '100%',
