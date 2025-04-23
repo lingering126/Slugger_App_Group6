@@ -18,7 +18,7 @@ export default function NewActivityScreen() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/homepage/activities', {
+      const response = await fetch('http://localhost:5001/api/homepage/activities', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

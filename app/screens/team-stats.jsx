@@ -44,7 +44,7 @@ const TeamStatsScreen = () => {
   const fetchTeamStats = async () => {
     try {
       const response = await fetch(
-        'http://localhost:5000/api/homepage/stats/team/1',
+        'http://localhost:5001/api/homepage/stats/team/1',
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`

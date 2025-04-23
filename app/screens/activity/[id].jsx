@@ -18,7 +18,7 @@ export default function ActivityDetailScreen() {
     try {
       setLoading(true);
       const response = await fetch(
-        `http://localhost:5000/api/homepage/activities/${id}`,
+        `http://localhost:5001/api/homepage/activities/${id}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`

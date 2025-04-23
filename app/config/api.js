@@ -1,6 +1,6 @@
 // API Configuration
 const API_CONFIG = {
-  API_URL: 'http://localhost:5000/api',
+  API_URL: 'http://localhost:5001/api',
   ENDPOINTS: {
     AUTH: {
       LOGIN: '/auth/login',

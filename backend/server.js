@@ -216,8 +216,8 @@ app.post('/api/auth/signup', async (req, res) => {
     console.log('=== Signup Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
     console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', process.env.PORT || 5000);
-    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
+    console.log('Port being used:', process.env.PORT || 5001);
+    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
     console.log('===============================');
     
     const mailOptions = {
@@ -230,7 +230,7 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+            <a href="http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -239,8 +239,8 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -621,7 +621,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     // Send verification email
     const serverIPs = getServerIPs();
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-    const port = process.env.PORT || 5000;
+    const port = process.env.PORT || 5001;
     
     console.log('=== Resend Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
@@ -644,7 +644,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
+            <a href="http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -786,7 +786,7 @@ app.get('/health', (req, res) => {
         hostname: require('os').hostname(),
         platform: process.platform,
         nodeVersion: process.version,
-        port: process.env.PORT || 5000
+        port: process.env.PORT || 5001
       },
       // Add extra fields to help identify this as the Slugger server
       serverType: 'Slugger Backend',
@@ -828,7 +828,7 @@ app.get('/discover', (req, res) => {
       version: '1.0.0',
       status: 'online',
       interfaces: ipAddresses,
-      port: process.env.PORT || 5000,
+      port: process.env.PORT || 5001,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -974,7 +974,7 @@ app.post('/api/test/email', async (req, res) => {
 
 // Start server
 // Note: PORT is set to 5001 in the .env file, which overrides this default
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}/api`);

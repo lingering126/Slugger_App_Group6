@@ -102,8 +102,8 @@ exports.updateUserTarget = async (req, res) => {
     res.json({
       success: true,
       data: {
-        targetPoints: userStats.targetPoints,
-        progress: userStats.calculateProgress()
+      targetPoints: userStats.targetPoints,
+      progress: userStats.calculateProgress()
       }
     });
   } catch (error) {
