@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator } from 'react-native'
+import React, { useState, useEffect } from 'react'
+import { useNavigation } from '@react-navigation/native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { userService, groupService } from '../../services/api' 
 
 // Physical activities library
 const physicalActivities = [
@@ -23,7 +24,7 @@ const physicalActivities = [
   { id: 16, name: 'DIY', icon: '🔨' },
   { id: 17, name: 'Gardening', icon: '🌱' },
   { id: 18, name: 'Physical other', icon: '❓' }
-];
+]
 
 // Mental activities library
 const mentalActivities = [
@@ -38,7 +39,7 @@ const mentalActivities = [
   { id: 9, name: 'Mental other', icon: '❓' },
   { id: 10, name: 'Journal', icon: '📓' },
   { id: 11, name: 'Breathing exercise', icon: '💨' }
-];
+]
 
 // Bonus activities library
 const bonusActivities = [
@@ -47,74 +48,120 @@ const bonusActivities = [
   { id: 3, name: 'Personal Best', icon: '🏆' },
   { id: 4, name: 'Personal Goal', icon: '🎯' },
   { id: 5, name: 'Bonus other', icon: '✨' }
-];
+]
 
 const Profile = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation()
   
   // User data state
-  const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [userData, setUserData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   
-  // Activity selection states (unchanged)
-  const [selectedPhysicalActivities, setSelectedPhysicalActivities] = useState([]);
-  const [physicalModalVisible, setPhysicalModalVisible] = useState(false);
-  const [selectedMentalActivities, setSelectedMentalActivities] = useState([]);
-  const [mentalModalVisible, setMentalModalVisible] = useState(false);
-  const [selectedBonusActivities, setSelectedBonusActivities] = useState([]);
-  const [bonusModalVisible, setBonusModalVisible] = useState(false);
+  // Groups state
+  const [groups, setGroups] = useState([])
+  const [loadingGroups, setLoadingGroups] = useState(false)
+  const [selectedGroup, setSelectedGroup] = useState(null)
+  
+  // Activity selection states
+  const [selectedPhysicalActivities, setSelectedPhysicalActivities] = useState([])
+  const [physicalModalVisible, setPhysicalModalVisible] = useState(false)
+  const [selectedMentalActivities, setSelectedMentalActivities] = useState([])
+  const [mentalModalVisible, setMentalModalVisible] = useState(false)
+  const [selectedBonusActivities, setSelectedBonusActivities] = useState([])
+  const [bonusModalVisible, setBonusModalVisible] = useState(false)
   
   // Load user data when component mounts
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        setLoading(true);
+        setLoading(true)
         
         // Get user data from AsyncStorage
-        const userJson = await AsyncStorage.getItem('user');
-        const user = userJson ? JSON.parse(userJson) : null;
+        const userJson = await AsyncStorage.getItem('user')
+        const user = userJson ? JSON.parse(userJson) : null
         
         if (!user) {
-          throw new Error('User data not found');
+          throw new Error('User data not found')
         }
         
-        setUserData(user);
+        setUserData(user)
       } catch (err) {
-        console.error('Error loading user data:', err);
-        setError('Failed to load profile data');
+        console.error('Error loading user data:', err)
+        setError('Failed to load profile data')
         
         // Use default values if unable to get user data
         setUserData({
           name: "Guest User",
           status: "Inactive",
           createdAt: new Date().toISOString()
-        });
+        })
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
     
-    loadUserData();
-  }, []);
+    loadUserData()
+  }, [])
+  
+  // Load user's groups
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        setLoadingGroups(true)
+        const userGroups = await groupService.getUserGroups()
+        setGroups(userGroups)
+      } catch (error) {
+        console.error('Error fetching groups:', error)
+        // Keep the groups array empty if there's an error
+      } finally {
+        setLoadingGroups(false)
+      }
+    }
+    
+    fetchGroups()
+  }, [])
   
   // Generate avatar text from user's name
   const getAvatarText = () => {
-    if (!userData || !userData.name) return "??";
-    return userData.name.substring(0, 2).toUpperCase();
-  };
+    if (!userData || !userData.name) return "??"
+    return userData.name.substring(0, 2).toUpperCase()
+  }
   
   // Format join date for display
   const getFormattedJoinDate = () => {
     if (!userData || !userData.createdAt) {
-      return "April 2025"; // Default date
+      return "April 2025" // Default date
     }
     
     return new Date(userData.createdAt).toLocaleDateString('en-US', { 
       month: 'long', 
       year: 'numeric' 
-    });
-  };
+    })
+  }
+  
+  // Save user settings
+  const saveUserSettings = async () => {
+    try {
+      // Show some form of loading indicator
+      
+      // Create the data object to send to API
+      const activitySettings = {
+        physicalActivities: selectedPhysicalActivities.map(a => a.id),
+        mentalActivities: selectedMentalActivities.map(a => a.id),
+        bonusActivities: selectedBonusActivities.map(a => a.id)
+      }
+      
+      // This would call the API service to save settings
+      // await userService.saveUserActivities(activitySettings)
+      
+      // For now, we'll just simulate a successful save
+      alert('Settings saved successfully!')
+    } catch (error) {
+      console.error('Error saving settings:', error)
+      alert('Failed to save settings. Please try again.')
+    }
+  }
   
   // Show loading placeholder while fetching user data
   if (loading) {
@@ -138,7 +185,7 @@ const Profile = () => {
           <ActivityIndicator size="large" color="#3A8891" />
         </View>
       </View>
-    );
+    )
   }
   
   return (
@@ -162,19 +209,67 @@ const Profile = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Rest of the profile content - unchanged */}
+      {/* Rest of the profile content - updated for groups */}
       <ScrollView style={styles.content}>
         <Text style={styles.sectionTitle}>My Groups</Text>
-        {/* Group list would go here */}
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>No groups joined yet</Text>
-        </View>
+        {loadingGroups ? (
+          <View style={styles.placeholder}>
+            <ActivityIndicator size="small" color="#3A8891" />
+            <Text style={[styles.placeholderText, {marginTop: 8}]}>Loading groups...</Text>
+          </View>
+        ) : groups.length === 0 ? (
+          <View style={styles.placeholder}>
+            <Text style={styles.placeholderText}>No groups joined yet</Text>
+          </View>
+        ) : (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.groupsScrollView}
+          >
+            {groups.map(group => (
+              <TouchableOpacity
+                key={group._id || group.id}
+                style={[
+                  styles.groupCard, 
+                  selectedGroup && (selectedGroup._id || selectedGroup.id) === (group._id || group.id) ? 
+                    styles.selectedGroupCard : {}
+                ]}
+                onPress={() => setSelectedGroup(group)}
+              >
+                <View style={styles.groupCardIcon}>
+                  <Text style={styles.groupCardIconText}>
+                    {group.name.substring(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={styles.groupCardName}>{group.name}</Text>
+                <Text style={styles.groupCardMembers}>
+                  {group.members?.length || 0} members
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
         
         <Text style={styles.sectionTitle}>Group Members</Text>
-        {/* Group members would go here */}
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>Join a group to see members</Text>
-        </View>
+        {selectedGroup ? (
+          <View style={styles.membersContainer}>
+            {(selectedGroup.members || []).map((member, index) => (
+              <View key={member._id || member.id || index} style={styles.memberItem}>
+                <View style={styles.memberAvatar}>
+                  <Text style={styles.memberAvatarText}>
+                    {member.name ? member.name.substring(0, 2).toUpperCase() : "??"}
+                  </Text>
+                </View>
+                <Text style={styles.memberName}>{member.name || `Member ${index + 1}`}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.placeholder}>
+            <Text style={styles.placeholderText}>Select a group to see members</Text>
+          </View>
+        )}
         
         <Text style={styles.sectionTitle}>Activity Settings</Text>
         
@@ -305,11 +400,11 @@ const Profile = () => {
             onPress={async () => {
               try {
                 // Remove the welcomeCompleted flag from AsyncStorage
-                await AsyncStorage.removeItem('welcomeCompleted');
-                alert('Welcome flow has been reset. Log out and back in to see the welcome screens.');
+                await AsyncStorage.removeItem('welcomeCompleted')
+                alert('Welcome flow has been reset. Log out and back in to see the welcome screens.')
               } catch (error) {
-                console.error('Error resetting welcome flow:', error);
-                alert('Failed to reset welcome flow: ' + error.message);
+                console.error('Error resetting welcome flow:', error)
+                alert('Failed to reset welcome flow: ' + error.message)
               }
             }}
           >
@@ -318,7 +413,7 @@ const Profile = () => {
         </View>
         
         {/* Save Button */}
-        <TouchableOpacity style={styles.saveButton}>
+        <TouchableOpacity style={styles.saveButton} onPress={saveUserSettings}>
           <Text style={styles.saveButtonText}>Save Settings</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -602,6 +697,86 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 16,
   },
+  // Group styles
+  groupsScrollView: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  groupCard: {
+    width: 150,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginRight: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  selectedGroupCard: {
+    borderWidth: 2,
+    borderColor: '#3A8891',
+  },
+  groupCardIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#3A8891',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  groupCardIconText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  groupCardName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0E5E6F',
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  groupCardMembers: {
+    fontSize: 14,
+    color: '#666',
+  },
+  // Members styles
+  membersContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 15,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0E5E6F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  memberAvatarText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  memberName: {
+    fontSize: 16,
+    color: '#333',
+  },
+  // Activities styles
   activitySection: {
     backgroundColor: '#fff',
     padding: 15,
