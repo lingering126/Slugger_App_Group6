@@ -135,12 +135,12 @@ mongoose.connect(process.env.MONGODB_URI, {
   console.log('Successfully connected to MongoDB Atlas');
   console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
 })
-.catch(err => {
+  .catch(err => {
   console.error('MongoDB connection error:', err);
   console.error('Error code:', err.code);
   console.error('Error name:', err.name);
   console.error('Full error:', err);
-  // Continue with in-memory storage as fallback
+    // Continue with in-memory storage as fallback
   console.log('Falling back to in-memory storage');
 });
 
@@ -246,6 +246,7 @@ app.post('/api/auth/signup', async (req, res) => {
         email,
         password: hashedPassword, // Store the hashed password
         name, // Store the user's name
+        username: name, // Set username same as name
         isVerified: false,
         verificationToken,
         verificationTokenExpires
