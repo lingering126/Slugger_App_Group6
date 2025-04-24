@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -8,9 +8,11 @@ import {
   FlatList,
   Image,
   Animated,
-  SafeAreaView
+  SafeAreaView,
+  Platform,
+  ScrollView
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { FontAwesome, FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -63,10 +65,57 @@ const slides = [
 ];
 
 export default function WelcomeScreen() {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const { initialIndex } = useLocalSearchParams();
+  // Initialize currentIndex directly with initialIndex if available
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    if (initialIndex) {
+      const index = parseInt(initialIndex, 10);
+      if (!isNaN(index) && index >= 0 && index < slides.length) {
+        return index;
+      }
+    }
+    return 0;
+  });
   const flatListRef = useRef(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+
+  // Initialize scrollX for web
+  useEffect(() => {
+    if (Platform.OS === 'web' && currentIndex > 0) {
+      // Set initial value for scrollX when starting with non-zero index
+      scrollX.setValue(currentIndex * width);
+    }
+  }, []);
+
+  // Update scrollX when currentIndex changes (for web platform)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      // Manually update the scrollX value for web to trigger animations
+      Animated.timing(scrollX, {
+        toValue: currentIndex * width,
+        duration: 300,
+        useNativeDriver: false
+      }).start();
+    }
+  }, [currentIndex]);
+
+  // Scroll FlatList to initial position on mount (for mobile)
+  useEffect(() => {
+    if (Platform.OS !== 'web' && currentIndex > 0 && flatListRef.current) {
+      // Use a short delay to ensure the FlatList is fully rendered
+      const timer = setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToIndex({
+            index: currentIndex,
+            animated: false
+          });
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Function to handle joining a group
   const handleJoinGroup = async () => {
@@ -103,28 +152,49 @@ export default function WelcomeScreen() {
 
   // Function to render each slide
   const renderSlide = ({ item, index }) => {
-    // Calculate opacity for fade-in effect
-    const inputRange = [
-      (index - 1) * width,
-      index * width,
-      (index + 1) * width
-    ];
+    // For web platform, we need to adjust the calculation
+    let inputRange, opacity, translateY;
     
-    const opacity = scrollX.interpolate({
-      inputRange,
-      outputRange: [0, 1, 0],
-      extrapolate: 'clamp'
-    });
+    if (Platform.OS === 'web') {
+      // Simpler calculation for web platform
+      opacity = index === currentIndex ? 1 : 0;
+      translateY = index === currentIndex ? 0 : 50;
+    } else {
+      // Original animation for mobile platforms
+      inputRange = [
+        (index - 1) * width,
+        index * width,
+        (index + 1) * width
+      ];
+      
+      opacity = scrollX.interpolate({
+        inputRange,
+        outputRange: [0, 1, 0],
+        extrapolate: 'clamp'
+      });
 
-    const translateY = scrollX.interpolate({
-      inputRange,
-      outputRange: [50, 0, 50],
-      extrapolate: 'clamp'
-    });
+      translateY = scrollX.interpolate({
+        inputRange,
+        outputRange: [50, 0, 50],
+        extrapolate: 'clamp'
+      });
+    }
+
+    // For web platform, we need to directly render the slide if it's the current one
+    if (Platform.OS === 'web' && index !== currentIndex) {
+      return null;
+    }
 
     return (
       <View style={styles.slide}>
-        <Animated.View style={[styles.slideContent, { opacity, transform: [{ translateY }] }]}>
+        <Animated.View 
+          style={[
+            styles.slideContent, 
+            Platform.OS === 'web' 
+              ? { opacity, transform: [{ translateY }] }
+              : { opacity, transform: [{ translateY }] }
+          ]}
+        >
           <View style={styles.iconContainer}>
             {item.iconType === 'font' ? (
               <FontAwesome name={item.icon} size={80} color="#4CAF50" />
@@ -169,20 +239,32 @@ export default function WelcomeScreen() {
   // Function to handle next slide
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
-      flatListRef.current.scrollToIndex({
-        index: currentIndex + 1,
-        animated: true
-      });
+      // Only try to scroll if we're in the mobile view and flatListRef is available
+      if (Platform.OS !== 'web' && flatListRef.current) {
+        flatListRef.current.scrollToIndex({
+          index: currentIndex + 1,
+          animated: true
+        });
+      } else if (Platform.OS === 'web') {
+        // For web, we just update the current index
+        setCurrentIndex(currentIndex + 1);
+      }
     }
   };
 
   // Function to handle previous slide
   const handlePrev = () => {
     if (currentIndex > 0) {
-      flatListRef.current.scrollToIndex({
-        index: currentIndex - 1,
-        animated: true
-      });
+      // Only try to scroll if we're in the mobile view and flatListRef is available
+      if (Platform.OS !== 'web' && flatListRef.current) {
+        flatListRef.current.scrollToIndex({
+          index: currentIndex - 1,
+          animated: true
+        });
+      } else if (Platform.OS === 'web') {
+        // For web, we just update the current index
+        setCurrentIndex(currentIndex - 1);
+      }
     }
   };
 
@@ -223,6 +305,84 @@ export default function WelcomeScreen() {
     );
   };
 
+  // Web-specific or native rendering
+  if (Platform.OS === 'web') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.webContainer}>
+          {/* Current slide content - Force rendering without animation conditions */}
+          <View style={styles.slide}>
+            <View style={styles.slideContent}>
+              <View style={styles.iconContainer}>
+                {slides[currentIndex].iconType === 'font' ? (
+                  <FontAwesome name={slides[currentIndex].icon} size={80} color="#4CAF50" />
+                ) : slides[currentIndex].iconType === 'fa5' ? (
+                  <FontAwesome5 name={slides[currentIndex].icon} size={80} color="#4CAF50" />
+                ) : (
+                  <MaterialCommunityIcons name={slides[currentIndex].icon} size={80} color="#4CAF50" />
+                )}
+              </View>
+              <Text style={styles.title}>{slides[currentIndex].title}</Text>
+              <Text style={styles.text}>{slides[currentIndex].text}</Text>
+              
+              {currentIndex === slides.length - 1 && (
+                <View style={styles.buttonContainer}>
+                  <TouchableOpacity 
+                    style={[styles.button, styles.joinButton]} 
+                    onPress={handleJoinGroup}
+                  >
+                    <Text style={styles.buttonText}>Join a team</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.button, styles.createButton]} 
+                    onPress={handleCreateGroup}
+                  >
+                    <Text style={styles.buttonText}>Create a team</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.button, styles.skipButton]} 
+                    onPress={handleSkipForNow}
+                  >
+                    <Text style={styles.skipButtonText}>Not for now</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+          
+          {renderPagination()}
+          
+          {/* Always display the navigation buttons container, with improved visibility */}
+          <View style={[styles.navigationButtons, { zIndex: 100 }]}>
+            {currentIndex > 0 ? (
+              <TouchableOpacity 
+                style={[styles.navButton, { backgroundColor: '#e0f2e0' }]} 
+                onPress={handlePrev}
+              >
+                <Ionicons name="chevron-back" size={24} color="#4CAF50" />
+              </TouchableOpacity>
+            ) : (
+              // Empty view to maintain layout
+              <View style={{ width: 50 }} />
+            )}
+            
+            {currentIndex < slides.length - 1 && (
+              <TouchableOpacity 
+                style={[styles.navButton, { backgroundColor: '#e0f2e0' }]} 
+                onPress={handleNext}
+              >
+                <Ionicons name="chevron-forward" size={24} color="#4CAF50" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Mobile rendering
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
@@ -242,23 +402,47 @@ export default function WelcomeScreen() {
           setCurrentIndex(index);
         }}
         scrollEventThrottle={16}
+        getItemLayout={(data, index) => (
+          {length: width, offset: width * index, index}
+        )}
+        onScrollToIndexFailed={info => {
+          const wait = new Promise(resolve => setTimeout(resolve, 500));
+          wait.then(() => {
+            if (flatListRef.current) {
+              flatListRef.current.scrollToIndex({ 
+                index: info.index, 
+                animated: true 
+              });
+            }
+          });
+        }}
       />
       
       {renderPagination()}
       
-      {currentIndex < slides.length - 1 && (
-        <View style={styles.navigationButtons}>
-          {currentIndex > 0 && (
-            <TouchableOpacity style={styles.navButton} onPress={handlePrev}>
-              <Ionicons name="chevron-back" size={24} color="#4CAF50" />
-            </TouchableOpacity>
-          )}
-          
-          <TouchableOpacity style={styles.navButton} onPress={handleNext}>
+      {/* Always display the navigation buttons container, with improved visibility */}
+      <View style={[styles.navigationButtons, { zIndex: 100 }]}>
+        {currentIndex > 0 ? (
+          <TouchableOpacity 
+            style={[styles.navButton, { backgroundColor: '#e0f2e0' }]} 
+            onPress={handlePrev}
+          >
+            <Ionicons name="chevron-back" size={24} color="#4CAF50" />
+          </TouchableOpacity>
+        ) : (
+          // Empty view to maintain layout
+          <View style={{ width: 50 }} />
+        )}
+        
+        {currentIndex < slides.length - 1 && (
+          <TouchableOpacity 
+            style={[styles.navButton, { backgroundColor: '#e0f2e0' }]} 
+            onPress={handleNext}
+          >
             <Ionicons name="chevron-forward" size={24} color="#4CAF50" />
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -267,6 +451,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  webContainer: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   slide: {
     width,
@@ -341,6 +531,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
   },
   buttonContainer: {
     width: '100%',
@@ -377,4 +569,4 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
   }
-}); 
+});
