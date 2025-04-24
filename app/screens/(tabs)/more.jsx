@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,37 +8,60 @@ export default function MoreScreen() {
 
   const handleSignOut = async () => {
     try {
-      // Show confirmation alert before signing out
-      Alert.alert(
-        "Sign Out",
-        "Are you sure you want to sign out?",
-        [
-          {
-            text: "Cancel",
-            style: "cancel"
-          },
-          {
-            text: "Sign Out",
-            onPress: async () => {
-              // Clear authentication tokens
-              await AsyncStorage.removeItem('token');
-              await AsyncStorage.removeItem('user');
-              
-              // Optionally keep saved email for convenience but clear password
-              await AsyncStorage.removeItem('savedPassword');
-              
-              // Clear any cached connection URLs (optional)
-              global.workingApiUrl = null;
-              
-              // Navigate to login screen
-              router.replace('/screens/login');
+      // Different handling for web vs native platforms
+      if (Platform.OS === 'web') {
+        // Use standard web alert for web platform
+        if (confirm("Are you sure you want to sign out?")) {
+          // Clear authentication tokens
+          await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('user');
+          
+          // Optionally keep saved email for convenience but clear password
+          await AsyncStorage.removeItem('savedPassword');
+          
+          // Clear any cached connection URLs (optional)
+          global.workingApiUrl = null;
+          
+          // Navigate to login screen
+          router.replace('/screens/login');
+        }
+      } else {
+        // Show confirmation alert before signing out (for native platforms)
+        Alert.alert(
+          "Sign Out",
+          "Are you sure you want to sign out?",
+          [
+            {
+              text: "Cancel",
+              style: "cancel"
+            },
+            {
+              text: "Sign Out",
+              onPress: async () => {
+                // Clear authentication tokens
+                await AsyncStorage.removeItem('token');
+                await AsyncStorage.removeItem('user');
+                
+                // Optionally keep saved email for convenience but clear password
+                await AsyncStorage.removeItem('savedPassword');
+                
+                // Clear any cached connection URLs (optional)
+                global.workingApiUrl = null;
+                
+                // Navigate to login screen
+                router.replace('/screens/login');
+              }
             }
-          }
-        ]
-      );
+          ]
+        );
+      }
     } catch (error) {
       console.error('Error signing out:', error);
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
+      if (Platform.OS === 'web') {
+        alert('Failed to sign out. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to sign out. Please try again.');
+      }
     }
   };
 

@@ -62,10 +62,11 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 
 ### Prerequisites
 
-- Node.js (v14 or later)
+- Node.js (v16 or later)
 - npm or yarn
 - MongoDB (local or Atlas)
 - Expo Go app installed on your mobile device for testing
+- Mailgun account (for production email sending) or use Ethereal for testing
 
 ### Frontend Setup
 
@@ -75,7 +76,12 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
    npm install
    ```
 
-2. Start the Expo development server:
+2. Install additional required packages:
+   ```
+   npm install expo-clipboard @react-native-picker/picker
+   ```
+
+3. Start the Expo development server:
    ```
    npm start
    # or 

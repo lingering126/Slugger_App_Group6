@@ -16,43 +16,78 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function JoinGroupScreen() {
+  // State to store the group code entered by the user
   const [groupCode, setGroupCode] = useState('');
+  // State to manage the loading indicator
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Function to handle joining a group
   const handleJoinGroup = async () => {
+    // Validate that the group code is not empty
     if (!groupCode.trim()) {
-      Alert.alert('Error', 'Please enter a group code');
+      if (Platform.OS === 'web') {
+        alert('Please enter a group code');
+      } else {
+        Alert.alert('Error', 'Please enter a group code');
+      }
       return;
     }
 
     setLoading(true);
 
     try {
-      // In a real app, we would make an API call to validate the group code
-      // For now, just simulate a delay and navigate to home
-      setTimeout(() => {
-        setLoading(false);
-        
-        // For testing, let's accept any 6-character code
-        if (groupCode.length >= 6) {
-          Alert.alert(
-            'Success', 
-            `You have joined the group successfully!`,
-            [
-              { 
-                text: 'OK', 
-                onPress: () => router.replace('/screens/(tabs)/home') 
-              }
-            ]
-          );
-        } else {
-          Alert.alert('Error', 'Invalid group code. Please try again.');
-        }
-      }, 1500);
+      // Retrieve the authentication token from local storage
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Define the API endpoint
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      // Send a POST request to join the group
+      const response = await fetch(`${apiUrl}/groups/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          groupId: groupCode
+        })
+      });
+
+      const data = await response.json();
+      
+      // Check if the response is successful
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to join group');
+      }
+
+      setLoading(false);
+      if (Platform.OS === 'web') {
+        alert(`Successfully joined group "${data.name}"!`);
+        router.replace('/screens/(tabs)/home'); // Navigate to the home screen
+      } else {
+        Alert.alert(
+          'Success',
+          `Successfully joined group "${data.name}"!`,
+          [
+            {
+              text: 'OK',
+              onPress: () => router.replace('/screens/(tabs)/home'),
+            },
+          ]
+        );
+      }
     } catch (error) {
       setLoading(false);
-      Alert.alert('Error', 'Failed to join group. Please try again.');
+      if (Platform.OS === 'web') {
+        alert(error.message || 'Failed to join group. Please try again.');
+      } else {
+        Alert.alert('Error', error.message || 'Failed to join group. Please try again.');
+      }
       console.error('Error joining group:', error);
     }
   };
@@ -64,24 +99,21 @@ export default function JoinGroupScreen() {
         style={styles.keyboardAvoidingView}
       >
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <Text style={styles.title}>Join an Existing Team</Text>
-          
-          <Text style={styles.description}>
-            Enter the team code provided by the team administrator to join their Slugger team.
-          </Text>
+          <Text style={styles.title}>Join a Group</Text>
 
+          {/* Input field for the group code */}
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Team Code *</Text>
+            <Text style={styles.label}>Group Code *</Text>
             <TextInput
               style={styles.input}
               value={groupCode}
               onChangeText={setGroupCode}
-              placeholder="Enter 6-digit team code"
+              placeholder="Enter the group code"
               maxLength={10}
-              autoCapitalize="characters"
             />
           </View>
 
+          {/* Button to join the group */}
           <TouchableOpacity
             style={styles.button}
             onPress={handleJoinGroup}
@@ -90,20 +122,14 @@ export default function JoinGroupScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.buttonText}>Join Team</Text>
+              <Text style={styles.buttonText}>Join Group</Text>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.createGroupButton}
-            onPress={() => router.replace('/screens/create-group')}
-          >
-            <Text style={styles.createGroupButtonText}>Create a New Team Instead</Text>
-          </TouchableOpacity>
-
+          {/* Button to cancel and go back */}
           <TouchableOpacity
             style={styles.cancelButton}
-            onPress={() => router.replace('/screens/welcome')}
+            onPress={() => router.replace('/screens/welcome?initialIndex=5')}
             disabled={loading}
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -132,13 +158,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: 'center',
     color: '#0E5E6F',
-  },
-  description: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 30,
-    lineHeight: 22,
   },
   formGroup: {
     marginBottom: 25,
@@ -171,16 +190,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  createGroupButton: {
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  createGroupButtonText: {
-    color: '#0E5E6F',
-    fontSize: 16,
-    textDecorationLine: 'underline',
-  },
   cancelButton: {
     backgroundColor: '#F5F5F8',
     padding: 15,
@@ -195,4 +204,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-}); 
+});

@@ -7,11 +7,13 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const os = require('os');
-const User = require('./models/User');
+const User = require('./src/models/user');
 const postsRouter = require('./homepage/routes/posts');
-const auth = require('./middleware/auth');
+const { router: authRoutes, authMiddleware } = require('./routes/auth');
 const activityRoutes = require('./routes/activities');
 const statsRoutes = require('./homepage/routes/index');
+const groupRoutes = require('./routes/group');
+const teamRoutes = require('./src/routes/team');
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
@@ -113,32 +115,94 @@ transporter.verify()
 
 // CORS configuration
 const corsOptions = {
-  origin: ['http://localhost:8081', 'http://localhost:19006'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 
 // Middleware
 app.use(cors(corsOptions));
 
-// Add OPTIONS handling for preflight requests
-app.options('*', cors(corsOptions));
-
 app.use(express.json());
 
-// Auth routes (no auth middleware)
+// Connect to MongoDB Atlas
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+})
+.then(() => {
+  console.log('Successfully connected to MongoDB Atlas');
+  console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
+})
+.catch(err => {
+  console.error('MongoDB connection error:', err);
+  console.error('Error code:', err.code);
+  console.error('Error name:', err.name);
+  console.error('Full error:', err);
+  // Continue with in-memory storage as fallback
+  console.log('Falling back to in-memory storage');
+});
+
+// Add MongoDB connection error handlers
+mongoose.connection.on('error', err => {
+  console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('MongoDB reconnected');
+});
+
+// In-memory user storage as fallback
+const inMemoryUsers = [];
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} from ${req.ip}`);
+  console.log('Headers:', JSON.stringify(req.headers));
+  
+  // Add CORS headers to every response
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Log response
+  const originalSend = res.send;
+  res.send = function(body) {
+    console.log(`[${new Date().toISOString()}] Response: ${res.statusCode}`);
+    return originalSend.call(this, body);
+  };
+  
+  next();
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ message: 'Internal server error', error: err.message });
+});
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/posts', authMiddleware, postsRouter);
+app.use('/api/activities', authMiddleware, activityRoutes);
+app.use('/api/stats', authMiddleware, statsRoutes);
+app.use('/api/groups', groupRoutes);
+
 app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, name } = req.body;
     
     console.log('Signup attempt for:', email);
     
-    if (!email || !password) {
-      console.log('Missing email or password');
-      return res.status(400).json({ message: 'Email and password are required' });
+    if (!email || !password || !name) {
+      console.log('Missing required fields');
+      return res.status(400).json({ message: 'Email, password, and name are required' });
     }
     
     // Validate email format
@@ -181,13 +245,14 @@ app.post('/api/auth/signup', async (req, res) => {
       const newUser = new User({
         email,
         password: hashedPassword, // Store the hashed password
+        name, // Store the user's name
         isVerified: false,
         verificationToken,
         verificationTokenExpires
       });
       
       await newUser.save();
-      console.log('User registered in MongoDB:', email);
+      console.log('User registered in MongoDB:', email, 'with name:', name);
     } else {
       // Fallback to in-memory storage
       const existingUser = inMemoryUsers.find(user => user.email === email);
@@ -220,8 +285,25 @@ app.post('/api/auth/signup', async (req, res) => {
     console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
     console.log('===============================');
     
+    // 确保有邮件发送配置
+    if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
+      console.warn('Email configuration missing. Setting up a default transporter for development.');
+      // 如果没有配置邮件服务，创建一个测试用的transporter
+      const testAccount = await nodemailer.createTestAccount();
+      transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      console.log('Using Ethereal test account:', testAccount.user);
+    }
+    
     const mailOptions = {
-      from: process.env.MAIL_FROM,
+      from: process.env.MAIL_FROM || 'test@example.com',
       to: email,
       subject: 'Verify your Slugger account',
       html: `
@@ -255,12 +337,18 @@ app.post('/api/auth/signup', async (req, res) => {
     
     try {
       console.log('Attempting to send verification email to:', email);
-      console.log('Using from address:', process.env.MAIL_FROM);
+      console.log('Using from address:', mailOptions.from);
       
       const info = await transporter.sendMail(mailOptions);
       console.log('Verification email sent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
+      
+      // 如果使用了Ethereal测试账户，提供预览链接
+      if (info.messageId && info.messageId.includes('ethereal')) {
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('IMPORTANT: This is a test email. Check the preview URL above to view it.');
+      }
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
       console.error('Error details:', emailError.message);
@@ -345,7 +433,9 @@ app.post('/api/auth/login', async (req, res) => {
       token,
       user: {
         id: user.id || user._id,
-        email: user.email
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar
       }
     });
   } catch (error) {
@@ -697,72 +787,6 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     console.error('Resend verification error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
-});
-
-// Protected routes (with auth middleware)
-app.use('/api/posts', auth, postsRouter);
-app.use('/api/activities', auth, activityRoutes);
-app.use('/api/stats', auth, statsRoutes);
-
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-})
-.then(() => {
-  console.log('Successfully connected to MongoDB Atlas');
-  console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
-})
-  .catch(err => {
-  console.error('MongoDB connection error:', err);
-  console.error('Error code:', err.code);
-  console.error('Error name:', err.name);
-  console.error('Full error:', err);
-    // Continue with in-memory storage as fallback
-  console.log('Falling back to in-memory storage');
-  });
-
-// Add MongoDB connection error handlers
-mongoose.connection.on('error', err => {
-  console.error('MongoDB connection error:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB disconnected');
-});
-
-mongoose.connection.on('reconnected', () => {
-  console.log('MongoDB reconnected');
-});
-
-// In-memory user storage as fallback
-const inMemoryUsers = [];
-
-// Add request logging middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} from ${req.ip}`);
-  console.log('Headers:', JSON.stringify(req.headers));
-  
-  // Add CORS headers to every response
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  // Log response
-  const originalSend = res.send;
-  res.send = function(body) {
-    console.log(`[${new Date().toISOString()}] Response: ${res.statusCode}`);
-    return originalSend.call(this, body);
-  };
-  
-  next();
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Server error:', err);
-  res.status(500).json({ message: 'Internal server error', error: err.message });
 });
 
 // Health check route

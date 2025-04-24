@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Activity = require('../models/Activity');
 const mongoose = require('mongoose');
-const User = require('../models/User');
+const User = require('../src/models/user');
 
 // Create a new activity
 router.post('/', async (req, res) => {

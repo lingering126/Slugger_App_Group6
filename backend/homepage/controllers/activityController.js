@@ -1,5 +1,5 @@
 const Activity = require('../../models/Activity');
-const User = require('../../models/User');
+const User = require('../../src/models/user');
 const UserStats = require('../models/UserStats');
 
 // Get activity types list
