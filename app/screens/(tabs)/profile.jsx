@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator } from 'react-native'
 import React, { useState, useEffect } from 'react'
-import { useNavigation } from '@react-navigation/native'
+import { useRouter } from 'expo-router'
+import { useFocusEffect } from '@react-navigation/native'
+import { useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { userService, groupService } from '../../services/api' 
 
@@ -50,8 +52,8 @@ const bonusActivities = [
   { id: 5, name: 'Bonus other', icon: '✨' }
 ]
 
-const Profile = () => {
-  const navigation = useNavigation()
+export default function Profile() {
+  const router = useRouter()
   
   // User data state
   const [userData, setUserData] = useState(null)
@@ -71,38 +73,49 @@ const Profile = () => {
   const [selectedBonusActivities, setSelectedBonusActivities] = useState([])
   const [bonusModalVisible, setBonusModalVisible] = useState(false)
   
+  // Load user data function
+  const loadUserData = async () => {
+    try {
+      setLoading(true)
+      
+      // Get user data from AsyncStorage
+      const userJson = await AsyncStorage.getItem('user')
+      const user = userJson ? JSON.parse(userJson) : null
+      
+      if (!user) {
+        throw new Error('User data not found')
+      }
+      
+      setUserData(user)
+    } catch (err) {
+      console.error('Error loading user data:', err)
+      setError('Failed to load profile data')
+      
+      // Use default values if unable to get user data
+      setUserData({
+        name: "Guest User",
+        status: "Inactive",
+        createdAt: new Date().toISOString()
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+  
   // Load user data when component mounts
   useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        setLoading(true)
-        
-        // Get user data from AsyncStorage
-        const userJson = await AsyncStorage.getItem('user')
-        const user = userJson ? JSON.parse(userJson) : null
-        
-        if (!user) {
-          throw new Error('User data not found')
-        }
-        
-        setUserData(user)
-      } catch (err) {
-        console.error('Error loading user data:', err)
-        setError('Failed to load profile data')
-        
-        // Use default values if unable to get user data
-        setUserData({
-          name: "Guest User",
-          status: "Inactive",
-          createdAt: new Date().toISOString()
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
-    
     loadUserData()
   }, [])
+  
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData()
+      return () => {
+        // Cleanup if needed
+      }
+    }, [])
+  )
   
   // Load user's groups
   useEffect(() => {
@@ -163,6 +176,11 @@ const Profile = () => {
     }
   }
   
+  // Navigate to edit profile
+  const handleEditProfile = () => {
+    router.push('/screens/(tabs)/profile/EditProfile');
+  }
+  
   // Show loading placeholder while fetching user data
   if (loading) {
     return (
@@ -204,7 +222,10 @@ const Profile = () => {
             <Text style={styles.userJoinDate}>Member since: {getFormattedJoinDate()}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.editButton}>
+        <TouchableOpacity 
+          style={styles.editButton}
+          onPress={handleEditProfile}
+        >
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
@@ -598,8 +619,6 @@ const Profile = () => {
   )
 }
 
-export default Profile
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -959,4 +978,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-});
+})
