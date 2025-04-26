@@ -27,7 +27,7 @@ app.use((req, res, next) => {
 });
 
 // Routes
-const authRoutes = require('./routes/auth');
+const authRoutes = require('./routes/auth').router;
 const postRoutes = require('./homepage/routes/posts');
 
 // Public routes

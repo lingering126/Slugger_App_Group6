@@ -11,15 +11,18 @@ const authMiddleware = (req, res, next) => {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key');
+    console.log('Decoded token:', decoded);
     
-    // Add compatibility handling: ensure req.user contains id field
+    // Ensure user ID is set correctly
     req.user = {
-      ...decoded,
-      id: decoded.userId || decoded.id  // Support both possible id fields
+      id: decoded.userId || decoded._id || decoded.id,  // Support multiple possible ID fields
+      ...decoded
     };
     
+    console.log('Set user in request:', req.user);
     next();
   } catch (error) {
+    console.error('Token verification error:', error);
     return res.status(401).json({ message: 'Invalid token' });
   }
 };
