@@ -30,17 +30,17 @@ export const getServerIP = (): string | null => {
 
 // Build complete server URL
 export const getServerUrl = (path: string = '/api'): string => {
-  return `${API_CONFIG.BASE_URL}${path}`;
+  return `${API_CONFIG.API_URL}${path}`;
 };
 
 // Build health check URL
 export const getHealthUrl = (): string => {
-  return `${API_CONFIG.BASE_URL}/health`;
+  return `${API_CONFIG.API_URL}/health`;
 };
 
 // Build ping URL
 export const getPingUrl = (): string => {
-  return `${API_CONFIG.BASE_URL}/ping`;
+  return `${API_CONFIG.API_URL}/ping`;
 };
 
 export default {
@@ -48,4 +48,4 @@ export default {
   getServerUrl,
   getHealthUrl,
   getPingUrl
-}; 
+};

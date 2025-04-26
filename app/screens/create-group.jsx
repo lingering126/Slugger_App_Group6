@@ -21,11 +21,8 @@ export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState(''); // Group name entered by the user
   const [groupDescription, setGroupDescription] = useState(''); // Group description entered by the user
   const [targetName, setTargetName] = useState(''); // Selected target category
-  const [targetMentalValue, setTargetMentalValue] = useState(0); // Mental target value
-  const [targetPhysicalValue, setTargetPhysicalValue] = useState(0); // Physical target value
-  const [targetValue, setTargetValue] = useState(0); // Total target value (mental + physical)
-  const [dailyLimitPhysical, setDailyLimitPhysical] = useState(7); // Daily physical limit
-  const [dailyLimitMental, setDailyLimitMental] = useState(7); // Daily mental limit
+  const [weeklyLimitPhysical, setWeeklyLimitPhysical] = useState(7); // Weekly physical limit
+  const [weeklyLimitMental, setWeeklyLimitMental] = useState(7); // Weekly mental limit
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
   const router = useRouter(); // Router for navigation
 
@@ -54,13 +51,6 @@ export default function CreateGroupScreen() {
     { label: '6', value: 6 },
     { label: '7', value: 7 },
   ];
-
-  // Automatically calculate the total target value whenever mental or physical values change
-  useEffect(() => {
-    const mental = parseInt(targetMentalValue, 10) || 0;
-    const physical = parseInt(targetPhysicalValue, 10) || 0;
-    setTargetValue(mental + physical);
-  }, [targetMentalValue, targetPhysicalValue]);
 
   // Function to handle the creation of a new group
   const handleCreateGroup = async () => {
@@ -107,10 +97,8 @@ export default function CreateGroupScreen() {
           name: groupName,
           description: groupDescription,
           targetName,
-          targetMentalValue: parseInt(targetMentalValue, 10),
-          targetPhysicalValue: parseInt(targetPhysicalValue, 10),
-          dailyLimitPhysical,
-          dailyLimitMental,
+          weeklyLimitPhysical: parseInt(weeklyLimitPhysical, 10),
+          weeklyLimitMental: parseInt(weeklyLimitMental, 10),
         }),
       });
 
@@ -193,70 +181,32 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-          {/* Input for mental target value and daily mental limit */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Mental Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={targetMentalValue.toString()}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setTargetMentalValue(intValue);
-                }}
-                placeholder="e.g., 50, 100"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Mental Limit</Text>
-              <Dropdown
-                style={styles.dropdown}
-                data={limitData}
-                labelField="label"
-                valueField="value"
-                placeholder="Select limit"
-                value={dailyLimitMental}
-                onChange={(item) => setDailyLimitMental(item.value)}
-              />
-            </View>
-          </View>
-
-          {/* Input for physical target value and daily physical limit */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Physical Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={targetPhysicalValue.toString()}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setTargetPhysicalValue(intValue);
-                }}
-                placeholder="e.g., 200, 300"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Physical Limit</Text>
-              <Dropdown
-                style={styles.dropdown}
-                data={limitData}
-                labelField="label"
-                valueField="value"
-                placeholder="Select limit"
-                value={dailyLimitPhysical}
-                onChange={(item) => setDailyLimitPhysical(item.value)}
-              />
-            </View>
-          </View>
-
-          {/* Display the total target value */}
+          {/* Weekly mental limit */}
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Total Target Value</Text>
-            <Text style={styles.totalValue}>{targetValue}</Text>
+            <Text style={styles.label}>Weekly Mental Limit</Text>
+            <Dropdown
+              style={styles.dropdown}
+              data={limitData}
+              labelField="label"
+              valueField="value"
+              placeholder="Select limit"
+              value={weeklyLimitMental}
+              onChange={(item) => setWeeklyLimitMental(item.value)}
+            />
+          </View>
+
+          {/* Weekly physical limit */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Weekly Physical Limit</Text>
+            <Dropdown
+              style={styles.dropdown}
+              data={limitData}
+              labelField="label"
+              valueField="value"
+              placeholder="Select limit"
+              value={weeklyLimitPhysical}
+              onChange={(item) => setWeeklyLimitPhysical(item.value)}
+            />
           </View>
 
           {/* Button to create the group */}

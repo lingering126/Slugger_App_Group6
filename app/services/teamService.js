@@ -63,10 +63,22 @@ const teamService = {
 
   async getTeamById(teamId) {
     try {
+<<<<<<< Updated upstream
       const response = await api.get(`/teams/${teamId}`);
+=======
+      console.log('Getting team by ID:', teamId);
+      console.log('Team ID type:', typeof teamId);
+      console.log('API URL being used:', getApiBaseUrl());
+      console.log('Endpoint path:', getEndpoint(`/teams/${teamId}`));
+      
+      const response = await api.get(getEndpoint(`/teams/${teamId}`));
+      console.log('Team details response:', response.data);
+>>>>>>> Stashed changes
       return response.data;
     } catch (error) {
-      console.error('Error fetching team:', error);
+      console.error('Error fetching team details:', error.message);
+      console.error('Error response data:', error.response?.data);
+      console.error('Error response status:', error.response?.status);
       throw error;
     }
   },
@@ -235,4 +247,4 @@ const teamService = {
   }
 };
 
-export default teamService; 
+export default teamService;

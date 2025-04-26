@@ -22,8 +22,13 @@ const API_CONFIG = {
       STATS: '/stats/user',
       PROFILE: '/users/profile',
       UPDATE_PROFILE: '/users/profile'
+    },
+    USER_TARGET: {
+      GET: '/user-targets',
+      CREATE: '/user-targets',
+      UPDATE: '/user-targets'
     }
   }
 };
 
-export default API_CONFIG; 
+export default API_CONFIG;
