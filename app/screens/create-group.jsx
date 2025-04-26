@@ -128,15 +128,30 @@ export default function CreateGroupScreen() {
         throw new Error(data.message || 'Failed to create group');
       }
 
+      // Store the newly created team data in AsyncStorage 
+      // so the user is automatically joined to the team
+      try {
+        // Extract the current user data
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          // Save the team data
+          await AsyncStorage.setItem('userTeam', JSON.stringify(data));
+          console.log('Saved team data to AsyncStorage:', data);
+        }
+      } catch (storageError) {
+        console.error('Error saving team data to AsyncStorage:', storageError);
+        // Continue execution even if storage fails
+      }
+
       setLoading(false); // Hide loading indicator
       if (Platform.OS === 'web') {
-        alert(`Group "${groupName}" created successfully!`);
-        router.replace('/screens/(tabs)/home'); // Navigate to the home screen
+        alert(`Team "${groupName}" created successfully!`);
+        router.replace('/screens/(tabs)/team'); // Navigate directly to team screen
       } else {
-        Alert.alert('Success', `Group "${groupName}" created successfully!`, [
+        Alert.alert('Success', `Team "${groupName}" created successfully!`, [
           {
             text: 'OK',
-            onPress: () => router.replace('/screens/(tabs)/home'),
+            onPress: () => router.replace('/screens/(tabs)/team'),
           },
         ]);
       }

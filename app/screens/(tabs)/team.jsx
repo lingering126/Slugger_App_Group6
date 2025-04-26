@@ -81,6 +81,18 @@ export default function TeamsScreen() {
         return;
       }
 
+      // Check for saved userTeam data in AsyncStorage
+      const savedUserTeam = await AsyncStorage.getItem('userTeam');
+      if (savedUserTeam) {
+        try {
+          const parsedTeam = JSON.parse(savedUserTeam);
+          console.log('Found saved user team in AsyncStorage:', parsedTeam);
+          setUserTeam(parsedTeam);
+        } catch (error) {
+          console.error('Error parsing saved team data:', error);
+        }
+      }
+
       console.log('Loading teams...');
       const teamsData = await teamService.getAllTeams();
       console.log('Teams data:', teamsData);
@@ -111,7 +123,11 @@ export default function TeamsScreen() {
         });
         
         console.log('Found user team:', userTeam);
-        setUserTeam(userTeam);
+        if (userTeam) {
+          setUserTeam(userTeam);
+          // Save the team data to AsyncStorage for persistence
+          await AsyncStorage.setItem('userTeam', JSON.stringify(userTeam));
+        }
       }
     } catch (error) {
       console.error('Error loading teams:', error);
@@ -509,7 +525,7 @@ export default function TeamsScreen() {
             <Text style={styles.teamName}>{item.name}</Text>
           </View>
           <View style={styles.teamIdBadge}>
-            <Text style={styles.teamIdBadgeText}>ID: {item.groupId}</Text>
+            <Text style={styles.teamIdBadgeText}>ID: {item.teamId || item.groupId || 'N/A'}</Text>
           </View>
         </View>
         <View style={styles.teamCardBody}>
@@ -811,15 +827,16 @@ export default function TeamsScreen() {
           <View style={styles.teamIdContainer}>
             <View style={styles.teamIdInner}>
               <Text style={styles.teamIdLabel}>Team ID:</Text>
-              <Text style={styles.teamId}>{userTeam.groupId}</Text>
+              <Text style={styles.teamId}>{userTeam.teamId || userTeam.groupId || 'N/A'}</Text>
             </View>
             <TouchableOpacity 
               style={styles.copyButton}
               onPress={async () => {
                 try {
                   // Use the newly installed expo-clipboard package
-                  if (userTeam.groupId) {
-                    await Clipboard.setStringAsync(userTeam.groupId.toString());
+                  const teamId = userTeam.teamId || userTeam.groupId;
+                  if (teamId) {
+                    await Clipboard.setStringAsync(teamId.toString());
                     Alert.alert('Copied', 'Team ID copied to clipboard');
                   } else {
                     Alert.alert('Error', 'No team ID available to copy');
