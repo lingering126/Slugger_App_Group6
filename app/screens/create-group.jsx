@@ -88,20 +88,23 @@ export default function CreateGroupScreen() {
 
     try {
       // Retrieve the authentication token from local storage
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
+      console.log('Token retrieved:', token ? 'Token exists' : 'No token found');
+      
       if (!token) {
         throw new Error('No authentication token found');
       }
 
       // Define the API endpoint
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Using API URL:', apiUrl);
 
       // Send a POST request to create the group
-      const response = await fetch(`${apiUrl}/groups`, {
+      const response = await fetch(`${apiUrl}/teams`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: groupName,
@@ -114,7 +117,11 @@ export default function CreateGroupScreen() {
         }),
       });
 
+      // Log response status for debugging
+      console.log('API response status:', response.status);
+      
       const data = await response.json();
+      console.log('API response data:', data);
 
       // Check if the response is successful
       if (!response.ok) {
