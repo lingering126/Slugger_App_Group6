@@ -18,6 +18,9 @@ const teamRoutes = require('./src/routes/team');
 =======
 const teamRoutes = require('./routes/team');
 const userTargetRoutes = require('./routes/userTarget');
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 // Function to get all server IP addresses
@@ -198,6 +201,9 @@ app.use('/api/posts', authMiddleware, postsRouter);
 app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
 app.use('/api/groups', groupRoutes);
+
+// Register userTarget routes - Fix path
+app.use('/api/user-targets', userTargetRoutes);
 
 // Register userTarget routes - Fix path
 app.use('/api/user-targets', userTargetRoutes);
