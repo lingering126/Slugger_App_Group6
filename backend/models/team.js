@@ -1,0 +1,92 @@
+const mongoose = require('mongoose');
+
+// Function to generate a random six-digit ID
+function generateSixDigitId() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Define the schema for the Team model
+const teamSchema = new mongoose.Schema({
+  teamId: {
+    type: String, // Unique team ID
+    unique: true,
+    required: true,
+    length: 6
+  },
+  name: {
+    type: String, // Team name
+    required: true
+  },
+  description: String, // Team description
+  targetName: {
+    type: String, // Target category
+    enum: [
+      'Target 1',
+      'Target 2',
+      'Target 3',
+      'Target 4',
+      'Target 5',
+      'Target 6',
+      'Target 7',
+      'Target 8',
+      'Target 9',
+      'Target 10'
+    ],
+    required: true
+  },
+  targetMentalValue: {
+    type: Number, // Mental target value
+    required: true,
+    default: 0
+  },
+  targetPhysicalValue: {
+    type: Number, // Physical target value
+    required: true,
+    default: 0
+  },
+  targetValue: {
+    type: Number, // Total target value
+    required: true,
+    default: 0
+  },
+  dailyLimitPhysical: {
+    type: Number, // Daily physical limit
+    required: true,
+    default: 100
+  },
+  dailyLimitMental: {
+    type: Number, // Daily mental limit
+    required: true,
+    default: 100
+  },
+  members: [{
+    type: mongoose.Schema.Types.ObjectId, // List of user IDs
+    ref: 'User'
+  }],
+  createdAt: {
+    type: Date, // Creation timestamp
+    default: Date.now
+  }
+});
+
+// Generate a unique teamId before saving
+teamSchema.pre('validate', async function(next) {
+  if (this.isNew) {
+    let exists = true;
+    while (exists) {
+      const id = generateSixDigitId();
+      exists = await mongoose.models.Team.findOne({ teamId: id });
+      if (!exists) this.teamId = id;
+    }
+  }
+  next();
+});
+
+// Calculate total target value before saving
+teamSchema.pre('save', function(next) {
+  this.targetValue = this.targetMentalValue + this.targetPhysicalValue;
+  next();
+});
+
+// Export the Team model
+module.exports = mongoose.model('Team', teamSchema); 

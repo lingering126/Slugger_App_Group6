@@ -75,39 +75,24 @@ export default function TeamsScreen() {
   const loadTeams = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         console.log('No token found');
         return;
       }
 
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      console.log('Loading teams from:', `${apiUrl}/groups/all`);
-      
-      const response = await fetch(`${apiUrl}/groups/all`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      console.log('Loading teams...');
+      const teamsData = await teamService.getAllTeams();
+      console.log('Teams data:', teamsData);
 
-      console.log('Response status:', response.status);
-      const data = await response.json();
-      console.log('Response data:', data);
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to load teams');
-      }
-
-      if (!Array.isArray(data)) {
-        console.error('Teams data is not an array:', data);
+      if (!Array.isArray(teamsData)) {
+        console.error('Teams data is not an array:', teamsData);
         setTeams([]);
         return;
       }
 
       // Filter out teams with no members
-      const activeTeams = data.filter(team => team.members && team.members.length > 0);
+      const activeTeams = teamsData.filter(team => team.members && team.members.length > 0);
       setTeams(activeTeams);
 
       // Find the team that the user belongs to
@@ -149,35 +134,18 @@ export default function TeamsScreen() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert('Error', 'Please log in first');
-        return;
-      }
-
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      const response = await fetch(`${apiUrl}/groups`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: newTeam.name,
-          description: newTeam.description,
-          targetName: newTeam.targetName,
-          targetMentalValue: parseInt(newTeam.targetMentalValue),
-          targetPhysicalValue: parseInt(newTeam.targetPhysicalValue),
-          dailyLimitPhysical: parseInt(newTeam.dailyLimitPhysical),
-          dailyLimitMental: parseInt(newTeam.dailyLimitMental)
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to create team');
-      }
-
+      const teamData = {
+        name: newTeam.name,
+        description: newTeam.description,
+        targetName: newTeam.targetName,
+        targetMentalValue: parseInt(newTeam.targetMentalValue),
+        targetPhysicalValue: parseInt(newTeam.targetPhysicalValue),
+        dailyLimitPhysical: parseInt(newTeam.dailyLimitPhysical),
+        dailyLimitMental: parseInt(newTeam.dailyLimitMental)
+      };
+      
+      await teamService.createTeam(teamData);
+      
       setModalVisible(false);
       setNewTeam({
         name: '',
@@ -207,38 +175,11 @@ export default function TeamsScreen() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert('Error', 'Please log in first');
-        return;
-      }
-
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      console.log('Joining team by ID:', teamIdToJoin);
+      await teamService.joinTeamById(teamIdToJoin);
       
-      const response = await fetch(`${apiUrl}/groups/join-by-id`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ groupId: teamIdToJoin })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to join team');
-      }
-
       Alert.alert('Success', 'Joined team successfully');
       setTeamIdToJoin('');
       await loadTeams();
-      
-      // Find the recently joined team and set it as current team
-      const joinedTeam = teams.find(team => team._id === teamIdToJoin);
-      if (joinedTeam) {
-        setUserTeam(joinedTeam);
-      }
     } catch (error) {
       console.error('Error joining team by ID:', error);
       Alert.alert('Error', error.message || 'Failed to join team');
@@ -250,7 +191,7 @@ export default function TeamsScreen() {
   const handleJoinTeam = async (teamId) => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -343,7 +284,7 @@ export default function TeamsScreen() {
     // Attempt to call API to leave team in the background
     try {
       // Get token
-      AsyncStorage.getItem('token').then(token => {
+      AsyncStorage.getItem('userToken').then(token => {
         if (!token) return;
         
         const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
@@ -672,7 +613,7 @@ export default function TeamsScreen() {
   const handleUpdateTeam = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -719,7 +660,7 @@ export default function TeamsScreen() {
   const handleSaveTeamInfo = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -758,7 +699,7 @@ export default function TeamsScreen() {
   const handleSaveTargets = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
