@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Picker } from '@react-native-picker/picker';
+import { Dropdown } from 'react-native-element-dropdown';
 
 export default function CreateGroupScreen() {
   // State variables to store user input and app state
@@ -28,6 +28,32 @@ export default function CreateGroupScreen() {
   const [dailyLimitMental, setDailyLimitMental] = useState(7); // Daily mental limit
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
   const router = useRouter(); // Router for navigation
+
+  // 定义下拉菜单数据
+  const targetData = [
+    { label: 'Select a category', value: '' },
+    { label: 'Target 1', value: 'Target 1' },
+    { label: 'Target 2', value: 'Target 2' },
+    { label: 'Target 3', value: 'Target 3' },
+    { label: 'Target 4', value: 'Target 4' },
+    { label: 'Target 5', value: 'Target 5' },
+    { label: 'Target 6', value: 'Target 6' },
+    { label: 'Target 7', value: 'Target 7' },
+    { label: 'Target 8', value: 'Target 8' },
+    { label: 'Target 9', value: 'Target 9' },
+    { label: 'Target 10', value: 'Target 10' },
+  ];
+
+  const limitData = [
+    { label: '0', value: 0 },
+    { label: '1', value: 1 },
+    { label: '2', value: 2 },
+    { label: '3', value: 3 },
+    { label: '4', value: 4 },
+    { label: '5', value: 5 },
+    { label: '6', value: 6 },
+    { label: '7', value: 7 },
+  ];
 
   // Automatically calculate the total target value whenever mental or physical values change
   useEffect(() => {
@@ -156,23 +182,15 @@ export default function CreateGroupScreen() {
           {/* Dropdown for selecting the target category */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Target Name</Text>
-            <Picker
-              selectedValue={targetName}
-              onValueChange={(itemValue) => setTargetName(itemValue)}
-              style={styles.picker}
-            >
-              <Picker.Item label="Select a category" value="" />
-              <Picker.Item label="Target 1" value="Target 1" />
-              <Picker.Item label="Target 2" value="Target 2" />
-              <Picker.Item label="Target 3" value="Target 3" />
-              <Picker.Item label="Target 4" value="Target 4" />
-              <Picker.Item label="Target 5" value="Target 5" />
-              <Picker.Item label="Target 6" value="Target 6" />
-              <Picker.Item label="Target 7" value="Target 7" />
-              <Picker.Item label="Target 8" value="Target 8" />
-              <Picker.Item label="Target 9" value="Target 9" />
-              <Picker.Item label="Target 10" value="Target 10" />
-            </Picker>
+            <Dropdown
+              style={styles.dropdown}
+              data={targetData}
+              labelField="label"
+              valueField="value"
+              placeholder="Select a category"
+              value={targetName}
+              onChange={(item) => setTargetName(item.value)}
+            />
           </View>
 
           {/* Input for mental target value and daily mental limit */}
@@ -193,20 +211,15 @@ export default function CreateGroupScreen() {
 
             <View style={styles.halfWidth}>
               <Text style={styles.label}>Daily Mental Limit</Text>
-              <Picker
-                selectedValue={dailyLimitMental}
-                onValueChange={(itemValue) => setDailyLimitMental(itemValue)}
-                style={styles.picker}
-              >
-                <Picker.Item label="0" value={0} />
-                <Picker.Item label="1" value={1} />
-                <Picker.Item label="2" value={2} />
-                <Picker.Item label="3" value={3} />
-                <Picker.Item label="4" value={4} />
-                <Picker.Item label="5" value={5} />
-                <Picker.Item label="6" value={6} />
-                <Picker.Item label="7" value={7} />
-              </Picker>
+              <Dropdown
+                style={styles.dropdown}
+                data={limitData}
+                labelField="label"
+                valueField="value"
+                placeholder="Select limit"
+                value={dailyLimitMental}
+                onChange={(item) => setDailyLimitMental(item.value)}
+              />
             </View>
           </View>
 
@@ -228,20 +241,15 @@ export default function CreateGroupScreen() {
 
             <View style={styles.halfWidth}>
               <Text style={styles.label}>Daily Physical Limit</Text>
-              <Picker
-                selectedValue={dailyLimitPhysical}
-                onValueChange={(itemValue) => setDailyLimitPhysical(itemValue)}
-                style={styles.picker}
-              >
-                <Picker.Item label="0" value={0} />
-                <Picker.Item label="1" value={1} />
-                <Picker.Item label="2" value={2} />
-                <Picker.Item label="3" value={3} />
-                <Picker.Item label="4" value={4} />
-                <Picker.Item label="5" value={5} />
-                <Picker.Item label="6" value={6} />
-                <Picker.Item label="7" value={7} />
-              </Picker>
+              <Dropdown
+                style={styles.dropdown}
+                data={limitData}
+                labelField="label"
+                valueField="value"
+                placeholder="Select limit"
+                value={dailyLimitPhysical}
+                onChange={(item) => setDailyLimitPhysical(item.value)}
+              />
             </View>
           </View>
 
@@ -267,7 +275,7 @@ export default function CreateGroupScreen() {
           {/* Button to cancel and go back */}
           <TouchableOpacity
             style={styles.cancelButton}
-            onPress={() => router.replace('/screens/welcome')}
+            onPress={() => router.replace('/screens/welcome?initialIndex=5')}
             disabled={loading}
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -317,12 +325,6 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
   },
-  picker: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
   button: {
     backgroundColor: '#4CAF50',
     padding: 15,
@@ -363,5 +365,13 @@ const styles = StyleSheet.create({
   halfWidth: {
     flex: 1,
     marginHorizontal: 5,
+  },
+  dropdown: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 15,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
 });

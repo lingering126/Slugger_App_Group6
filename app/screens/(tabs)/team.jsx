@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Image, ScrollView, Alert, ActivityIndicator } from "react-native";
-import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from "@expo/vector-icons";
 import teamService from "../../services/teamService";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
+import { Dropdown } from 'react-native-element-dropdown';
 
 export default function TeamsScreen() {
   const [teams, setTeams] = useState([]);
@@ -32,6 +32,20 @@ export default function TeamsScreen() {
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
   const navigation = useNavigation();
+
+  const targetData = [
+    { label: 'Select a category', value: '' },
+    { label: 'Target 1', value: 'Target 1' },
+    { label: 'Target 2', value: 'Target 2' },
+    { label: 'Target 3', value: 'Target 3' },
+    { label: 'Target 4', value: 'Target 4' },
+    { label: 'Target 5', value: 'Target 5' },
+    { label: 'Target 6', value: 'Target 6' },
+    { label: 'Target 7', value: 'Target 7' },
+    { label: 'Target 8', value: 'Target 8' },
+    { label: 'Target 9', value: 'Target 9' },
+    { label: 'Target 10', value: 'Target 10' },
+  ];
 
   useEffect(() => {
     loadUserData();
@@ -92,11 +106,11 @@ export default function TeamsScreen() {
         return;
       }
 
-      // 过滤掉没有成员的团队
+      // Filter out teams with no members
       const activeTeams = data.filter(team => team.members && team.members.length > 0);
       setTeams(activeTeams);
 
-      // 查找用户所在的团队
+      // Find the team that the user belongs to
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
         const parsedUser = JSON.parse(userData);
@@ -184,7 +198,7 @@ export default function TeamsScreen() {
     }
   };
 
-  // 通过小组ID加入小组
+  // Join a team by team ID
   const handleJoinTeamById = async () => {
     if (!teamIdToJoin.trim()) {
       Alert.alert('Error', 'Please enter a team ID');
@@ -220,7 +234,7 @@ export default function TeamsScreen() {
       setTeamIdToJoin('');
       await loadTeams();
       
-      // 找到刚加入的团队并设置为当前团队
+      // Find the recently joined team and set it as current team
       const joinedTeam = teams.find(team => team._id === teamIdToJoin);
       if (joinedTeam) {
         setUserTeam(joinedTeam);
@@ -261,7 +275,7 @@ export default function TeamsScreen() {
       console.log('Join response data:', data);
 
       if (response.status === 400 && data.message === 'Already a member') {
-        // 如果已经是成员，直接更新状态
+        // If already a member, just update the state
         const team = teams.find(t => t._id === teamId);
         if (team) {
           setUserTeam(team);
@@ -274,10 +288,10 @@ export default function TeamsScreen() {
         throw new Error(data.message || 'Failed to join team');
       }
 
-      // 更新用户团队状态
+      // Update user team status
       const team = teams.find(t => t._id === teamId);
       if (team) {
-        // 初始化编辑状态
+        // Initialize edit state
         setIsEditingTeam(false);
         setEditedTeam({
           name: team.name || '',
@@ -287,7 +301,7 @@ export default function TeamsScreen() {
       }
 
       Alert.alert('Success', 'Successfully joined the team');
-      await loadTeams(); // 重新加载团队列表
+      await loadTeams(); // Reload team list
     } catch (error) {
       console.error('Error joining team:', error);
       Alert.alert('Error', error.message || 'Failed to join team');
@@ -296,7 +310,7 @@ export default function TeamsScreen() {
     }
   };
 
-  // 增强版退出团队功能，确保退出后自动刷新状态
+  // Enhanced leave team functionality to ensure state refresh after leaving
   const handleLeaveTeam = () => {
     if (!userTeam) {
       console.log('No team to leave');
@@ -305,30 +319,30 @@ export default function TeamsScreen() {
     
     console.log('Preparing to leave team:', userTeam._id);
     
-    // 保存团队ID以便后续使用
+    // Save team ID for later use
     const teamIdToLeave = userTeam._id;
     
-    // 立即清除用户团队状态，返回团队列表
+    // Immediately clear user team state and return to team list
     setUserTeam(null);
     
-    // 立即重新加载团队列表
+    // Immediately reload team list
     loadTeams();
     
-    // 设置定时器，延迟再次刷新团队列表，确保状态更新
+    // Set a timer to delay refresh of team list to ensure state update
     setTimeout(() => {
       console.log('Refreshing team list after delay');
       loadTeams();
     }, 1000);
     
-    // 再次延迟刷新，确保后端数据已更新
+    // Delay refresh again to ensure backend data is updated
     setTimeout(() => {
       console.log('Final refresh of team list');
       loadTeams();
     }, 2000);
     
-    // 在后台尝试调用API退出团队
+    // Attempt to call API to leave team in the background
     try {
-      // 获取token
+      // Get token
       AsyncStorage.getItem('token').then(token => {
         if (!token) return;
         
@@ -342,7 +356,7 @@ export default function TeamsScreen() {
           console.log('Leave team API response status:', xhr.status);
           if (xhr.status >= 200 && xhr.status < 300) {
             console.log('Successfully left team, refreshing team list');
-            // API调用成功后再次刷新团队列表
+            // Refresh team list after successful API call
             loadTeams();
           } else {
             console.error('Error leaving team:', xhr.responseText);
@@ -362,7 +376,7 @@ export default function TeamsScreen() {
     }
   };
   
-  // 单独的函数处理团队列表中的“返回”按钮
+  // Separate function to handle "Back" button in team list
   const handleBackToTeamList = () => {
     console.log('Returning to team list without leaving');
     setUserTeam(null);
@@ -513,9 +527,9 @@ export default function TeamsScreen() {
     setTeamProgress(Math.round(totalProgress / team.goals.length));
   };
 
-  // 进入团队而不是加入团队（已经是成员的情况）
+  // Enter team instead of joining (already a member)
   const handleEnterTeam = (team) => {
-    // 初始化编辑状态
+    // Initialize edit state
     setIsEditingTeam(false);
     setEditedTeam({
       name: team.name || '',
@@ -525,17 +539,17 @@ export default function TeamsScreen() {
   };
   
   const renderTeamCard = ({ item }) => {
-    // 检查用户是否是团队成员，简化逻辑以适应不同的数据结构
+    // Check if user is a team member, simplified logic to accommodate different data structures
     const isTeamMember = item.members && Array.isArray(item.members) && item.members.some(member => {
-      // 如果成员是对象并且有user属性
+      // If member is an object and has user property
       if (typeof member === 'object' && member.user) {
         return member.user._id === userId || member.user.id === userId;
       }
-      // 如果成员是字符串ID
+      // If member is a string ID
       if (typeof member === 'string') {
         return member === userId;
       }
-      // 如果成员是对象但没有user属性（可能直接是ID）
+      // If member is an object but has no user property (possibly direct ID)
       if (typeof member === 'object' && member._id) {
         return member._id === userId;
       }
@@ -615,7 +629,7 @@ export default function TeamsScreen() {
     </View>
   );
 
-  // 添加编辑小组信息的状态
+  // Add state for editing team information
   const [editingTeamInfo, setEditingTeamInfo] = useState(false);
   const [editingTargets, setEditingTargets] = useState(false);
   const [isEditingTeam, setIsEditingTeam] = useState(false);
@@ -631,7 +645,7 @@ export default function TeamsScreen() {
     targetPhysicalValue: 0
   });
 
-  // 处理编辑小组信息
+  // Handle editing team information
   const handleEditTeamInfo = () => {
     setEditedTeamInfo({
       name: userTeam.name,
@@ -643,7 +657,7 @@ export default function TeamsScreen() {
     setEditingTeamInfo(true);
   };
 
-  // 处理编辑小组目标
+  // Handle editing team targets
   const handleEditTargets = () => {
     setEditedTeamInfo({
       ...editedTeamInfo,
@@ -654,7 +668,7 @@ export default function TeamsScreen() {
     setEditingTargets(true);
   };
 
-  // 处理更新团队信息
+  // Handle updating team information
   const handleUpdateTeam = async () => {
     try {
       setLoading(true);
@@ -684,7 +698,7 @@ export default function TeamsScreen() {
         throw new Error(data.message || 'Failed to update team');
       }
 
-      // 更新本地团队信息
+      // Update local team information
       setUserTeam({
         ...userTeam,
         name: editedTeam.name,
@@ -701,7 +715,7 @@ export default function TeamsScreen() {
     }
   };
 
-  // 保存小组信息
+  // Save team information
   const handleSaveTeamInfo = async () => {
     try {
       setLoading(true);
@@ -740,7 +754,7 @@ export default function TeamsScreen() {
     }
   };
 
-  // 保存小组目标
+  // Save team targets
   const handleSaveTargets = async () => {
     try {
       setLoading(true);
@@ -785,7 +799,7 @@ export default function TeamsScreen() {
     }
   };
 
-  // 使用上面已经定义的handleBackToTeamList函数
+  // Use the previously defined handleBackToTeamList function
 
   const renderTeamDashboard = () => (
     <ScrollView style={styles.teamDashboard}>
@@ -862,7 +876,7 @@ export default function TeamsScreen() {
               style={styles.copyButton}
               onPress={async () => {
                 try {
-                  // 使用新安装的expo-clipboard包
+                  // Use the newly installed expo-clipboard package
                   if (userTeam.groupId) {
                     await Clipboard.setStringAsync(userTeam.groupId.toString());
                     Alert.alert('Copied', 'Team ID copied to clipboard');
@@ -897,10 +911,10 @@ export default function TeamsScreen() {
             <Ionicons name="person-circle" size={40} color="#4A90E2" />
             <View style={styles.memberInfo}>
               <Text style={styles.memberName}>
-                {member.name || // 直接访问name属性
-                 (member.email ? member.email.split('@')[0] : // 如果有email但没有name
-                  (member.user?.name || // 兼容旧数据结构
-                   (member.user?.email ? member.user.email.split('@')[0] : // 兼容旧数据结构
+                {member.name || // Directly access name property
+                 (member.email ? member.email.split('@')[0] : // If email exists but no name
+                  (member.user?.name || // Compatible with old data structure
+                   (member.user?.email ? member.user.email.split('@')[0] : // Compatible with old data structure
                     'Anonymous')))}
               </Text>
               <Text style={styles.memberRole}>{member.role || 'Member'}</Text>
@@ -909,7 +923,7 @@ export default function TeamsScreen() {
         ))}
       </View>
 
-      {/* 小组目标部分 */}
+      {/* Team targets section */}
       <View style={styles.targetsContainer}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Team Targets</Text>
@@ -931,23 +945,20 @@ export default function TeamsScreen() {
             <Text style={styles.editSectionTitle}>Edit Team Targets</Text>
             <View style={styles.editTargetField}>
               <Text style={styles.editTargetLabel}>Target Name:</Text>
-              <Picker
-                selectedValue={editedTeamInfo.targetName}
-                onValueChange={(itemValue) => setEditedTeamInfo({...editedTeamInfo, targetName: itemValue})}
-                style={styles.targetPicker}
-              >
-                <Picker.Item label="Select a category" value="" />
-                <Picker.Item label="Target 1" value="Target 1" />
-                <Picker.Item label="Target 2" value="Target 2" />
-                <Picker.Item label="Target 3" value="Target 3" />
-                <Picker.Item label="Target 4" value="Target 4" />
-                <Picker.Item label="Target 5" value="Target 5" />
-                <Picker.Item label="Target 6" value="Target 6" />
-                <Picker.Item label="Target 7" value="Target 7" />
-                <Picker.Item label="Target 8" value="Target 8" />
-                <Picker.Item label="Target 9" value="Target 9" />
-                <Picker.Item label="Target 10" value="Target 10" />
-              </Picker>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.placeholderStyle}
+                selectedTextStyle={styles.selectedTextStyle}
+                data={targetData}
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Select a category"
+                value={editedTeamInfo.targetName}
+                onChange={item => {
+                  setEditedTeamInfo({...editedTeamInfo, targetName: item.value});
+                }}
+              />
             </View>
             <View style={styles.editTargetField}>
               <Text style={styles.editTargetLabel}>Mental Value:</Text>
@@ -1236,23 +1247,20 @@ export default function TeamsScreen() {
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Target Name</Text>
-            <Picker
-              selectedValue={newTeam.targetName}
-              onValueChange={(itemValue) => setNewTeam({ ...newTeam, targetName: itemValue })}
-              style={styles.picker}
-            >
-              <Picker.Item label="Select a category" value="" />
-              <Picker.Item label="Target 1" value="Target 1" />
-              <Picker.Item label="Target 2" value="Target 2" />
-              <Picker.Item label="Target 3" value="Target 3" />
-              <Picker.Item label="Target 4" value="Target 4" />
-              <Picker.Item label="Target 5" value="Target 5" />
-              <Picker.Item label="Target 6" value="Target 6" />
-              <Picker.Item label="Target 7" value="Target 7" />
-              <Picker.Item label="Target 8" value="Target 8" />
-              <Picker.Item label="Target 9" value="Target 9" />
-              <Picker.Item label="Target 10" value="Target 10" />
-            </Picker>
+            <Dropdown
+              style={styles.dropdown}
+              placeholderStyle={styles.placeholderStyle}
+              selectedTextStyle={styles.selectedTextStyle}
+              data={targetData}
+              maxHeight={300}
+              labelField="label"
+              valueField="value"
+              placeholder="Select a category"
+              value={newTeam.targetName}
+              onChange={item => {
+                setNewTeam({...newTeam, targetName: item.value});
+              }}
+            />
           </View>
 
           <View style={[styles.formGroup, styles.row]}>
@@ -1272,20 +1280,29 @@ export default function TeamsScreen() {
 
             <View style={styles.halfWidth}>
               <Text style={styles.label}>Daily Mental Limit</Text>
-              <Picker
-                selectedValue={newTeam.dailyLimitMental}
-                onValueChange={(itemValue) => setNewTeam({ ...newTeam, dailyLimitMental: itemValue })}
-                style={styles.picker}
-              >
-                <Picker.Item label="0" value={0} />
-                <Picker.Item label="1" value={1} />
-                <Picker.Item label="2" value={2} />
-                <Picker.Item label="3" value={3} />
-                <Picker.Item label="4" value={4} />
-                <Picker.Item label="5" value={5} />
-                <Picker.Item label="6" value={6} />
-                <Picker.Item label="7" value={7} />
-              </Picker>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.placeholderStyle}
+                selectedTextStyle={styles.selectedTextStyle}
+                data={[
+                  { label: '0', value: 0 },
+                  { label: '1', value: 1 },
+                  { label: '2', value: 2 },
+                  { label: '3', value: 3 },
+                  { label: '4', value: 4 },
+                  { label: '5', value: 5 },
+                  { label: '6', value: 6 },
+                  { label: '7', value: 7 },
+                ]}
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Select limit"
+                value={newTeam.dailyLimitMental}
+                onChange={item => {
+                  setNewTeam({...newTeam, dailyLimitMental: item.value});
+                }}
+              />
             </View>
           </View>
 
@@ -1306,20 +1323,29 @@ export default function TeamsScreen() {
 
             <View style={styles.halfWidth}>
               <Text style={styles.label}>Daily Physical Limit</Text>
-              <Picker
-                selectedValue={newTeam.dailyLimitPhysical}
-                onValueChange={(itemValue) => setNewTeam({ ...newTeam, dailyLimitPhysical: itemValue })}
-                style={styles.picker}
-              >
-                <Picker.Item label="0" value={0} />
-                <Picker.Item label="1" value={1} />
-                <Picker.Item label="2" value={2} />
-                <Picker.Item label="3" value={3} />
-                <Picker.Item label="4" value={4} />
-                <Picker.Item label="5" value={5} />
-                <Picker.Item label="6" value={6} />
-                <Picker.Item label="7" value={7} />
-              </Picker>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.placeholderStyle}
+                selectedTextStyle={styles.selectedTextStyle}
+                data={[
+                  { label: '0', value: 0 },
+                  { label: '1', value: 1 },
+                  { label: '2', value: 2 },
+                  { label: '3', value: 3 },
+                  { label: '4', value: 4 },
+                  { label: '5', value: 5 },
+                  { label: '6', value: 6 },
+                  { label: '7', value: 7 },
+                ]}
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Select limit"
+                value={newTeam.dailyLimitPhysical}
+                onChange={item => {
+                  setNewTeam({...newTeam, dailyLimitPhysical: item.value});
+                }}
+              />
             </View>
           </View>
 
@@ -1360,7 +1386,7 @@ export default function TeamsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 通过ID加入小组 */}
+      {/* Join team by ID */}
       <View style={styles.joinByIdCard}>
         <Text style={styles.joinByIdTitle}>Join a Team</Text>
         <Text style={styles.joinByIdSubtitle}>Enter a team ID to join an existing team</Text>
@@ -1435,7 +1461,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F5F7FA",
     padding: 16,
   },
-  // 通过ID加入小组的样式
+  // Join team by ID styles
   joinByIdCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -1485,7 +1511,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   
-  // 团队信息卡片样式
+  // Team info card styles
   dashboardCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -1560,7 +1586,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '500',
   },
-  // 团队卡片样式
+  // Team card styles
   teamCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -2010,4 +2036,90 @@ const styles = StyleSheet.create({
   halfWidth: {
     width: "48%",
   },
+  dropdown: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#F5F7FA",
+  },
+  placeholderStyle: {
+    fontSize: 16,
+    color: "#7F8C8D",
+  },
+  selectedTextStyle: {
+    fontSize: 16,
+    color: "#2C3E50",
+  },
+  editTargetsContainer: {
+    backgroundColor: '#F8F9FA',
+    padding: 15,
+    borderRadius: 10,
+  },
+  editSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 15,
+  },
+  editTargetField: {
+    marginBottom: 12,
+  },
+  editTargetLabel: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginBottom: 6,
+  },
+  targetInput: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#F5F7FA",
+  },
+  editActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  editButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#E0E0E0',
+    marginRight: 8,
+  },
+  saveButton: {
+    backgroundColor: '#4A90E2',
+    marginLeft: 8,
+  },
+  editButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  editContainer: {
+    marginTop: 10,
+  },
+  editInput: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 16,
+    backgroundColor: "#F5F7FA",
+  },
+  multilineInput: {
+    height: 100,
+    textAlignVertical: "top",
+  }
 });
+

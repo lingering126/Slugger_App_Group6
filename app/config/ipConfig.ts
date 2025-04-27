@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import API_CONFIG from './api';
 
 // Automatically get development server IP address
 export const getServerIP = (): string | null => {
@@ -28,32 +29,18 @@ export const getServerIP = (): string | null => {
 };
 
 // Build complete server URL
-export const getServerUrl = (port: number = 5001, path: string = '/api'): string | null => {
-  const ip = getServerIP();
-  if (ip) {
-    return `http://${ip}:${port}${path}`;
-  }
-  
-  // If unable to get IP address, return null
-  return null;
+export const getServerUrl = (path: string = '/api'): string => {
+  return `${API_CONFIG.BASE_URL}${path}`;
 };
 
 // Build health check URL
-export const getHealthUrl = (port: number = 5001): string | null => {
-  const ip = getServerIP();
-  if (ip) {
-    return `http://${ip}:${port}/health`;
-  }
-  return null;
+export const getHealthUrl = (): string => {
+  return `${API_CONFIG.BASE_URL}/health`;
 };
 
 // Build ping URL
-export const getPingUrl = (port: number = 5001): string | null => {
-  const ip = getServerIP();
-  if (ip) {
-    return `http://${ip}:${port}/ping`;
-  }
-  return null;
+export const getPingUrl = (): string => {
+  return `${API_CONFIG.BASE_URL}/ping`;
 };
 
 export default {

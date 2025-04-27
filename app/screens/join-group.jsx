@@ -129,7 +129,7 @@ export default function JoinGroupScreen() {
           {/* Button to cancel and go back */}
           <TouchableOpacity
             style={styles.cancelButton}
-            onPress={() => router.replace('/screens/welcome')}
+            onPress={() => router.replace('/screens/welcome?initialIndex=5')}
             disabled={loading}
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>

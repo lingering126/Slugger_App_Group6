@@ -1,5 +1,6 @@
 import { Platform, Alert } from 'react-native';
 import IPConfig from './config/ipConfig';
+import API_CONFIG from './config/api';
 // Try to import NetInfo, but don't fail if it's not available
 let NetInfo;
 try {
@@ -57,104 +58,12 @@ export const getApiUrl = () => {
   
   // In web browser environment, prioritize localhost
   if (isWebEnvironment) {
-    console.log('Detected web environment, prioritizing localhost');
-    return ['http://localhost:5001/api'];
-  }
-
-  // Define the backend server IP here - update this to match your actual server IP
-  // This can be your computer's IP address on the same network as your phone
-  // Using expo-constants to get the server IP
-  const serverUrl = IPConfig.getServerUrl();
-  if (serverUrl) {
-    console.log('Using Expo Constants server URL:', serverUrl);
-    return [serverUrl];
-  }
-
-  // Get the server IP from environment or use auto-discovery
-  const serverIP = process.env.REACT_NATIVE_SERVER_IP || global.serverIP;
-  console.log('Server IP configuration:', serverIP || 'Using auto-discovery');
-  
-  // Only include the most likely IPs to avoid unnecessary connection attempts
-  // Initialize an empty array and only add valid IPs
-  const possibleIPs = [];
-  
-  // Add serverIP only if it exists
-  if (serverIP) {
-    possibleIPs.push(serverIP);
+    console.log('Detected web environment, using API config URL');
+    return [API_CONFIG.API_URL];
   }
   
-  // Add common fallbacks, but with less priority
-  const additionalIPs = [
-    // Local network addresses (including your specific subnet)
-    '192.168.31.1',    // Common router IP in your subnet
-    '192.168.31.252',  // Your laptop IP explicitly
-    
-    // Emulator addresses
-    '10.0.2.2',        // Android emulator
-    'localhost',       // iOS simulator
-    '127.0.0.1',       // Localhost
-  ];
-  
-  // Add IP ranges to scan if we're on a typical home network
-  // This helps find the server even if the IP changed
-  try {
-    // Check the device's own IP to determine network subnet
-    const netInfo = global.lastNetworkInfo;
-    if (netInfo && netInfo.details && netInfo.details.ipAddress) {
-      const deviceIP = netInfo.details.ipAddress;
-      console.log('Device IP:', deviceIP);
-      
-      // Extract subnet from device IP (e.g., from 192.168.1.5 get 192.168.1)
-      const ipParts = deviceIP.split('.');
-      if (ipParts.length === 4) {
-        const subnet = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}`;
-        console.log('Detected subnet:', subnet);
-        
-        // Add common server ports on this subnet
-        const commonLastOctets = ['1', '2', '100', '101', '102', '200', '250', '251', '252', '253', '254'];
-        commonLastOctets.forEach(lastOctet => {
-          const potentialIP = `${subnet}.${lastOctet}`;
-          // Don't add duplicates - with null check
-          if (potentialIP && possibleIPs && additionalIPs && 
-              !possibleIPs.includes(potentialIP) && 
-              !additionalIPs.includes(potentialIP)) {
-            additionalIPs.push(potentialIP);
-          }
-        });
-      }
-    }
-  } catch (error) {
-    console.warn('Error detecting network subnet:', error);
-  }
-  
-  // Add additional IPs if they haven't been added already
-  additionalIPs.forEach(ip => {
-    // Only add valid IPs and avoid duplicates - with null check
-    if (ip && possibleIPs && !possibleIPs.includes(ip)) {
-      possibleIPs.push(ip);
-    }
-  });
-  
-  // Create URLs for all possible IPs, handling those that already have port or protocol
-  const allUrls = possibleIPs.map(ip => {
-    // Skip undefined or null values
-    if (!ip) {
-      return null;
-    }
-    
-    if (ip.includes('://')) {
-      return `${ip}/api`;
-    } else if (ip.includes(':')) {
-      return `http://${ip}/api`;
-    } else {
-      return `http://${ip}:5001/api`;
-    }
-  }).filter(Boolean); // Filter out any null/undefined values
-  
-  console.log('Generated API URLs to try:', allUrls);
-  
-  // Return all URLs to try, prioritized by past success
-  return getPrioritizedUrls(allUrls);
+  // Get the server URL from config
+  return [API_CONFIG.API_URL];
 };
 
 // Simple ping function to test connectivity with minimal overhead
@@ -228,7 +137,7 @@ export const testDirectConnection = async () => {
   
   // Create an array of URLs to test, prioritizing the user-specified IP
   const urls = [
-    `http://${serverIP}:5001/health`,
+    `http://${serverIP}:${API_CONFIG.PORT}/health`,
   ];
   
   const results = {};
@@ -277,11 +186,11 @@ export const testDirectConnection = async () => {
   if (!foundWorkingUrl) {
     // Try your specific network's addresses
     const additionalUrls = [
-      `http://192.168.31.1:5001/health`,  // Your router
-      `http://192.168.31.252:5001/health`, // Your laptop IP explicitly
-      `http://10.0.2.2:5001/health`,      // Android emulator
-      `http://localhost:5001/health`,     // iOS simulator
-      `http://127.0.0.1:5001/health`,     // Localhost
+      `http://192.168.31.1:${API_CONFIG.PORT}/health`,  // Your router
+      `http://192.168.31.252:${API_CONFIG.PORT}/health`, // Your laptop IP explicitly
+      `http://10.0.2.2:${API_CONFIG.PORT}/health`,      // Android emulator
+      `http://localhost:${API_CONFIG.PORT}/health`,     // iOS simulator
+      `http://127.0.0.1:${API_CONFIG.PORT}/health`,     // Localhost
     ];
     
     for (const url of additionalUrls) {
@@ -380,7 +289,7 @@ export const checkServerConnection = async (apiUrls) => {
     if (isWebEnvironment) {
       console.log('Web environment detected, checking localhost first');
       
-      const localhostUrl = 'http://localhost:5001/api';
+      const localhostUrl = `http://localhost:${API_CONFIG.PORT}/api`;
       const pingResult = await pingServer(localhostUrl);
       
       if (pingResult) {
@@ -537,7 +446,7 @@ export const scanNetworkForServer = async () => {
       console.log('Web environment detected, checking localhost only');
       
       try {
-        const pingUrl = 'http://localhost:5001/ping';
+        const pingUrl = `http://localhost:${API_CONFIG.PORT}/ping`;
         console.log(`Testing connection to: ${pingUrl}`);
         
         const response = await fetch(pingUrl, {
@@ -549,7 +458,7 @@ export const scanNetworkForServer = async () => {
         
         if (response.ok && await response.text() === 'PONG') {
           console.log('Server found at localhost');
-          const apiUrl = 'http://localhost:5001/api';
+          const apiUrl = `http://localhost:${API_CONFIG.PORT}/api`;
           
           // Store as global server IP
           global.serverIP = 'localhost';
@@ -609,7 +518,7 @@ export const scanNetworkForServer = async () => {
         console.log('IPs to scan:', ipsToScan);
         
         // Create URLs for all IPs to scan
-        const urlsToScan = ipsToScan.map(ip => `http://${ip}:5001/ping`);
+        const urlsToScan = ipsToScan.map(ip => `http://${ip}:${API_CONFIG.PORT}/ping`);
         
         // Try pinging each IP in parallel with a short timeout
         const pingPromises = urlsToScan.map(url => {
@@ -655,7 +564,7 @@ export const scanNetworkForServer = async () => {
         if (successfulPings.length > 0) {
           // Found at least one server!
           const bestServer = successfulPings[0];
-          const apiUrl = `http://${bestServer.ip}:5001/api`;
+          const apiUrl = `http://${bestServer.ip}:${API_CONFIG.PORT}/api`;
           
           // Store as global server IP
           global.serverIP = bestServer.ip;
@@ -708,7 +617,7 @@ const Utils = {
         console.log('Web environment detected, trying localhost first');
         
         try {
-          const localhostUrl = 'http://localhost:5001/api';
+          const localhostUrl = `http://localhost:${API_CONFIG.PORT}/api`;
           const pingResult = await pingServer(localhostUrl);
           
           if (pingResult) {
