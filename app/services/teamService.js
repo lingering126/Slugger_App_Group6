@@ -64,11 +64,8 @@ const teamService = {
   async getTeamById(teamId) {
     try {
 <<<<<<< Updated upstream
-<<<<<<< Updated upstream
       const response = await api.get(`/teams/${teamId}`);
 =======
-=======
->>>>>>> Stashed changes
       console.log('Getting team by ID:', teamId);
       console.log('Team ID type:', typeof teamId);
       console.log('API URL being used:', getApiBaseUrl());
@@ -76,9 +73,6 @@ const teamService = {
       
       const response = await api.get(getEndpoint(`/teams/${teamId}`));
       console.log('Team details response:', response.data);
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
 >>>>>>> Stashed changes
       return response.data;
     } catch (error) {

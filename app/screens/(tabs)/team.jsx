@@ -34,7 +34,6 @@ export default function TeamsScreen() {
     try {
       setLoading(true);
 <<<<<<< Updated upstream
-<<<<<<< Updated upstream
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         console.log('No token found');
@@ -93,11 +92,6 @@ export default function TeamsScreen() {
       console.log('Fetched teams data:', teamsData);
       setTeams(teamsData);
 >>>>>>> Stashed changes
-=======
-      const teamsData = await teamService.getAllTeams();
-      console.log('Fetched teams data:', teamsData);
-      setTeams(teamsData);
->>>>>>> Stashed changes
     } catch (error) {
       console.error('Error fetching teams:', error);
       Alert.alert('Error', 'Failed to load teams');
@@ -106,7 +100,6 @@ export default function TeamsScreen() {
     }
   };
 
-<<<<<<< Updated upstream
 <<<<<<< Updated upstream
   const handleCreateTeam = async () => {
     if (!newTeam.name.trim()) {
@@ -290,32 +283,11 @@ export default function TeamsScreen() {
       Alert.alert('Success', 'Successfully joined the team');
       await loadTeams(); // Reload team list
 =======
-=======
-  // 处理创建新团队
-  const handleCreateTeam = () => {
-    router.push('/screens/create-group');
-  };
-
-  // 处理查看团队详情
-  const handleViewTeamDetails = (teamId) => {
-    router.push({
-      pathname: "/screens/team-details",
-      params: { teamId }
-    });
-  };
-
-  // 处理加入团队请求
-  const handleJoinTeam = async (teamId) => {
-    try {
->>>>>>> Stashed changes
       setJoiningTeamId(teamId);
       await teamService.joinTeam(teamId);
       Alert.alert('Success', 'You have successfully joined the team!');
       // 重新获取团队列表，更新UI
       await fetchTeams();
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
 >>>>>>> Stashed changes
     } catch (error) {
       console.error('Error joining team:', error);
@@ -329,7 +301,6 @@ export default function TeamsScreen() {
   const isMemberOfTeam = (team) => {
     if (!currentUserId || !team.members) return false;
     
-<<<<<<< Updated upstream
 <<<<<<< Updated upstream
     console.log('Preparing to leave team:', userTeam._id);
     
@@ -417,11 +388,6 @@ export default function TeamsScreen() {
       if (typeof member === 'object') {
         return member._id === currentUserId;
 >>>>>>> Stashed changes
-=======
-    return team.members.some(member => {
-      if (typeof member === 'object') {
-        return member._id === currentUserId;
->>>>>>> Stashed changes
       }
       return member === currentUserId;
     });
@@ -492,7 +458,6 @@ export default function TeamsScreen() {
     );
   };
 
-<<<<<<< Updated upstream
 <<<<<<< Updated upstream
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -1310,8 +1275,6 @@ export default function TeamsScreen() {
     </View>
   );
 
-=======
->>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
   return (
