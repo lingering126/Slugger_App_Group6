@@ -5,19 +5,19 @@ function generateSixDigitId() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Define the schema for the Team model
-const teamSchema = new mongoose.Schema({
-  teamId: {
-    type: String, // Unique team ID
+// Define the schema for the Group model
+const groupSchema = new mongoose.Schema({
+  groupId: {
+    type: String, // Unique group ID
     unique: true,
     required: true,
     length: 6
   },
   name: {
-    type: String, // Team name
+    type: String, // Group name
     required: true
   },
-  description: String, // Team description
+  description: String, // Group description
   targetName: {
     type: String, // Target category
     enum: [
@@ -34,30 +34,21 @@ const teamSchema = new mongoose.Schema({
     ],
     required: true
   },
-  targetMentalValue: {
-    type: Number, // Mental target value
-    required: true,
+  targetGoal: {
+    type: Number, // Sum of all members' personal goals
     default: 0
   },
-  targetPhysicalValue: {
-    type: Number, // Physical target value
+  weeklyLimitPhysical: {
+    type: Number, // Weekly physical limit
     required: true,
-    default: 0
+    default: 7,
+    max: 7
   },
-  targetValue: {
-    type: Number, // Total target value
+  weeklyLimitMental: {
+    type: Number, // Weekly mental limit
     required: true,
-    default: 0
-  },
-  dailyLimitPhysical: {
-    type: Number, // Daily physical limit
-    required: true,
-    default: 100
-  },
-  dailyLimitMental: {
-    type: Number, // Daily mental limit
-    required: true,
-    default: 100
+    default: 7,
+    max: 7
   },
   members: [{
     type: mongoose.Schema.Types.ObjectId, // List of user IDs
@@ -69,24 +60,48 @@ const teamSchema = new mongoose.Schema({
   }
 });
 
-// Generate a unique teamId before saving
-teamSchema.pre('validate', async function(next) {
+// Generate a unique groupId before saving
+groupSchema.pre('validate', async function(next) {
   if (this.isNew) {
     let exists = true;
     while (exists) {
       const id = generateSixDigitId();
-      exists = await mongoose.models.Team.findOne({ teamId: id });
-      if (!exists) this.teamId = id;
+      exists = await mongoose.models.Group.findOne({ groupId: id });
+      if (!exists) this.groupId = id;
     }
   }
   next();
 });
 
+<<<<<<< Updated upstream:backend/models/group.js
 // Calculate total target value before saving
-teamSchema.pre('save', function(next) {
+groupSchema.pre('save', function(next) {
   this.targetValue = this.targetMentalValue + this.targetPhysicalValue;
   next();
 });
 
+// Export the Group model
+module.exports = mongoose.model('Group', groupSchema);
+=======
+// Method to update the targetGoal value based on members' personal goals
+teamSchema.methods.updateTargetGoal = async function() {
+  const UserTarget = mongoose.model('UserTarget');
+  let sum = 0;
+  
+  // Get all user targets for team members
+  const userTargets = await UserTarget.find({
+    userId: { $in: this.members }
+  });
+  
+  // Sum up all targetValues
+  for (const userTarget of userTargets) {
+    sum += userTarget.targetValue || 0;
+  }
+  
+  this.targetGoal = sum;
+  return this.save();
+};
+
 // Export the Team model
-module.exports = mongoose.model('Team', teamSchema); 
+module.exports = mongoose.model('Team', teamSchema);
+>>>>>>> Stashed changes:backend/models/team.js

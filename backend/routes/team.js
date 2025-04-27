@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Team = require('../models/team');
+const UserTarget = require('../models/UserTarget');
 const authMiddleware = require('../middleware/auth');
 
 // Create a new team
@@ -10,10 +11,8 @@ router.post('/', authMiddleware, async (req, res) => {
       name,
       description,
       targetName,
-      targetMentalValue,
-      targetPhysicalValue,
-      dailyLimitPhysical = 100,
-      dailyLimitMental = 100
+      weeklyLimitPhysical = 7,
+      weeklyLimitMental = 7
     } = req.body;
 
     const userId = req.user.userId;
@@ -22,14 +21,16 @@ router.post('/', authMiddleware, async (req, res) => {
       name,
       description,
       targetName,
-      targetMentalValue,
-      targetPhysicalValue,
-      dailyLimitPhysical,
-      dailyLimitMental,
+      weeklyLimitPhysical,
+      weeklyLimitMental,
       members: [userId]
     });
 
     await team.save();
+    
+    // Calculate initial targetGoal based on the creator's personal goal
+    await team.updateTargetGoal();
+    
     res.status(201).json(team);
   } catch (error) {
     res.status(500).json({ message: 'Failed to create team', error: error.message });
@@ -49,6 +50,10 @@ router.post('/join', authMiddleware, async (req, res) => {
     }
     team.members.push(userId);
     await team.save();
+    
+    // Update the team's targetGoal with the new member's personal goal
+    await team.updateTargetGoal();
+    
     res.status(200).json(team);
   } catch (error) {
     res.status(500).json({ message: 'Failed to join team', error: error.message });
@@ -87,6 +92,9 @@ router.post('/join-by-id', authMiddleware, async (req, res) => {
     team.members.push(userId);
     await team.save();
     
+    // Update the team's targetGoal with the new member's personal goal
+    await team.updateTargetGoal();
+    
     console.log(`User ${userId} successfully joined team ${teamId}`);
     res.status(200).json(team);
   } catch (error) {
@@ -99,7 +107,10 @@ router.post('/join-by-id', authMiddleware, async (req, res) => {
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const teams = await Team.find({ members: userId }).populate('members', 'email name');
+    // Also populate userTargets for each member to show individual contributions
+    const teams = await Team.find({ members: userId })
+      .populate('members', 'email name');
+      
     res.status(200).json(teams);
   } catch (error) {
     res.status(500).json({ message: 'Failed to get teams', error: error.message });
@@ -114,6 +125,39 @@ router.get('/all', authMiddleware, async (req, res) => {
     res.status(200).json(teams);
   } catch (error) {
     res.status(500).json({ message: 'Failed to get teams', error: error.message });
+  }
+});
+
+// Get a specific team by ID with detailed member information
+router.get('/:teamId', authMiddleware, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.user.userId;
+    
+    const team = await Team.findById(teamId).populate('members', 'email name');
+    
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+    
+    // Check if user is a member
+    const isMember = team.members.some(member => member._id.toString() === userId.toString());
+    if (!isMember) {
+      return res.status(403).json({ message: 'Not authorized to view this team' });
+    }
+    
+    // Get all user targets for team members to show individual contributions
+    const userTargets = await UserTarget.find({
+      userId: { $in: team.members.map(member => member._id) }
+    });
+    
+    // Add user targets to the response
+    const teamWithTargets = team.toObject();
+    teamWithTargets.memberTargets = userTargets;
+    
+    res.status(200).json(teamWithTargets);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to get team details', error: error.message });
   }
 });
 
@@ -157,7 +201,7 @@ router.put('/:teamId', authMiddleware, async (req, res) => {
 router.put('/:teamId/targets', authMiddleware, async (req, res) => {
   try {
     const { teamId } = req.params;
-    const { targetName, targetMentalValue, targetPhysicalValue } = req.body;
+    const { targetName } = req.body;
     const userId = req.user.userId;
     
     console.log(`User ${userId} attempting to update targets for team ${teamId}`);
@@ -177,16 +221,79 @@ router.put('/:teamId/targets', authMiddleware, async (req, res) => {
     
     // Update team targets
     if (targetName) team.targetName = targetName;
-    if (targetMentalValue !== undefined) team.targetMentalValue = targetMentalValue;
-    if (targetPhysicalValue !== undefined) team.targetPhysicalValue = targetPhysicalValue;
     
-    await team.save();
+    // Update targetGoal in case any members' personal goals have changed
+    await team.updateTargetGoal();
+    
     console.log(`Team ${teamId} targets updated successfully`);
     
     res.status(200).json(team);
   } catch (error) {
     console.error(`Error updating team targets: ${error.message}`);
     res.status(500).json({ message: 'Failed to update team targets', error: error.message });
+  }
+});
+
+// Update weekly limits
+router.put('/:teamId/weekly-limits', authMiddleware, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { weeklyLimitPhysical, weeklyLimitMental } = req.body;
+    const userId = req.user.userId;
+    
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+    
+    // Check if user is a member
+    const isMember = team.members.some(member => member.toString() === userId.toString());
+    if (!isMember) {
+      return res.status(403).json({ message: 'Not authorized to update this team' });
+    }
+    
+    // Update weekly limits
+    if (weeklyLimitPhysical !== undefined) {
+      // Ensure the limit doesn't exceed the maximum of 7
+      team.weeklyLimitPhysical = Math.min(weeklyLimitPhysical, 7);
+    }
+    
+    if (weeklyLimitMental !== undefined) {
+      // Ensure the limit doesn't exceed the maximum of 7
+      team.weeklyLimitMental = Math.min(weeklyLimitMental, 7);
+    }
+    
+    await team.save();
+    
+    res.status(200).json(team);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to update weekly limits', error: error.message });
+  }
+});
+
+// Force update of team targetGoal
+router.post('/:teamId/update-target-goal', authMiddleware, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.user.userId;
+    
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+    
+    // Check if user is a member
+    const isMember = team.members.some(member => member.toString() === userId.toString());
+    if (!isMember) {
+      return res.status(403).json({ message: 'Not authorized to update this team' });
+    }
+    
+    // Update the targetGoal
+    await team.updateTargetGoal();
+    
+    res.status(200).json({ message: 'Team target goal updated successfully', team });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to update team target goal', error: error.message });
   }
 });
 
@@ -221,6 +328,9 @@ router.post('/leave', authMiddleware, async (req, res) => {
     team.members.splice(memberIndex, 1);
     await team.save();
     
+    // Update the team's targetGoal after member leaves
+    await team.updateTargetGoal();
+    
     console.log(`User ${userId} successfully left team ${teamId}`);
     res.status(200).json({ message: 'Successfully left team' });
   } catch (error) {
@@ -254,4 +364,4 @@ router.delete('/:teamId', authMiddleware, async (req, res) => {
 });
 
 // Export the router
-module.exports = router; 
+module.exports = router;
