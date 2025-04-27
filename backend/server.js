@@ -12,13 +12,8 @@ const postsRouter = require('./homepage/routes/posts');
 const { router: authRoutes, authMiddleware } = require('./routes/auth');
 const activityRoutes = require('./routes/activities');
 const statsRoutes = require('./homepage/routes/index');
-<<<<<<< Updated upstream
 const groupRoutes = require('./routes/group');
 const teamRoutes = require('./src/routes/team');
-=======
-const teamRoutes = require('./routes/team');
-const userTargetRoutes = require('./routes/userTarget');
->>>>>>> Stashed changes
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
@@ -199,9 +194,6 @@ app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
 app.use('/api/groups', groupRoutes);
 
-// Register userTarget routes - Fix path
-app.use('/api/user-targets', userTargetRoutes);
-
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { email, password, name } = req.body;
@@ -294,10 +286,10 @@ app.post('/api/auth/signup', async (req, res) => {
     console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
     console.log('===============================');
     
-    // Ensure email sending configuration exists
+    // 确保有邮件发送配置
     if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
       console.warn('Email configuration missing. Setting up a default transporter for development.');
-      // If email service is not configured, create a test transporter
+      // 如果没有配置邮件服务，创建一个测试用的transporter
       const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
         host: 'smtp.ethereal.email',
@@ -353,7 +345,7 @@ app.post('/api/auth/signup', async (req, res) => {
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
       
-      // If using an Ethereal test account, provide a preview link
+      // 如果使用了Ethereal测试账户，提供预览链接
       if (info.messageId && info.messageId.includes('ethereal')) {
         console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
         console.log('IMPORTANT: This is a test email. Check the preview URL above to view it.');

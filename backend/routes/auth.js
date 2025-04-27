@@ -3,7 +3,6 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../src/models/user');
-const UserTarget = require('../models/userTarget');
 const { AppError } = require('../middleware/errorHandler');
 
 // Temporary user storage (replace with database in production)
@@ -90,14 +89,6 @@ router.post('/register', async (req, res, next) => {
 
     await newUser.save();
 
-    // Create UserTarget for the new user
-    const newUserTarget = new UserTarget({
-      userId: newUser._id,
-      weeklyTarget: 1 // Default weekly target
-    });
-    
-    await newUserTarget.save();
-
     // Create token
     const token = jwt.sign(
       { userId: newUser._id, username: newUser.name },
@@ -148,4 +139,4 @@ const authMiddleware = (req, res, next) => {
 
 // Export router and middleware separately
 module.exports.router = router;
-module.exports.authMiddleware = authMiddleware;
+module.exports.authMiddleware = authMiddleware; 

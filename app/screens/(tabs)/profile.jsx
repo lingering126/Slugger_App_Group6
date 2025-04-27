@@ -1,10 +1,7 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, Alert } from 'react-native'
-import React, { useState, useEffect } from 'react'
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList } from 'react-native'
+import React, { useState } from 'react'
 import { useNavigation } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import axios from 'axios'
-import { getServerIP, getServerUrl } from '../../config/ipConfig'
-import API_CONFIG from '../../config/api' // 添加API_CONFIG导入
 
 // Mock data (would normally come from a database)
 const mockUserData = {
@@ -15,48 +12,48 @@ const mockUserData = {
 
 // Physical activities library
 const physicalActivities = [
-  { id: 1, name: 'Cricket' },
-  { id: 2, name: 'Soccer' },
-  { id: 3, name: 'Run' },
-  { id: 4, name: 'Walk' },
-  { id: 5, name: 'HIIT' },
-  { id: 6, name: 'Gym Workout' },
-  { id: 7, name: 'Cycle' },
-  { id: 8, name: 'Swim' },
-  { id: 9, name: 'Home Workout' },
-  { id: 10, name: 'Physio' },
-  { id: 11, name: 'Yoga' },
-  { id: 12, name: 'Squash' },
-  { id: 13, name: 'Rugby' },
-  { id: 14, name: 'Touch Rugby' },
-  { id: 15, name: 'Steps goal' },
-  { id: 16, name: 'DIY' },
-  { id: 17, name: 'Gardening' },
-  { id: 18, name: 'Physical other' }
+  { id: 1, name: 'Cricket', icon: '🏏' },
+  { id: 2, name: 'Soccer', icon: '⚽' },
+  { id: 3, name: 'Run', icon: '🏃' },
+  { id: 4, name: 'Walk', icon: '🚶' },
+  { id: 5, name: 'HIIT', icon: '🔥' },
+  { id: 6, name: 'Gym Workout', icon: '💪' },
+  { id: 7, name: 'Cycle', icon: '🚴' },
+  { id: 8, name: 'Swim', icon: '🏊' },
+  { id: 9, name: 'Home Workout', icon: '🏠' },
+  { id: 10, name: 'Physio', icon: '🧑‍⚕️' },
+  { id: 11, name: 'Yoga', icon: '🧘' },
+  { id: 12, name: 'Squash', icon: '🎾' },
+  { id: 13, name: 'Rugby', icon: '🏉' },
+  { id: 14, name: 'Touch Rugby', icon: '👐' },
+  { id: 15, name: 'Steps goal', icon: '👣' },
+  { id: 16, name: 'DIY', icon: '🔨' },
+  { id: 17, name: 'Gardening', icon: '🌱' },
+  { id: 18, name: 'Physical other', icon: '❓' }
 ]
 
 // Mental activities library
 const mentalActivities = [
-  { id: 1, name: 'Meditation' },
-  { id: 2, name: 'Reading' },
-  { id: 3, name: 'Writing' },
-  { id: 4, name: 'Music Practice' },
-  { id: 5, name: 'Mental Gym' },
-  { id: 6, name: 'Duolingo' },
-  { id: 7, name: 'Language Training' },
-  { id: 8, name: 'Cold shower' },
-  { id: 9, name: 'Mental other' },
-  { id: 10, name: 'Journal' },
-  { id: 11, name: 'Breathing exercise' }
+  { id: 1, name: 'Meditation', icon: '🧘' },
+  { id: 2, name: 'Reading', icon: '📚' },
+  { id: 3, name: 'Writing', icon: '✍️' },
+  { id: 4, name: 'Music Practice', icon: '🎵' },
+  { id: 5, name: 'Mental Gym', icon: '🧠' },
+  { id: 6, name: 'Duolingo', icon: '🦉' },
+  { id: 7, name: 'Language Training', icon: '🗣️' },
+  { id: 8, name: 'Cold shower', icon: '🚿' },
+  { id: 9, name: 'Mental other', icon: '❓' },
+  { id: 10, name: 'Journal', icon: '📓' },
+  { id: 11, name: 'Breathing exercise', icon: '💨' }
 ]
 
 // Bonus activities library
 const bonusActivities = [
-  { id: 1, name: 'Community Service' },
-  { id: 2, name: 'Family' },
-  { id: 3, name: 'Personal Best' },
-  { id: 4, name: 'Personal Goal' },
-  { id: 5, name: 'Bonus other' }
+  { id: 1, name: 'Community Service', icon: '🤝' },
+  { id: 2, name: 'Family', icon: '👨‍👩‍👧‍👦' },
+  { id: 3, name: 'Personal Best', icon: '🏆' },
+  { id: 4, name: 'Personal Goal', icon: '🎯' },
+  { id: 5, name: 'Bonus other', icon: '✨' }
 ]
 
 const Profile = () => {
@@ -67,95 +64,7 @@ const Profile = () => {
   const [mentalModalVisible, setMentalModalVisible] = useState(false)
   const [selectedBonusActivities, setSelectedBonusActivities] = useState([])
   const [bonusModalVisible, setBonusModalVisible] = useState(false)
-  const [targetModalVisible, setTargetModalVisible] = useState(false);
-  const [userTarget, setUserTarget] = useState(3); // Default target value
-  const [isLoading, setIsLoading] = useState(false);
-
-  // 更新用户目标值并保存到数据库
-  const updateUserTarget = async (target) => {
-    setIsLoading(true);
-    try {
-      // 获取用户ID（去除认证部分）
-      const userId = await AsyncStorage.getItem('userId');
-      
-      // 验证必要数据
-      if (!userId) {
-        Alert.alert('提示', '找不到用户ID，请重新登录');
-        setIsLoading(false);
-        return;
-      }
-      
-      // 构建API请求URL
-      const apiUrl = `${API_CONFIG.API_URL}/user-targets`;
-      console.log(`尝试保存目标值 ${target} 到 ${apiUrl}`);
-      
-      // 发送PUT请求（去除认证头）
-      const response = await axios({
-        method: 'put',
-        url: apiUrl,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        data: {
-          userId,
-          weeklyTarget: parseInt(target)
-        }
-      });
-      
-      if (response.status === 200) {
-        console.log('目标更新成功:', response.data);
-        // 更新本地状态
-        setUserTarget(target);
-        await AsyncStorage.setItem('userTarget', target.toString());
-        Alert.alert('成功', '目标设置已保存');
-      }
-    } catch (error) {
-      console.error('保存目标失败:', error);
-      
-      // 错误处理（去除认证相关错误处理）
-      if (error.response) {
-        const status = error.response.status;
-        
-        if (status === 404) {
-          // 如果目标不存在，尝试创建
-          try {
-            const userId = await AsyncStorage.getItem('userId');
-            const apiUrl = `${API_CONFIG.API_URL}/user-targets`;
-            
-            const createResponse = await axios({
-              method: 'post',
-              url: apiUrl,
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              data: {
-                userId,
-                weeklyTarget: parseInt(target)
-              }
-            });
-            
-            if (createResponse.status === 201) {
-              console.log('目标创建成功:', createResponse.data);
-              setUserTarget(target);
-              await AsyncStorage.setItem('userTarget', target.toString());
-              Alert.alert('成功', '目标设置已创建');
-            }
-          } catch (createError) {
-            console.error('创建目标失败:', createError);
-            Alert.alert('错误', '无法创建目标，请稍后再试');
-          }
-        } else {
-          Alert.alert('错误', `保存失败: ${status}`);
-        }
-      } else {
-        Alert.alert('错误', '无法连接到服务器，请检查网络连接或服务器状态');
-      }
-    } finally {
-      setIsLoading(false);
-      setTargetModalVisible(false);
-    }
-  };
-
+  
   return (
     <View style={styles.container}>
       {/* Header/Top Information Area */}
@@ -172,17 +81,9 @@ const Profile = () => {
             <Text style={styles.userJoinDate}>Member since: {mockUserData.joinDate}</Text>
           </View>
         </View>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity 
-            style={styles.targetButton}
-            onPress={() => setTargetModalVisible(true)}
-          >
-            <Text style={styles.targetButtonText}>{`Target: ${userTarget}`}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.editButton}>
-            <Text style={styles.editButtonText}>Edit Profile</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.editButton}>
+          <Text style={styles.editButtonText}>Edit Profile</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Rest of the profile content */}
@@ -222,6 +123,7 @@ const Profile = () => {
             <View style={styles.selectedActivitiesContainer}>
               {selectedPhysicalActivities.map(activity => (
                 <View key={activity.id} style={styles.activityChip}>
+                  <Text style={styles.activityChipIcon}>{activity.icon}</Text>
                   <Text style={styles.activityChipText}>{activity.name}</Text>
                   <TouchableOpacity 
                     onPress={() => {
@@ -260,6 +162,7 @@ const Profile = () => {
             <View style={styles.selectedActivitiesContainer}>
               {selectedMentalActivities.map(activity => (
                 <View key={activity.id} style={[styles.activityChip, { backgroundColor: '#0E5E6F' }]}>
+                  <Text style={styles.activityChipIcon}>{activity.icon}</Text>
                   <Text style={styles.activityChipText}>{activity.name}</Text>
                   <TouchableOpacity 
                     onPress={() => {
@@ -298,6 +201,7 @@ const Profile = () => {
             <View style={styles.selectedActivitiesContainer}>
               {selectedBonusActivities.map(activity => (
                 <View key={activity.id} style={[styles.activityChip, { backgroundColor: '#FF6B6B' }]}>
+                  <Text style={styles.activityChipIcon}>{activity.icon}</Text>
                   <Text style={styles.activityChipText}>{activity.name}</Text>
                   <TouchableOpacity 
                     onPress={() => {
@@ -382,6 +286,7 @@ const Profile = () => {
                     }
                   }}
                 >
+                  <Text style={styles.activityItemIcon}>{item.icon}</Text>
                   <Text style={styles.activityItemText}>{item.name}</Text>
                   {selectedPhysicalActivities.some(activity => activity.id === item.id) && (
                     <Text style={styles.activityItemSelected}>✓</Text>
@@ -440,6 +345,7 @@ const Profile = () => {
                     }
                   }}
                 >
+                  <Text style={styles.activityItemIcon}>{item.icon}</Text>
                   <Text style={styles.activityItemText}>{item.name}</Text>
                   {selectedMentalActivities.some(activity => activity.id === item.id) && (
                     <Text style={styles.activityItemSelected}>✓</Text>
@@ -498,9 +404,10 @@ const Profile = () => {
                     }
                   }}
                 >
+                  <Text style={styles.activityItemIcon}>{item.icon}</Text>
                   <Text style={styles.activityItemText}>{item.name}</Text>
                   {selectedBonusActivities.some(activity => activity.id === item.id) && (
-                    <Text style={styles.activityItemSelected}>✓</Text>
+                    <Text style={[styles.activityItemSelected, { color: '#4A9D63' }]}>✓</Text>
                   )}
                 </TouchableOpacity>
               )}
@@ -513,68 +420,6 @@ const Profile = () => {
             >
               <Text style={styles.modalDoneText}>Done</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal for setting user target */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={targetModalVisible}
-        onRequestClose={() => setTargetModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Set User Target</Text>
-              <TouchableOpacity 
-                onPress={() => setTargetModalVisible(false)}
-                style={styles.modalCloseButton}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.targetModalContent}>
-              <Text style={styles.targetDescription}>
-                Set your user target (1-7 activities per week)
-              </Text>
-              
-              <View style={styles.targetSelectorContainer}>
-                {[1, 2, 3, 4, 5, 6, 7].map((value) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={[
-
-                      styles.targetSelectorItem,
-                      userTarget === value && styles.targetSelectorItemSelected
-                    ]}
-                    onPress={() => setUserTarget(value)}
-                  >
-                    <Text 
-                      style={[
-
-                        styles.targetSelectorText,
-                        userTarget === value && styles.targetSelectorTextSelected
-                      ]}
-                    >
-                      {value}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.targetSaveButton}
-                onPress={() => updateUserTarget(userTarget)}
-                disabled={isLoading}
-              >
-                <Text style={styles.targetSaveButtonText}>
-                  {isLoading ? 'Updating...' : 'Save Target'}
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
@@ -647,26 +492,10 @@ const styles = StyleSheet.create({
     color: '#E8F0F2',
     opacity: 0.8,
   },
-  headerButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 15,
-  },
-  targetButton: {
-    backgroundColor: '#0E5E6F',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  targetButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
   editButton: {
+    marginTop: 15,
     backgroundColor: '#0E5E6F',
+    alignSelf: 'flex-end',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -746,6 +575,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     margin: 5,
   },
+  activityChipIcon: {
+    fontSize: 16,
+    marginRight: 5,
+  },
   activityChipText: {
     color: '#fff',
     fontSize: 14,
@@ -814,6 +647,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  activityItemIcon: {
+    fontSize: 20,
+    marginRight: 15,
+  },
   activityItemText: {
     fontSize: 16,
     flex: 1,
@@ -861,49 +698,6 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   resetButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  targetModalContent: {
-    padding: 20,
-  },
-  targetDescription: {
-    fontSize: 16,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  targetSelectorContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  targetSelectorItem: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#0E5E6F',
-  },
-  targetSelectorItemSelected: {
-    backgroundColor: '#0E5E6F',
-  },
-  targetSelectorText: {
-    fontSize: 16,
-    color: '#0E5E6F',
-  },
-  targetSelectorTextSelected: {
-    color: '#fff',
-  },
-  targetSaveButton: {
-    backgroundColor: '#0E5E6F',
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center',
-  },
-  targetSaveButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

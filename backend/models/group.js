@@ -1,37 +1,14 @@
 const mongoose = require('mongoose');
-const UserTarget = require('./userTarget');
 
 // Function to generate a random six-digit ID
 function generateSixDigitId() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-<<<<<<< Updated upstream:backend/models/group.js
 // Define the schema for the Group model
 const groupSchema = new mongoose.Schema({
   groupId: {
     type: String, // Unique group ID
-=======
-// Helper function to calculate target value from member userTargets
-async function calculateTeamTargetValue(members) {
-  let targetValue = 0;
-  
-  // Get all userTargets for team members
-  const userTargets = await UserTarget.find({ userId: { $in: members } });
-  
-  // Sum up the weeklyTarget values
-  userTargets.forEach(target => {
-    targetValue += target.weeklyTarget;
-  });
-  
-  return targetValue;
-}
-
-// Define the schema for the Team model
-const teamSchema = new mongoose.Schema({
-  teamId: {
-    type: String, // Unique team ID
->>>>>>> Stashed changes:backend/models/team.js
     unique: true,
     required: true,
     length: 6
@@ -57,20 +34,30 @@ const teamSchema = new mongoose.Schema({
     ],
     required: true
   },
+  targetMentalValue: {
+    type: Number, // Mental target value
+    required: true,
+    default: 0
+  },
+  targetPhysicalValue: {
+    type: Number, // Physical target value
+    required: true,
+    default: 0
+  },
   targetValue: {
     type: Number, // Total target value
     required: true,
     default: 0
   },
-  weeklyLimitPhysical: {
-    type: Number, // Weekly physical limit
+  dailyLimitPhysical: {
+    type: Number, // Daily physical limit
     required: true,
-    default: 700
+    default: 100
   },
-  weeklyLimitMental: {
-    type: Number, // Weekly mental limit
+  dailyLimitMental: {
+    type: Number, // Daily mental limit
     required: true,
-    default: 700
+    default: 100
   },
   members: [{
     type: mongoose.Schema.Types.ObjectId, // List of user IDs
@@ -95,7 +82,6 @@ groupSchema.pre('validate', async function(next) {
   next();
 });
 
-<<<<<<< Updated upstream:backend/models/group.js
 // Calculate total target value before saving
 groupSchema.pre('save', function(next) {
   this.targetValue = this.targetMentalValue + this.targetPhysicalValue;
@@ -104,20 +90,3 @@ groupSchema.pre('save', function(next) {
 
 // Export the Group model
 module.exports = mongoose.model('Group', groupSchema);
-=======
-// Update targetValue before saving by summing all member userTargets
-teamSchema.pre('save', async function(next) {
-  try {
-    // Only recalculate if members have changed or document is new
-    if (this.isNew || this.isModified('members')) {
-      this.targetValue = await calculateTeamTargetValue(this.members);
-    }
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Export the Team model
-module.exports = mongoose.model('Team', teamSchema);
->>>>>>> Stashed changes:backend/models/team.js
