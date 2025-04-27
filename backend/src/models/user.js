@@ -24,6 +24,18 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  avatarUrl: {
+    type: String,
+    default: null
+  },
+  bio: {
+    type: String,
+    default: ''
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  },
   isVerified: {
     type: Boolean,
     default: false
@@ -42,4 +54,4 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
-module.exports = User; 
+module.exports = User;
