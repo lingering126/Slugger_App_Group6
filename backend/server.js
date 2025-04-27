@@ -113,17 +113,25 @@ transporter.verify()
     console.error('Please check your email credentials and settings in .env file');
   });
 
-// CORS configuration
+// CORS configuration - 合并了第二个文件中的更完整配置
 const corsOptions = {
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: '*', // Allow all origins in development
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
+
+// 增加JSON大小限制，从第二个文件合并过来
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Middleware
 app.use(cors(corsOptions));
 
-app.use(express.json());
+// Add OPTIONS handling for preflight requests
+app.options('*', cors(corsOptions));
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI, {
@@ -135,12 +143,12 @@ mongoose.connect(process.env.MONGODB_URI, {
   console.log('Successfully connected to MongoDB Atlas');
   console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
 })
-  .catch(err => {
+.catch(err => {
   console.error('MongoDB connection error:', err);
   console.error('Error code:', err.code);
   console.error('Error name:', err.name);
   console.error('Full error:', err);
-    // Continue with in-memory storage as fallback
+  // Continue with in-memory storage as fallback
   console.log('Falling back to in-memory storage');
 });
 
@@ -430,13 +438,15 @@ app.post('/api/auth/login', async (req, res) => {
     
     console.log('Login successful for:', email);
     
+    // 从第二个文件合并，包含更多用户资料信息
     res.status(200).json({
       token,
       user: {
         id: user.id || user._id,
         email: user.email,
         name: user.name,
-        avatar: user.avatar
+        avatarUrl: user.avatarUrl,
+        bio: user.bio 
       }
     });
   } catch (error) {
@@ -786,6 +796,82 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
   } catch (error) {
     console.error('Resend verification error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// 从第二个文件合并过来的用户资料更新端点
+app.put('/api/user/profile', async (req, res) => {
+  try {
+    // Get the user ID from the JWT token
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+    
+    // Update user in database
+    if (mongoose.connection.readyState === 1) {
+      // MongoDB update
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { 
+          $set: {
+            name: req.body.name,
+            bio: req.body.bio,
+            avatarUrl: req.body.avatarUrl, 
+            updatedAt: new Date()
+          } 
+        },
+        { new: true } // Return the updated document
+      );
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // Return updated user data (excluding password)
+      const userResponse = {
+        id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        bio: updatedUser.bio,
+        avatarUrl: updatedUser.avatarUrl,
+        createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt
+      };
+      
+      return res.status(200).json(userResponse);
+    } else {
+      // In-memory update (for development)
+      const userIndex = inMemoryUsers.findIndex(u => u.id === userId);
+      
+      if (userIndex === -1) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // Update user
+      inMemoryUsers[userIndex] = {
+        ...inMemoryUsers[userIndex],
+        name: req.body.name,
+        bio: req.body.bio,
+        avatarUrl: req.body.avatarUrl,
+        updatedAt: new Date()
+      };
+      
+      // Return updated user (excluding password)
+      const userResponse = {
+        id: inMemoryUsers[userIndex].id,
+        name: inMemoryUsers[userIndex].name,
+        email: inMemoryUsers[userIndex].email,
+        bio: inMemoryUsers[userIndex].bio,
+        avatarUrl: inMemoryUsers[userIndex].avatarUrl,
+        createdAt: inMemoryUsers[userIndex].createdAt,
+        updatedAt: inMemoryUsers[userIndex].updatedAt
+      };
+      
+      return res.status(200).json(userResponse);
+    }
+  } catch (error) {
+    console.error('Profile update error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
