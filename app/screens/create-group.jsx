@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -21,12 +21,11 @@ export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState(''); // Group name entered by the user
   const [groupDescription, setGroupDescription] = useState(''); // Group description entered by the user
   const [targetName, setTargetName] = useState(''); // Selected target category
-  const [targetMentalValue, setTargetMentalValue] = useState(0); // Mental target value
-  const [targetPhysicalValue, setTargetPhysicalValue] = useState(0); // Physical target value
-  const [targetValue, setTargetValue] = useState(0); // Total target value (mental + physical)
-  const [dailyLimitPhysical, setDailyLimitPhysical] = useState(7); // Daily physical limit
-  const [dailyLimitMental, setDailyLimitMental] = useState(7); // Daily mental limit
+  const [weeklyLimitPhysical, setWeeklyLimitPhysical] = useState(7); // Weekly physical limit
+  const [weeklyLimitMental, setWeeklyLimitMental] = useState(7); // Weekly mental limit
+  const [userTargetValue, setUserTargetValue] = useState(1); // User's personal target value
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
+  const [updatingTarget, setUpdatingTarget] = useState(false); // Loading state for updating user target
   const router = useRouter(); // Router for navigation
 
   // 定义下拉菜单数据
@@ -55,12 +54,40 @@ export default function CreateGroupScreen() {
     { label: '7', value: 7 },
   ];
 
-  // Automatically calculate the total target value whenever mental or physical values change
-  useEffect(() => {
-    const mental = parseInt(targetMentalValue, 10) || 0;
-    const physical = parseInt(targetPhysicalValue, 10) || 0;
-    setTargetValue(mental + physical);
-  }, [targetMentalValue, targetPhysicalValue]);
+  // Function to update the user's personal target value
+  const updateUserTarget = async (value) => {
+    setUpdatingTarget(true);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.error('No authentication token found');
+        setUpdatingTarget(false);
+        return;
+      }
+      
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      const response = await fetch(`${apiUrl}/userTarget/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ targetValue: value }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Failed to update user target:', data.message);
+      } else {
+        console.log('User target updated successfully:', data);
+      }
+    } catch (error) {
+      console.error('Error updating user target:', error);
+    } finally {
+      setUpdatingTarget(false);
+    }
+  };
 
   // Function to handle the creation of a new group
   const handleCreateGroup = async () => {
@@ -107,10 +134,8 @@ export default function CreateGroupScreen() {
           name: groupName,
           description: groupDescription,
           targetName,
-          targetMentalValue: parseInt(targetMentalValue, 10),
-          targetPhysicalValue: parseInt(targetPhysicalValue, 10),
-          dailyLimitPhysical,
-          dailyLimitMental,
+          weeklyLimitPhysical,
+          weeklyLimitMental,
         }),
       });
 
@@ -193,70 +218,53 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-          {/* Input for mental target value and daily mental limit */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Mental Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={targetMentalValue.toString()}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setTargetMentalValue(intValue);
-                }}
-                placeholder="e.g., 50, 100"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Mental Limit</Text>
-              <Dropdown
-                style={styles.dropdown}
-                data={limitData}
-                labelField="label"
-                valueField="value"
-                placeholder="Select limit"
-                value={dailyLimitMental}
-                onChange={(item) => setDailyLimitMental(item.value)}
-              />
-            </View>
-          </View>
-
-          {/* Input for physical target value and daily physical limit */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Physical Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={targetPhysicalValue.toString()}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setTargetPhysicalValue(intValue);
-                }}
-                placeholder="e.g., 200, 300"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Physical Limit</Text>
-              <Dropdown
-                style={styles.dropdown}
-                data={limitData}
-                labelField="label"
-                valueField="value"
-                placeholder="Select limit"
-                value={dailyLimitPhysical}
-                onChange={(item) => setDailyLimitPhysical(item.value)}
-              />
-            </View>
-          </View>
-
-          {/* Display the total target value */}
+          {/* Personal Target Value dropdown */}
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Total Target Value</Text>
-            <Text style={styles.totalValue}>{targetValue}</Text>
+            <Text style={styles.label}>Personal Target Value</Text>
+            <View style={styles.targetValueContainer}>
+              <Dropdown
+                style={styles.dropdown}
+                data={limitData}
+                labelField="label"
+                valueField="value"
+                placeholder="Select your personal target"
+                value={userTargetValue}
+                onChange={(item) => {
+                  setUserTargetValue(item.value);
+                  updateUserTarget(item.value);
+                }}
+              />
+              {updatingTarget && <ActivityIndicator size="small" color="#0E5E6F" style={styles.loadingIndicator} />}
+            </View>
+            <Text style={styles.helperText}>This is your personal contribution goal (max: 7)</Text>
+          </View>
+
+          {/* Weekly Mental Limit dropdown */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Weekly Mental Limit</Text>
+            <Dropdown
+              style={styles.dropdown}
+              data={limitData}
+              labelField="label"
+              valueField="value"
+              placeholder="Select limit"
+              value={weeklyLimitMental}
+              onChange={(item) => setWeeklyLimitMental(item.value)}
+            />
+          </View>
+
+          {/* Weekly Physical Limit dropdown */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Weekly Physical Limit</Text>
+            <Dropdown
+              style={styles.dropdown}
+              data={limitData}
+              labelField="label"
+              valueField="value"
+              placeholder="Select limit"
+              value={weeklyLimitPhysical}
+              onChange={(item) => setWeeklyLimitPhysical(item.value)}
+            />
           </View>
 
           {/* Button to create the group */}
@@ -373,5 +381,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+  },
+  targetValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loadingIndicator: {
+    marginLeft: 10,
+  },
+  helperText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5,
   },
 });

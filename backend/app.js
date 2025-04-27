@@ -5,6 +5,7 @@ const { errorHandler } = require('./middleware/errorHandler');
 const auth = require('./middleware/auth');
 const activityRoutes = require('./routes/activities');
 const homepageRoutes = require('./homepage/routes');
+const teamRoutes = require('./routes/team'); // 添加team路由导入
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use((req, res, next) => {
 // Routes
 const authRoutes = require('./routes/auth');
 const postRoutes = require('./homepage/routes/posts');
+const userTargetRoutes = require('./routes/userTarget');
 
 // Public routes
 app.use('/api/auth', authRoutes);
@@ -37,8 +39,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/posts', auth, postRoutes);
 app.use('/api/activities', auth, activityRoutes);
 app.use('/api/homepage', auth, homepageRoutes);
+app.use('/api/teams', auth, teamRoutes); // 保留 teams 路由注册
+app.use('/api/userTarget', auth, userTargetRoutes); 
 
 // Error handling middleware
 app.use(errorHandler);
 
-module.exports = app; 
+module.exports = app;

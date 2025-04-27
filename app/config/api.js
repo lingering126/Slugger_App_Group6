@@ -22,8 +22,22 @@ const API_CONFIG = {
       STATS: '/stats/user',
       PROFILE: '/users/profile',
       UPDATE_PROFILE: '/users/profile'
+    },
+    TEAMS: {
+      LIST: '/teams',
+      ALL: '/teams/all',
+      CREATE: '/teams',
+      JOIN: '/teams/join',
+      JOIN_BY_ID: '/teams/join-by-id',
+      LEAVE: '/teams/leave',
+      DETAILS: '/teams/:id',
+      UPDATE: '/teams/:id',
+      UPDATE_TARGETS: '/teams/:id/targets',
+      UPDATE_WEEKLY_LIMITS: '/teams/:id/weekly-limits',
+      UPDATE_TARGET_GOAL: '/teams/:id/update-target-goal',
+      DELETE: '/teams/:id'
     }
   }
 };
 
-export default API_CONFIG; 
+export default API_CONFIG;

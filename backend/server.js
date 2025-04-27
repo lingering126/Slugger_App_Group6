@@ -192,8 +192,13 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/posts', authMiddleware, postsRouter);
 app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
+<<<<<<< Updated upstream
 app.use('/api/groups', groupRoutes);
+=======
+app.use('/api/userTarget', authMiddleware, require('./routes/userTarget'));
+>>>>>>> Stashed changes
 
+// Signup route
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { email, password, name } = req.body;

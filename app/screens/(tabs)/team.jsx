@@ -16,10 +16,8 @@ export default function TeamsScreen() {
     name: '',
     description: '',
     targetName: '',
-    targetMentalValue: 0,
-    targetPhysicalValue: 0,
-    dailyLimitPhysical: 7,
-    dailyLimitMental: 7
+    weeklyLimitPhysical: 7,
+    weeklyLimitMental: 7
   });
   const [modalVisible, setModalVisible] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
@@ -81,6 +79,7 @@ export default function TeamsScreen() {
         return;
       }
 
+<<<<<<< Updated upstream
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       console.log('Loading teams from:', `${apiUrl}/groups/all`);
       
@@ -99,6 +98,10 @@ export default function TeamsScreen() {
       if (!response.ok) {
         throw new Error(data.message || 'Failed to load teams');
       }
+=======
+      // 确保用户进入页面时总是显示团队列表
+      setUserTeam(null);
+>>>>>>> Stashed changes
 
       if (!Array.isArray(data)) {
         console.error('Teams data is not an array:', data);
@@ -110,12 +113,14 @@ export default function TeamsScreen() {
       const activeTeams = data.filter(team => team.members && team.members.length > 0);
       setTeams(activeTeams);
 
-      // Find the team that the user belongs to
+      // 获取用户 ID 但不自动设置 userTeam
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
         const parsedUser = JSON.parse(userData);
         console.log('Current user ID:', parsedUser.id);
         
+        // 我们仍然找到用户的团队，但不自动设置为当前选中团队
+        // 只是将团队数据保存到 AsyncStorage 中，供后续使用
         const userTeam = activeTeams.find(team => {
           console.log('Checking team:', team._id);
           console.log('Team members:', team.members);
@@ -126,7 +131,14 @@ export default function TeamsScreen() {
         });
         
         console.log('Found user team:', userTeam);
+<<<<<<< Updated upstream
         setUserTeam(userTeam);
+=======
+        if (userTeam) {
+          // 只保存团队数据，不自动设置为当前显示的团队
+          await AsyncStorage.setItem('userTeam', JSON.stringify(userTeam));
+        }
+>>>>>>> Stashed changes
       }
     } catch (error) {
       console.error('Error loading teams:', error);
@@ -149,6 +161,7 @@ export default function TeamsScreen() {
 
     try {
       setLoading(true);
+<<<<<<< Updated upstream
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
@@ -178,6 +191,20 @@ export default function TeamsScreen() {
         throw new Error(data.message || 'Failed to create team');
       }
 
+=======
+      const teamData = {
+        name: newTeam.name,
+        description: newTeam.description,
+        targetName: newTeam.targetName,
+        targetMentalValue: parseInt(newTeam.targetMentalValue),
+        targetPhysicalValue: parseInt(newTeam.targetPhysicalValue),
+        weeklyLimitPhysical: parseInt(newTeam.weeklyLimitPhysical),
+        weeklyLimitMental: parseInt(newTeam.weeklyLimitMental)
+      };
+      
+      await teamService.createTeam(teamData);
+      
+>>>>>>> Stashed changes
       setModalVisible(false);
       setNewTeam({
         name: '',
@@ -185,8 +212,8 @@ export default function TeamsScreen() {
         targetName: '',
         targetMentalValue: 0,
         targetPhysicalValue: 0,
-        dailyLimitPhysical: 7,
-        dailyLimitMental: 7
+        weeklyLimitPhysical: 7,
+        weeklyLimitMental: 7
       });
       Alert.alert('Success', 'Team created successfully');
       await loadTeams();
@@ -259,14 +286,14 @@ export default function TeamsScreen() {
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       console.log('Joining team:', teamId);
       
-      const response = await fetch(`${apiUrl}/groups/join`, {
+      const response = await fetch(`${apiUrl}/teams/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          groupId: teamId
+          teamId: teamId
         })
       });
 
@@ -348,7 +375,7 @@ export default function TeamsScreen() {
         
         const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${apiUrl}/groups/leave`);
+        xhr.open('POST', `${apiUrl}/teams/leave`);
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         
@@ -367,7 +394,7 @@ export default function TeamsScreen() {
           console.error('Network error when leaving team');
         };
         
-        xhr.send(JSON.stringify({ groupId: teamIdToLeave }));
+        xhr.send(JSON.stringify({ teamId: teamIdToLeave }));
       }).catch(err => {
         console.error('Error getting token:', err);
       });
@@ -681,7 +708,7 @@ export default function TeamsScreen() {
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       console.log('Updating team:', userTeam._id, editedTeam);
       
-      const response = await fetch(`${apiUrl}/groups/${userTeam._id}`, {
+      const response = await fetch(`${apiUrl}/teams/${userTeam._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -726,7 +753,7 @@ export default function TeamsScreen() {
       }
 
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      const response = await fetch(`${apiUrl}/groups/${userTeam._id}`, {
+      const response = await fetch(`${apiUrl}/teams/${userTeam._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -765,7 +792,7 @@ export default function TeamsScreen() {
       }
 
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      const response = await fetch(`${apiUrl}/groups/${userTeam._id}/targets`, {
+      const response = await fetch(`${apiUrl}/teams/${userTeam._id}/targets`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -960,30 +987,62 @@ export default function TeamsScreen() {
                 }}
               />
             </View>
-            <View style={styles.editTargetField}>
-              <Text style={styles.editTargetLabel}>Mental Value:</Text>
-              <TextInput
-                style={styles.targetInput}
-                value={String(editedTeamInfo.targetMentalValue)}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setEditedTeamInfo({...editedTeamInfo, targetMentalValue: intValue});
-                }}
-                keyboardType="numeric"
-              />
+            <View style={[styles.formGroup, styles.row]}>
+              <View style={styles.halfWidth}>
+                <Text style={styles.label}>Weekly Mental Limit</Text>
+                <Dropdown
+                  style={styles.dropdown}
+                  placeholderStyle={styles.placeholderStyle}
+                  selectedTextStyle={styles.selectedTextStyle}
+                  data={[
+                    { label: '0', value: 0 },
+                    { label: '1', value: 1 },
+                    { label: '2', value: 2 },
+                    { label: '3', value: 3 },
+                    { label: '4', value: 4 },
+                    { label: '5', value: 5 },
+                    { label: '6', value: 6 },
+                    { label: '7', value: 7 },
+                  ]}
+                  maxHeight={300}
+                  labelField="label"
+                  valueField="value"
+                  placeholder="Select limit"
+                  value={newTeam.weeklyLimitMental}
+                  onChange={item => {
+                    setNewTeam({...newTeam, weeklyLimitMental: item.value});
+                  }}
+                />
+              </View>
+
+              <View style={styles.halfWidth}>
+                <Text style={styles.label}>Weekly Physical Limit</Text>
+                <Dropdown
+                  style={styles.dropdown}
+                  placeholderStyle={styles.placeholderStyle}
+                  selectedTextStyle={styles.selectedTextStyle}
+                  data={[
+                    { label: '0', value: 0 },
+                    { label: '1', value: 1 },
+                    { label: '2', value: 2 },
+                    { label: '3', value: 3 },
+                    { label: '4', value: 4 },
+                    { label: '5', value: 5 },
+                    { label: '6', value: 6 },
+                    { label: '7', value: 7 },
+                  ]}
+                  maxHeight={300}
+                  labelField="label"
+                  valueField="value"
+                  placeholder="Select limit"
+                  value={newTeam.weeklyLimitPhysical}
+                  onChange={item => {
+                    setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
+                  }}
+                />
+              </View>
             </View>
-            <View style={styles.editTargetField}>
-              <Text style={styles.editTargetLabel}>Physical Value:</Text>
-              <TextInput
-                style={styles.targetInput}
-                value={String(editedTeamInfo.targetPhysicalValue)}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setEditedTeamInfo({...editedTeamInfo, targetPhysicalValue: intValue});
-                }}
-                keyboardType="numeric"
-              />
-            </View>
+
             <View style={styles.editActions}>
               <TouchableOpacity 
                 style={[styles.editButton, styles.cancelButton]}
@@ -1265,21 +1324,7 @@ export default function TeamsScreen() {
 
           <View style={[styles.formGroup, styles.row]}>
             <View style={styles.halfWidth}>
-              <Text style={styles.label}>Mental Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={String(newTeam.targetMentalValue)}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setNewTeam({ ...newTeam, targetMentalValue: intValue });
-                }}
-                placeholder="e.g., 50, 100"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Mental Limit</Text>
+              <Text style={styles.label}>Weekly Mental Limit</Text>
               <Dropdown
                 style={styles.dropdown}
                 placeholderStyle={styles.placeholderStyle}
@@ -1298,31 +1343,15 @@ export default function TeamsScreen() {
                 labelField="label"
                 valueField="value"
                 placeholder="Select limit"
-                value={newTeam.dailyLimitMental}
+                value={newTeam.weeklyLimitMental}
                 onChange={item => {
-                  setNewTeam({...newTeam, dailyLimitMental: item.value});
+                  setNewTeam({...newTeam, weeklyLimitMental: item.value});
                 }}
-              />
-            </View>
-          </View>
-
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Physical Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={String(newTeam.targetPhysicalValue)}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setNewTeam({ ...newTeam, targetPhysicalValue: intValue });
-                }}
-                placeholder="e.g., 200, 300"
-                keyboardType="numeric"
               />
             </View>
 
             <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Physical Limit</Text>
+              <Text style={styles.label}>Weekly Physical Limit</Text>
               <Dropdown
                 style={styles.dropdown}
                 placeholderStyle={styles.placeholderStyle}
@@ -1341,9 +1370,9 @@ export default function TeamsScreen() {
                 labelField="label"
                 valueField="value"
                 placeholder="Select limit"
-                value={newTeam.dailyLimitPhysical}
+                value={newTeam.weeklyLimitPhysical}
                 onChange={item => {
-                  setNewTeam({...newTeam, dailyLimitPhysical: item.value});
+                  setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
                 }}
               />
             </View>
