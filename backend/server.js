@@ -7,10 +7,13 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const os = require('os');
-const teamRoutes = require('./src/routes/team');
-const authRoutes = require('./src/routes/auth');
 const User = require('./src/models/user');
-
+const postsRouter = require('./homepage/routes/posts');
+const { router: authRoutes, authMiddleware } = require('./routes/auth');
+const activityRoutes = require('./routes/activities');
+const statsRoutes = require('./homepage/routes/index');
+const groupRoutes = require('./routes/group');
+const teamRoutes = require('./src/routes/team');
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
@@ -112,30 +115,47 @@ transporter.verify()
 
 // CORS configuration
 const corsOptions = {
-  origin: '*', // Allow all origins in development
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
+
 // Middleware
 app.use(cors(corsOptions));
-
-// Add OPTIONS handling for preflight requests
-app.options('*', cors(corsOptions));
-
 
 app.use(express.json());
 
 // Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB Atlas'))
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+})
+.then(() => {
+  console.log('Successfully connected to MongoDB Atlas');
+  console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
+})
   .catch(err => {
-    console.error('Could not connect to MongoDB Atlas:', err.message);
+  console.error('MongoDB connection error:', err);
+  console.error('Error code:', err.code);
+  console.error('Error name:', err.name);
+  console.error('Full error:', err);
     // Continue with in-memory storage as fallback
-  });
+  console.log('Falling back to in-memory storage');
+});
 
+// Add MongoDB connection error handlers
+mongoose.connection.on('error', err => {
+  console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('MongoDB reconnected');
+});
 
 // In-memory user storage as fallback
 const inMemoryUsers = [];
@@ -167,9 +187,12 @@ app.use((err, req, res, next) => {
 });
 
 // Routes
-
-app.use('/api/teams', teamRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/posts', authMiddleware, postsRouter);
+app.use('/api/activities', authMiddleware, activityRoutes);
+app.use('/api/stats', authMiddleware, statsRoutes);
+app.use('/api/groups', groupRoutes);
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
@@ -223,6 +246,7 @@ app.post('/api/auth/signup', async (req, res) => {
         email,
         password: hashedPassword, // Store the hashed password
         name, // Store the user's name
+        username: name, // Set username same as name
         isVerified: false,
         verificationToken,
         verificationTokenExpires
@@ -258,8 +282,8 @@ app.post('/api/auth/signup', async (req, res) => {
     console.log('=== Signup Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
     console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', process.env.PORT || 5000);
-    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
+    console.log('Port being used:', process.env.PORT || 5001);
+    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
     console.log('===============================');
     
     // 确保有邮件发送配置
@@ -289,7 +313,7 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+            <a href="http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -298,8 +322,8 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${process.env.PORT || 5000}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -349,7 +373,78 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-// Email verification endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    console.log('Login attempt for:', email);
+    
+    if (!email || !password) {
+      console.log('Missing email or password');
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+    
+    let user;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      // Find user in MongoDB
+      user = await User.findOne({ email });
+      console.log('MongoDB user found:', !!user);
+    } else {
+      // Fallback to in-memory storage
+      user = inMemoryUsers.find(user => user.email === email);
+      console.log('In-memory user found:', !!user);
+    }
+    
+    if (!user) {
+      console.log('User not found');
+      return res.status(400).json({ message: 'Invalid email or password' });
+    }
+    
+    // Check if user is verified
+    if (!user.isVerified) {
+      console.log('User not verified');
+      return res.status(403).json({ 
+        message: 'Please verify your email before logging in',
+        requiresVerification: true,
+        email: email
+      });
+    }
+    
+    // Check password using bcrypt to compare the hashed password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    console.log('Password valid:', isPasswordValid);
+    
+    if (!isPasswordValid) {
+      console.log('Invalid password');
+      return res.status(400).json({ message: 'Invalid email or password' });
+    }
+    
+    // Create JWT token
+    const token = jwt.sign(
+      { userId: user.id || user._id },
+      process.env.JWT_SECRET || 'fallback_secret_key',
+      { expiresIn: '7d' }
+    );
+    
+    console.log('Login successful for:', email);
+    
+    res.status(200).json({
+      token,
+      user: {
+        id: user.id || user._id,
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 app.get('/api/auth/verify-email', async (req, res) => {
   try {
     const { token, email } = req.query;
@@ -571,7 +666,6 @@ app.get('/api/auth/verify-email', async (req, res) => {
   }
 });
 
-// Resend verification email
 app.post('/api/auth/resend-verification', async (req, res) => {
   try {
     const { email } = req.body;
@@ -618,7 +712,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     // Send verification email
     const serverIPs = getServerIPs();
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-    const port = process.env.PORT || 5000;
+    const port = process.env.PORT || 5001;
     
     console.log('=== Resend Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
@@ -641,7 +735,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5000}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
+            <a href="http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -696,154 +790,6 @@ app.post('/api/auth/resend-verification', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    console.log('Login attempt for:', email);
-    
-    if (!email || !password) {
-      console.log('Missing email or password');
-      return res.status(400).json({ message: 'Email and password are required' });
-    }
-    
-    let user;
-    
-    // Check if MongoDB is connected
-    if (mongoose.connection.readyState === 1) {
-      // Find user in MongoDB
-      user = await User.findOne({ email });
-      console.log('MongoDB user found:', !!user);
-    } else {
-      // Fallback to in-memory storage
-      user = inMemoryUsers.find(user => user.email === email);
-      console.log('In-memory user found:', !!user);
-    }
-    
-    if (!user) {
-      console.log('User not found');
-      return res.status(400).json({ message: 'Invalid email or password' });
-    }
-    
-    // Check if user is verified
-    if (!user.isVerified) {
-      console.log('User not verified');
-      return res.status(403).json({ 
-        message: 'Please verify your email before logging in',
-        requiresVerification: true,
-        email: email
-      });
-    }
-    
-    // Check password using bcrypt to compare the hashed password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    console.log('Password valid:', isPasswordValid);
-    
-    if (!isPasswordValid) {
-      console.log('Invalid password');
-      return res.status(400).json({ message: 'Invalid email or password' });
-    }
-    
-    // Create JWT token
-    const token = jwt.sign(
-      { userId: user.id || user._id },
-      process.env.JWT_SECRET || 'fallback_secret_key',
-      { expiresIn: '7d' }
-    );
-    
-    console.log('Login successful for:', email);
-    
-    res.status(200).json({
-      token,
-      user: {
-        id: user.id || user._id,
-
-        email: user.email,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-        bio: user.bio 
-      }
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-// Add this to your server.js
-app.put('/api/user/profile', async (req, res) => {
-  try {
-    // Get the user ID from the JWT token
-    const token = req.headers.authorization.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.userId;
-    
-    // Update user in database
-    if (mongoose.connection.readyState === 1) {
-      // MongoDB update
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { 
-          $set: {
-            name: req.body.name,
-            bio: req.body.bio,
-            avatarUrl: req.body.avatarUrl, 
-            updatedAt: new Date()
-          } 
-        },
-        { new: true } // Return the updated document
-      );
-      
-      if (!updatedUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-      
-      // Return updated user data (excluding password)
-      const userResponse = {
-        id: updatedUser._id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        bio: updatedUser.bio,
-        avatarUrl: updatedUser.avatarUrl,
-        createdAt: updatedUser.createdAt,
-        updatedAt: updatedUser.updatedAt
-      };
-      
-      return res.status(200).json(userResponse);
-    } else {
-      // In-memory update (for development)
-      const userIndex = inMemoryUsers.findIndex(u => u.id === userId);
-      
-      if (userIndex === -1) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-      
-      // Update user
-      inMemoryUsers[userIndex] = {
-        ...inMemoryUsers[userIndex],
-        name: req.body.name,
-        bio: req.body.bio,
-        avatarUrl: req.body.avatarUrl,
-        updatedAt: new Date()
-      };
-      
-      // Return updated user (excluding password)
-      const userResponse = {
-        id: inMemoryUsers[userIndex].id,
-        name: inMemoryUsers[userIndex].name,
-        email: inMemoryUsers[userIndex].email,
-        bio: inMemoryUsers[userIndex].bio,
-        avatarUrl: inMemoryUsers[userIndex].avatarUrl,
-        createdAt: inMemoryUsers[userIndex].createdAt,
-        updatedAt: inMemoryUsers[userIndex].updatedAt
-      };
-      
-      return res.status(200).json(userResponse);
-    }
-  } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
 // Health check route
 app.get('/health', (req, res) => {
   try {
@@ -865,7 +811,7 @@ app.get('/health', (req, res) => {
         hostname: require('os').hostname(),
         platform: process.platform,
         nodeVersion: process.version,
-        port: process.env.PORT || 5000
+        port: process.env.PORT || 5001
       },
       // Add extra fields to help identify this as the Slugger server
       serverType: 'Slugger Backend',
@@ -907,7 +853,7 @@ app.get('/discover', (req, res) => {
       version: '1.0.0',
       status: 'online',
       interfaces: ipAddresses,
-      port: process.env.PORT || 5000,
+      port: process.env.PORT || 5001,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -1051,13 +997,9 @@ app.post('/api/test/email', async (req, res) => {
   }
 });
 
-// Import and use group routes
-const groupRoutes = require('./routes/group');
-app.use('/api/groups', groupRoutes);
-
 // Start server
 // Note: PORT is set to 5001 in the .env file, which overrides this default
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}/api`);
