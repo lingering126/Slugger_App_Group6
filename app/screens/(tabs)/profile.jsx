@@ -1,14 +1,10 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList } from 'react-native'
-import React, { useState } from 'react'
-import { useNavigation } from '@react-navigation/native'
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator, Image} from 'react-native'
+import React, { useState, useEffect } from 'react'
+import { useRouter } from 'expo-router'
+import { useFocusEffect } from '@react-navigation/native'
+import { useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-
-// Mock data (would normally come from a database)
-const mockUserData = {
-  name: "Huixian",
-  status: "Active",
-  joinDate: "March 2025"
-}
+import { userService, groupService } from '../../services/api' 
 
 // Physical activities library
 const physicalActivities = [
@@ -56,8 +52,20 @@ const bonusActivities = [
   { id: 5, name: 'Bonus other', icon: '✨' }
 ]
 
-const Profile = () => {
-  const navigation = useNavigation()
+export default function Profile() {
+  const router = useRouter()
+  
+  // User data state
+  const [userData, setUserData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  
+  // Groups state
+  const [groups, setGroups] = useState([])
+  const [loadingGroups, setLoadingGroups] = useState(false)
+  const [selectedGroup, setSelectedGroup] = useState(null)
+  
+  // Activity selection states
   const [selectedPhysicalActivities, setSelectedPhysicalActivities] = useState([])
   const [physicalModalVisible, setPhysicalModalVisible] = useState(false)
   const [selectedMentalActivities, setSelectedMentalActivities] = useState([])
@@ -65,41 +73,263 @@ const Profile = () => {
   const [selectedBonusActivities, setSelectedBonusActivities] = useState([])
   const [bonusModalVisible, setBonusModalVisible] = useState(false)
   
+  // Load user data function
+  const loadUserData = async () => {
+    try {
+      setLoading(true)
+      
+      // Get user data from AsyncStorage
+      const userJson = await AsyncStorage.getItem('user')
+      const user = userJson ? JSON.parse(userJson) : null
+      
+      if (!user) {
+        throw new Error('User data not found')
+      }
+      
+      setUserData(user)
+    } catch (err) {
+      console.error('Error loading user data:', err)
+      setError('Failed to load profile data')
+      
+      // Use default values if unable to get user data
+      setUserData({
+        name: "Guest User",
+        status: "Inactive",
+        createdAt: new Date().toISOString()
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  // Fetch groups function
+  const fetchGroups = async () => {
+    try {
+      setLoadingGroups(true);
+      const userGroups = await groupService.getUserGroups();
+      
+      // Get current user data
+      const currentUserJson = await AsyncStorage.getItem('user');
+      const currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
+      
+      // Update any group members that match the current user ID with latest user data
+      if (currentUser) {
+        const updatedGroups = userGroups.map(group => {
+          const updatedMembers = (group.members || []).map(member => {
+            if (member._id === currentUser._id || member.id === currentUser.id) {
+              // Replace with latest user data
+              return { ...member, ...currentUser };
+            }
+            return member;
+          });
+          return { ...group, members: updatedMembers };
+        });
+        setGroups(updatedGroups);
+      } else {
+        setGroups(userGroups);
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+      // Keep the groups array empty if there's an error
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+  
+  // Load user data when component mounts
+  useEffect(() => {
+    loadUserData()
+  }, [])
+  
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+      fetchGroups(); // Refresh groups when returning to Profile
+      return () => {
+        // Cleanup if needed
+      }
+    }, [])
+  )
+  
+  // Generate avatar text from user's name
+  const getAvatarText = () => {
+    if (!userData || !userData.name) return "??"
+    return userData.name.substring(0, 2).toUpperCase()
+  }
+  
+  // Format join date for display
+  const getFormattedJoinDate = () => {
+    if (!userData || !userData.createdAt) {
+      return "April 2025" // Default date
+    }
+    
+    return new Date(userData.createdAt).toLocaleDateString('en-US', { 
+      month: 'long', 
+      year: 'numeric' 
+    })
+  }
+  
+  // Save user settings
+  const saveUserSettings = async () => {
+    try {
+      // Show some form of loading indicator
+      
+      // Create the data object to send to API
+      const activitySettings = {
+        physicalActivities: selectedPhysicalActivities.map(a => a.id),
+        mentalActivities: selectedMentalActivities.map(a => a.id),
+        bonusActivities: selectedBonusActivities.map(a => a.id)
+      }
+      
+      // This would call the API service to save settings
+      // await userService.saveUserActivities(activitySettings)
+      
+      // For now, we'll just simulate a successful save
+      alert('Settings saved successfully!')
+    } catch (error) {
+      console.error('Error saving settings:', error)
+      alert('Failed to save settings. Please try again.')
+    }
+  }
+  
+  // Navigate to edit profile
+  const handleEditProfile = () => {
+    router.push('/screens/(tabs)/profile/EditProfile');
+  };
+  
+  // Show loading placeholder while fetching user data
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerContainer}>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatarPlaceholder}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            </View>
+            <View style={styles.userInfoContainer}>
+              <Text style={styles.userName}>Loading...</Text>
+              <Text style={styles.userStatus}>Please wait</Text>
+            </View>
+          </View>
+        </View>
+        
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3A8891" />
+        </View>
+      </View>
+    )
+  }
+  
   return (
     <View style={styles.container}>
-      {/* Header/Top Information Area */}
+      {/* Header/Top Information Area - replaced with dynamic user data */}
       <View style={styles.headerContainer}>
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>{mockUserData.name.substring(0, 2).toUpperCase()}</Text>
-            </View>
+            {userData?.avatarUrl ? (
+              <Image 
+                source={{ uri: userData.avatarUrl }} 
+                style={{ width: '100%', height: '100%' }}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarText}>{getAvatarText()}</Text>
+              </View>
+            )}
           </View>
           <View style={styles.userInfoContainer}>
-            <Text style={styles.userName}>{mockUserData.name}</Text>
-            <Text style={styles.userStatus}>Status: {mockUserData.status}</Text>
-            <Text style={styles.userJoinDate}>Member since: {mockUserData.joinDate}</Text>
+            <Text style={styles.userName}>{userData?.name || "Unknown User"}</Text>
+            <Text style={styles.userStatus}>Status: {userData?.status || "Active"}</Text>
+            <Text style={styles.userJoinDate}>Member since: {getFormattedJoinDate()}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.editButton}>
+        
+        {/* Bio section */}
+        {userData?.bio ? (
+          <View style={styles.bioContainer}>
+            <Text style={styles.bioText}>{userData.bio}</Text>
+          </View>
+        ) : null}
+        
+        <TouchableOpacity 
+          style={styles.editButton}
+          onPress={handleEditProfile}
+        >
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Rest of the profile content */}
+      {/* Rest of the profile content - updated for groups */}
       <ScrollView style={styles.content}>
         <Text style={styles.sectionTitle}>My Groups</Text>
-        {/* Group list would go here */}
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>No groups joined yet</Text>
-        </View>
+        {loadingGroups ? (
+          <View style={styles.placeholder}>
+            <ActivityIndicator size="small" color="#3A8891" />
+            <Text style={[styles.placeholderText, {marginTop: 8}]}>Loading groups...</Text>
+          </View>
+        ) : groups.length === 0 ? (
+          <View style={styles.placeholder}>
+            <Text style={styles.placeholderText}>No groups joined yet</Text>
+          </View>
+        ) : (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.groupsScrollView}
+          >
+            {groups.map(group => (
+              <TouchableOpacity
+                key={group._id || group.id}
+                style={[
+                  styles.groupCard, 
+                  selectedGroup && (selectedGroup._id || selectedGroup.id) === (group._id || group.id) ? 
+                    styles.selectedGroupCard : {}
+                ]}
+                onPress={() => setSelectedGroup(group)}
+              >
+                <View style={styles.groupCardIcon}>
+                  <Text style={styles.groupCardIconText}>
+                    {group.name.substring(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={styles.groupCardName}>{group.name}</Text>
+                <Text style={styles.groupCardMembers}>
+                  {group.members?.length || 0} members
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
         
         <Text style={styles.sectionTitle}>Group Members</Text>
-        {/* Group members would go here */}
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>Join a group to see members</Text>
-        </View>
-        
+        {selectedGroup ? (
+          <View style={styles.membersContainer}>
+            {(selectedGroup.members || []).map((member, index) => (
+              <View key={member._id || member.id || index} style={styles.memberItem}>
+                <View style={styles.memberAvatar}>
+                  {member.avatarUrl ? (
+                    <Image 
+                      source={{ uri: member.avatarUrl }} 
+                      style={{ width: '100%', height: '100%', borderRadius: 20 }}
+                    />
+                  ) : (
+                    <Text style={styles.memberAvatarText}>
+                      {member.name ? member.name.substring(0, 2).toUpperCase() : "??"}
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.memberName}>{member.name || `Member ${index + 1}`}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.placeholder}>
+            <Text style={styles.placeholderText}>Select a group to see members</Text>
+          </View>
+        )}
         <Text style={styles.sectionTitle}>Activity Settings</Text>
         
         {/* Physical Activities Section */}
@@ -229,11 +459,11 @@ const Profile = () => {
             onPress={async () => {
               try {
                 // Remove the welcomeCompleted flag from AsyncStorage
-                await AsyncStorage.removeItem('welcomeCompleted');
-                alert('Welcome flow has been reset. Log out and back in to see the welcome screens.');
+                await AsyncStorage.removeItem('welcomeCompleted')
+                alert('Welcome flow has been reset. Log out and back in to see the welcome screens.')
               } catch (error) {
-                console.error('Error resetting welcome flow:', error);
-                alert('Failed to reset welcome flow: ' + error.message);
+                console.error('Error resetting welcome flow:', error)
+                alert('Failed to reset welcome flow: ' + error.message)
               }
             }}
           >
@@ -242,7 +472,7 @@ const Profile = () => {
         </View>
         
         {/* Save Button */}
-        <TouchableOpacity style={styles.saveButton}>
+        <TouchableOpacity style={styles.saveButton} onPress={saveUserSettings}>
           <Text style={styles.saveButtonText}>Save Settings</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -427,8 +657,6 @@ const Profile = () => {
   )
 }
 
-export default Profile
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -492,6 +720,20 @@ const styles = StyleSheet.create({
     color: '#E8F0F2',
     opacity: 0.8,
   },
+  // Bio container styles
+  bioContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  bioText: {
+    color: '#fff',
+    fontSize: 14,
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
   editButton: {
     marginTop: 15,
     backgroundColor: '#0E5E6F',
@@ -526,6 +768,86 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 16,
   },
+  // Group styles
+  groupsScrollView: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  groupCard: {
+    width: 150,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginRight: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  selectedGroupCard: {
+    borderWidth: 2,
+    borderColor: '#3A8891',
+  },
+  groupCardIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#3A8891',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  groupCardIconText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  groupCardName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0E5E6F',
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  groupCardMembers: {
+    fontSize: 14,
+    color: '#666',
+  },
+  // Members styles
+  membersContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 15,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0E5E6F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  memberAvatarText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  memberName: {
+    fontSize: 16,
+    color: '#333',
+  },
+  // Activities styles
   activitySection: {
     backgroundColor: '#fff',
     padding: 15,
@@ -702,4 +1024,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-})
+  // Added loading style
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
