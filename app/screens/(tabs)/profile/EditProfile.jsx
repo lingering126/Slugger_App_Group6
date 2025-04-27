@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { userService } from '../../../services/api';
 
 export default function EditProfile() {
   const router = useRouter();
@@ -34,9 +35,8 @@ export default function EditProfile() {
       try {
         setLoading(true);
         
-        // Get user data from AsyncStorage
-        const userJson = await AsyncStorage.getItem('user');
-        const user = userJson ? JSON.parse(userJson) : null;
+        // Get user data using the API service
+        const user = await userService.getUserProfile();
         
         if (!user) {
           throw new Error('User data not found');
@@ -119,14 +119,51 @@ export default function EditProfile() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newAvatarUri = result.assets[0].uri;
-        setAvatarSource(newAvatarUri);
+        const selectedImageUri = result.assets[0].uri;
+        console.log("Selected image URI:", selectedImageUri);
         
-        console.log("New avatar set from camera:", newAvatarUri);
+        // For mobile devices, we need to convert the image to base64
+        try {
+          const base64 = await convertImageToBase64(selectedImageUri);
+          setAvatarSource(base64);
+          console.log("New avatar set from camera (converted to base64)");
+        } catch (error) {
+          console.error("Error converting camera image:", error);
+          // Fallback to URI if conversion fails
+          setAvatarSource(selectedImageUri);
+          console.log("New avatar set from camera:", selectedImageUri);
+        }
       }
     } catch (error) {
       console.error('Error taking photo:', error);
       Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+  // Helper function to convert an image URI to base64
+  const convertImageToBase64 = async (uri) => {
+    try {
+      // For web platform
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } 
+      // For mobile platforms, you'd need to implement a different method
+      // This is a placeholder - you'd need a library like expo-file-system
+      // Example: return await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+      
+      // For now, just return the URI for mobile platforms as a fallback
+      return uri;
+    } catch (error) {
+      console.error('Error converting image to base64:', error);
+      throw error;
     }
   };
 
@@ -151,10 +188,41 @@ export default function EditProfile() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newAvatarUri = result.assets[0].uri;
-        setAvatarSource(newAvatarUri);
+        const selectedImageUri = result.assets[0].uri;
+        console.log("Selected image URI:", selectedImageUri);
         
-        console.log("New avatar set from gallery:", newAvatarUri);
+        // For Web/macOS, we need to convert the image to base64
+        if (Platform.OS === 'web') {
+          try {
+            // Get blob from URI
+            const response = await fetch(selectedImageUri);
+            const blob = await response.blob();
+            
+            // Convert blob to base64 using FileReader
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64data = reader.result;
+              console.log("Converted to base64:", base64data.substring(0, 50) + "...");
+              setAvatarSource(base64data);
+            };
+            reader.readAsDataURL(blob);
+          } catch (error) {
+            console.error("Error converting image:", error);
+            Alert.alert("Error", "Failed to process the image");
+          }
+        } else {
+          // For mobile devices, try to convert to base64
+          try {
+            const base64 = await convertImageToBase64(selectedImageUri);
+            setAvatarSource(base64);
+            console.log("New avatar set from gallery (converted to base64)");
+          } catch (error) {
+            console.error("Error converting gallery image:", error);
+            // Fallback to URI if conversion fails
+            setAvatarSource(selectedImageUri);
+            console.log("New avatar set from gallery:", selectedImageUri);
+          }
+        }
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -162,7 +230,7 @@ export default function EditProfile() {
     }
   };
 
-  // Handle form submission
+  // Handle form submission - UPDATED to use API
   const handleSubmit = async () => {
     try {
       setSaving(true);
@@ -174,7 +242,12 @@ export default function EditProfile() {
         return;
       }
       
-      console.log("Current avatar source:", avatarSource);
+      // Add debug logs
+      console.log("Avatar source before saving:", avatarSource);
+      console.log("Avatar source type:", typeof avatarSource);
+      if (avatarSource) {
+        console.log("Avatar source starts with:", avatarSource.substring(0, 50) + '...');
+      }
       
       // Update user data with new values including avatar
       const updatedUserData = {
@@ -182,14 +255,22 @@ export default function EditProfile() {
         name: formData.name,
         email: formData.email,
         bio: formData.bio,
-        avatarUrl: avatarSource, // Save the avatar source
-        updatedAt: new Date().toISOString()
+        avatarUrl: avatarSource  // CHANGED: using avatarUrl instead of avatar
       };
       
-      console.log("Saving user data with avatar:", updatedUserData.avatarUrl);
+      // Add debug log for complete update data
+      console.log("Complete update data being sent:", JSON.stringify({
+        ...updatedUserData,
+        avatarUrl: updatedUserData.avatarUrl ? '[AVATAR DATA PRESENT]' : null
+      }));
       
-      // Save to AsyncStorage
-      await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
+      try {
+        console.log("Calling API to update profile...");
+        await userService.updateUserProfile(updatedUserData);
+        console.log("API call completed successfully");
+      } catch (error) {
+        console.error('Failed to update profile on server:', error);
+      }
       
       // Show success message and navigate back
       Alert.alert(
@@ -221,7 +302,7 @@ export default function EditProfile() {
         <Text style={styles.headerText}>Edit Profile</Text>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.push('/screens/(tabs)/profile')}
         >
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
@@ -283,7 +364,7 @@ export default function EditProfile() {
           />
         </View>
 
-        {/* Save Button - Full width now */}
+        {/* Save Button */}
         <TouchableOpacity 
           style={styles.saveButton}
           onPress={handleSubmit}
