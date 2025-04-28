@@ -66,7 +66,43 @@ Key authentication tests include:
 
 The tests are designed to run without MongoDB Memory Server, making them faster and more reliable especially on Windows systems.
 
-For more details, see `/backend/User Authentication/README.md`.
+### Authentication Test Structure and Coverage
+
+#### Test Coverage by Function
+
+The `authTests.test.js` file contains test cases organized by authentication function:
+
+| Function | Test File Section | Test Cases |
+|----------|------------------|------------|
+| **User Registration** | `describe('User Registration')` | - Successful registration<br>- Duplicate email rejection<br>- Email format validation<br>- Password strength validation<br>- Required field validation |
+| **User Login** | `describe('User Login')` | - Login with valid credentials<br>- Rejection for unverified users<br>- Incorrect password handling<br>- Non-existent user handling<br>- Missing credential validation |
+| **Email Verification** | `describe('Email Verification')` | - Verification with valid token<br>- Invalid token handling<br>- Expired token handling<br>- Already verified user handling |
+| **Remember Password** | `describe('Remember Password')` | - Saving credentials when checked<br>- Removing credentials when unchecked<br>- Preserving credentials during logout<br>- Auto-filling after logout |
+
+#### Running Specific Tests
+
+To run all authentication tests:
+
+```bash
+cd backend
+npm test -- tests/auth/authTests.test.js
+```
+
+To run a specific test section (e.g., only login tests):
+
+```bash
+cd backend
+npm test -- -t "User Login" tests/auth/authTests.test.js
+```
+
+#### Mocking Strategy
+
+The tests employ several mocking strategies to isolate authentication logic from external dependencies:
+
+1. **User Model Mocking**: Mocking the User module and its methods
+2. **Email Service Mocking**: Mocking nodemailer for email verification testing
+3. **JWT Token Mocking**: Mocking JWT for consistent token generation/verification
+4. **Express App Isolation**: Creating isolated Express app instances for testing
 
 ## Development Guidelines
 

@@ -158,8 +158,7 @@ cd backend
 npm test -- tests/auth/authTests.test.js
 ```
 
-
-For detailed test information, see `/backend/User Authentication/README.md`.
+For detailed test information, see the Authentication Test Structure section in the backend README.
 
 ## API Endpoints
 
