@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
-const AnalyticsService = require('./analytics.service');
-const Group = require('../../models/group'); 
-const ActivityLog = require('../models/activity-log'); 
-const GroupCycleHistory = require('../models/group-cycle-history'); 
-const User = require('../models/user'); 
+const AnalyticsService = require('../src/analytics/analytics.service');
+const Group = require('../models/group'); 
+const ActivityLog = require('../src/models/activity-log'); 
+const GroupCycleHistory = require('../src/models/group-cycle-history'); 
+const User = require('../src/models/user'); 
 
 // -- Mock Mongoose Models --
 // jest.mock('../path/to/group'); 
@@ -12,7 +12,7 @@ const User = require('../models/user');
 // jest.mock('../path/to/user');
 
 // -- More Robust Mock for Mongoose Methods --
-jest.mock('../../models/group', () => ({
+jest.mock('../models/group', () => ({
   findOne: jest.fn(),
   findById: jest.fn(),
   prototype: {
@@ -20,29 +20,31 @@ jest.mock('../../models/group', () => ({
     populate: jest.fn().mockReturnThis(),
   }
 }));
-jest.mock('../models/activity-log', () => ({
+jest.mock('../src/models/activity-log', () => ({
   find: jest.fn(),
   aggregate: jest.fn(),
 }));
-// Modify GroupCycleHistory mock to be a constructor
-jest.mock('../models/group-cycle-history', () => {
-  // Mock the constructor
+// Modify GroupCycleHistory mock to be a constructor using a class
+jest.mock('../src/models/group-cycle-history', () => {
   const mockSave = jest.fn();
-  const MockModel = jest.fn().mockImplementation(() => ({
-      save: mockSave
-  }));
-  // Attach static methods to the mock constructor
-  MockModel.findOne = jest.fn();
-  MockModel.find = jest.fn();
-  // Attach prototype methods needed if find/findOne results are used
-  // MockModel.prototype.save = mockSave; // Already handled by constructor instance
+  // Create a basic class mock
+  class MockGroupCycleHistory {
+    constructor(data) {
+      // Store data if needed, but the key is the save method
+      Object.assign(this, data);
+    }
+    // Attach save to the instance upon creation
+    save = mockSave;
+  }
+  // Attach static methods directly to the class mock
+  MockGroupCycleHistory.findOne = jest.fn();
+  MockGroupCycleHistory.find = jest.fn();
+  // Expose the mock save for assertions
+  MockGroupCycleHistory._mockSave = mockSave;
 
-  // Expose the mock save for assertions if needed externally
-  MockModel._mockSave = mockSave;
-
-  return MockModel;
+  return MockGroupCycleHistory; // Return the class itself
 });
-jest.mock('../models/user', () => ({
+jest.mock('../src/models/user', () => ({
   findById: jest.fn(),
 }));
 
@@ -334,8 +336,14 @@ describe('AnalyticsService', () => {
         // Verify the arguments for the calls if needed (more complex with mockImplementation)
 
         // Verify history save arguments
-        const constructorArgs = GroupCycleHistory.mock.calls[0][0];
-        expect(constructorArgs.completionPercentage).toBeCloseTo((600 / 800) * 100); // 75%
+        // Access the instance ('this' context) from the first call to the save mock
+        const savedInstance = GroupCycleHistory._mockSave.mock.contexts[0];
+        // Check the properties of the saved instance which were set by the constructor
+        expect(savedInstance.completionPercentage).toBeCloseTo((600 / 800) * 100); // 75%
+        // Optionally add more checks on the savedInstance properties:
+        // expect(savedInstance.groupId).toEqual(endedGroupData._id); 
+        // expect(savedInstance.startDate).toEqual(oldStartDate);
+        // expect(savedInstance.endDate).toEqual(oldEndDate);
         
         // Verify result based on new cycle
         expect(result.groupTarget).toBe(updatedGroupData.targetValue);
