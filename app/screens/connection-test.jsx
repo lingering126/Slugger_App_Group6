@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { getApiUrl, checkServerConnection, testDirectConnection } from '../utils';
+import { getApiUrl, checkServerConnection, testDirectConnection } from '../_utils';
 import { Stack } from 'expo-router';
 
 export default function ConnectionTestScreen() {

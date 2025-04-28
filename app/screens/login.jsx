@@ -2,28 +2,55 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getApiUrl, checkServerConnection } from '../utils';
+import { getApiUrl, checkServerConnection } from '../_utils';
 import { FontAwesome } from '@expo/vector-icons';
+
+/**
+ * Login Screen Component
+ * 
+ * Handles user authentication with features:
+ * - Email and password validation
+ * - Server connection verification
+ * - Login API integration
+ * - Token storage
+ * - Navigation to main app on success
+ * - Error handling for various failure modes
+ * - Email verification status check
+ * 
+ * The login flow:
+ * 1. User enters email and password
+ * 2. Client validates inputs
+ * 3. Server connection is verified
+ * 4. Credentials are sent to server
+ * 5. On success, authentication tokens are stored
+ * 6. User is redirected to the main app
+ */
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
-let WORKING_URL = null;
+let WORKING_URL = null; // Cache for the first successfully connected URL
 
 export default function LoginScreen() {
+  // Form fields state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  
+  // UI state
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState('checking');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberPassword, setRememberPassword] = useState(false);
+  
+  // Email verification flow state
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [resendingEmail, setResendingEmail] = useState(false);
+  
   const router = useRouter();
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams(); // For checking URL parameters, e.g., after email verification redirect
 
-  // Check if user was redirected after verification
+  // Effect hook to show alert if redirected from successful email verification
   useEffect(() => {
     if (params.verified === 'true') {
       Alert.alert(
@@ -34,7 +61,7 @@ export default function LoginScreen() {
     }
   }, [params]);
 
-  // Load saved credentials if available
+  // Effect hook to load saved credentials (email/password) from AsyncStorage
   useEffect(() => {
     const loadSavedCredentials = async () => {
       try {
@@ -57,7 +84,7 @@ export default function LoginScreen() {
     loadSavedCredentials();
   }, []);
 
-  // Check if the server is reachable
+  // Effect hook to check server connection status on mount
   useEffect(() => {
     const checkServer = async () => {
       try {
@@ -88,11 +115,17 @@ export default function LoginScreen() {
     checkServer();
   }, []);
 
+  /**
+   * Handles the primary user login logic.
+   * Validates inputs, communicates with the backend API, handles responses,
+   * stores tokens, and navigates the user accordingly.
+   */
   const handleLogin = async () => {
     try {
       setLoading(true);
       setError('');
       
+      // Basic form validation
       if (!email || !password) {
         setError('Please enter both email and password');
         setLoading(false);
@@ -435,6 +468,13 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.rememberText}>Remember password</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.forgotPasswordContainer} 
+              onPress={() => router.push('/screens/forgot-password')}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.buttonContainer}>
@@ -628,6 +668,14 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: '#666',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  forgotPasswordContainer: {
+    paddingVertical: 10,
+  },
+  forgotPasswordText: {
+    color: '#6c63ff',
     fontSize: 16,
     textDecorationLine: 'underline',
   }

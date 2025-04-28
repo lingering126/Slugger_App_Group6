@@ -38,7 +38,7 @@ export default function JoinGroupScreen() {
 
     try {
       // Retrieve the authentication token from local storage
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         throw new Error('No authentication token found');
       }

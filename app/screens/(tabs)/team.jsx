@@ -61,12 +61,23 @@ export default function TeamsScreen() {
 
   const loadUserData = async () => {
     try {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        const parsedUser = JSON.parse(userData);
-        setUserId(parsedUser.id);
-        await loadTeams();
+      // Try to get the userId directly first
+      const userId = await AsyncStorage.getItem('userId');
+      if (userId) {
+        console.log('Using userId from AsyncStorage:', userId);
+        setUserId(userId);
+      } else {
+        // Fallback to user object if needed
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const parsedUser = JSON.parse(userData);
+          console.log('Using userId from user object:', parsedUser.id);
+          setUserId(parsedUser.id);
+        }
       }
+      
+      // Load teams after setting userId
+      await loadTeams();
     } catch (error) {
       console.error('Error loading user data:', error);
     }
@@ -75,7 +86,7 @@ export default function TeamsScreen() {
   const loadTeams = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         console.log('No token found');
         return;
@@ -110,23 +121,44 @@ export default function TeamsScreen() {
       const activeTeams = data.filter(team => team.members && team.members.length > 0);
       setTeams(activeTeams);
 
-      // Find the team that the user belongs to
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        const parsedUser = JSON.parse(userData);
-        console.log('Current user ID:', parsedUser.id);
+      // Skip finding user team if userId is not available
+      if (!userId) {
+        console.log('No userId available, skipping user team detection');
+        return;
+      }
+
+      console.log('Current userId for team detection:', userId);
         
-        const userTeam = activeTeams.find(team => {
-          console.log('Checking team:', team._id);
-          console.log('Team members:', team.members);
-          return team.members && team.members.some(member => {
-            console.log('Member user:', member.user);
-            return member.user && (member.user._id === parsedUser.id || member.user.id === parsedUser.id);
-          });
+      // Find the team(s) that the user belongs to
+      const userTeams = activeTeams.filter(team => {
+        return team.members && team.members.some(member => {
+          // If member is an object with a user property
+          if (typeof member === 'object' && member.user) {
+            const result = member.user._id === userId || member.user.id === userId;
+            if (result) console.log(`User ${userId} is member of team ${team.name} (object.user match)`);
+            return result;
+          }
+          // If member is a string ID
+          if (typeof member === 'string') {
+            const result = member === userId;
+            if (result) console.log(`User ${userId} is member of team ${team.name} (string match)`);
+            return result;
+          }
+          // If member is an object with _id or id directly
+          if (typeof member === 'object') {
+            const result = member._id === userId || member.id === userId;
+            if (result) console.log(`User ${userId} is member of team ${team.name} (object._id match)`);
+            return result;
+          }
+          return false;
         });
+      });
         
-        console.log('Found user team:', userTeam);
-        setUserTeam(userTeam);
+      console.log('Found user teams:', userTeams.length > 0 ? userTeams.map(t => t.name) : 'None');
+      
+      // If we found user teams and userTeam is not set yet, use the first one
+      if (userTeams.length > 0 && !userTeam) {
+        setUserTeam(userTeams[0]);
       }
     } catch (error) {
       console.error('Error loading teams:', error);
@@ -149,7 +181,7 @@ export default function TeamsScreen() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -207,7 +239,7 @@ export default function TeamsScreen() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -250,7 +282,7 @@ export default function TeamsScreen() {
   const handleJoinTeam = async (teamId) => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -291,17 +323,40 @@ export default function TeamsScreen() {
       // Update user team status
       const team = teams.find(t => t._id === teamId);
       if (team) {
+        // Update local team data to include current user in members
+        const updatedTeam = {
+          ...team,
+          members: team.members ? [...team.members] : []
+        };
+        
+        // If user ID is not already in members, add it
+        if (userId && !updatedTeam.members.some(m => 
+          (typeof m === 'string' && m === userId) || 
+          (m.user && (m.user._id === userId || m.user.id === userId))
+        )) {
+          updatedTeam.members.push({ user: { _id: userId } });
+        }
+        
         // Initialize edit state
         setIsEditingTeam(false);
         setEditedTeam({
           name: team.name || '',
           description: team.description || ''
         });
-        setUserTeam(team);
+        
+        // Update user team
+        setUserTeam(updatedTeam);
+        
+        // Update this team in the teams list
+        setTeams(prevTeams => {
+          return prevTeams.map(t => t._id === teamId ? updatedTeam : t);
+        });
       }
-
+    
       Alert.alert('Success', 'Successfully joined the team');
-      await loadTeams(); // Reload team list
+      
+      // Reload teams to get the updated list
+      await loadTeams();
     } catch (error) {
       console.error('Error joining team:', error);
       Alert.alert('Error', error.message || 'Failed to join team');
@@ -343,7 +398,7 @@ export default function TeamsScreen() {
     // Attempt to call API to leave team in the background
     try {
       // Get token
-      AsyncStorage.getItem('token').then(token => {
+      AsyncStorage.getItem('userToken').then(token => {
         if (!token) return;
         
         const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
@@ -539,24 +594,30 @@ export default function TeamsScreen() {
   };
   
   const renderTeamCard = ({ item }) => {
-    // Check if user is a team member, simplified logic to accommodate different data structures
+    // Check if user is a team member using the same robust logic as loadTeams
     const isTeamMember = item.members && Array.isArray(item.members) && item.members.some(member => {
-      // If member is an object and has user property
+      // If member is an object with a user property
       if (typeof member === 'object' && member.user) {
-        return member.user._id === userId || member.user.id === userId;
+        const result = member.user._id === userId || member.user.id === userId;
+        if (result) console.log(`User ${userId} is member of team ${item.name} (object.user match)`);
+        return result;
       }
       // If member is a string ID
       if (typeof member === 'string') {
-        return member === userId;
+        const result = member === userId;
+        if (result) console.log(`User ${userId} is member of team ${item.name} (string match)`);
+        return result;
       }
-      // If member is an object but has no user property (possibly direct ID)
-      if (typeof member === 'object' && member._id) {
-        return member._id === userId;
+      // If member is an object with _id or id directly
+      if (typeof member === 'object') {
+        const result = member._id === userId || member.id === userId;
+        if (result) console.log(`User ${userId} is member of team ${item.name} (object._id match)`);
+        return result;
       }
       return false;
     });
     
-    console.log(`Checking if user ${userId} is member of team ${item.name}: ${isTeamMember}`);
+    console.log(`Team ${item.name} membership check: ${isTeamMember ? 'YES' : 'NO'} (userId: ${userId})`);
     
     return (
       <View style={styles.teamCard}>
@@ -672,7 +733,7 @@ export default function TeamsScreen() {
   const handleUpdateTeam = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -719,7 +780,7 @@ export default function TeamsScreen() {
   const handleSaveTeamInfo = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -758,7 +819,7 @@ export default function TeamsScreen() {
   const handleSaveTargets = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -2106,16 +2167,6 @@ const styles = StyleSheet.create({
   },
   editContainer: {
     marginTop: 10,
-  },
-  editInput: {
-    width: "100%",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-    backgroundColor: "#F5F7FA",
   },
   multilineInput: {
     height: 100,
