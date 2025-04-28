@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+mport AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Base API URL - consider moving this to an environment config
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -15,50 +15,60 @@ const userService = {
       }
       
       try {
-        // Try multiple endpoints to find the working one
-        const userId = await AsyncStorage.getItem('userId');
-        const endpoints = [
-          '/auth/me',
-          `/users/${userId}`,
-          '/users/me',
-          '/user/profile'
-        ];
-        
-        let userData = null;
-        let workingEndpoint = null;
-        
-        for (const endpoint of endpoints) {
-          try {
-            console.log(`Trying to fetch user profile from: ${API_BASE_URL}${endpoint}`);
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            console.log(`Response status for ${endpoint}: ${response.status}`);
-            
-            if (response.ok) {
-              userData = await response.json();
-              workingEndpoint = endpoint;
-              console.log(`Found working endpoint: ${endpoint}`);
-              break;
-            }
-          } catch (endpointError) {
-            console.warn(`Error for endpoint ${endpoint}:`, endpointError.message);
+        // First try to get the profile from the profiles endpoint
+        const response = await fetch(`${API_BASE_URL}/profiles/me`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
-        }
+        });
         
-        // If we found data from a working endpoint
-        if (userData) {
+        if (response.ok) {
+          const profileData = await response.json();
+          
+          // Combine user and profile data
+          const userData = {
+            id: profileData.user,
+            name: profileData.name,
+            email: profileData.user?.email || '',
+            username: profileData.user?.username || '',
+            bio: profileData.bio || '',
+            longTermGoal: profileData.longTermGoal || '',
+            avatarUrl: profileData.avatarUrl,
+            activitySettings: profileData.activitySettings || {
+              physicalActivities: [],
+              mentalActivities: [],
+              bonusActivities: []
+            },
+            status: profileData.status || 'Active',
+            createdAt: profileData.createdAt,
+            updatedAt: profileData.updatedAt
+          };
+          
           // Update local storage with fresh data
           await AsyncStorage.setItem('user', JSON.stringify(userData));
           return userData;
-        } else {
-          console.warn('Failed to fetch user profile from any endpoint, falling back to local data');
         }
+        
+        // Fallback to legacy endpoint if profile API fails
+        console.warn('Profile API failed, falling back to user API');
+        
+        const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          await AsyncStorage.setItem('user', JSON.stringify(userData));
+          return userData;
+        }
+        
+        console.warn('Failed to fetch user profile from any endpoint, falling back to local data');
       } catch (serverError) {
         console.warn('Error fetching from server, falling back to local data:', serverError);
       }
@@ -72,7 +82,6 @@ const userService = {
           const username = await AsyncStorage.getItem('username');
           
           if (userId && username) {
-            console.log('Building user object from stored pieces');
             const basicUser = {
               id: userId,
               _id: userId, // Include both formats for compatibility
@@ -88,7 +97,7 @@ const userService = {
           console.error('Error building user from pieces:', buildError);
         }
         
-        console.error('Error loading user data: - Error: User data not found');
+        console.error('Error loading user data - User data not found');
         return null;
       }
       
@@ -99,53 +108,7 @@ const userService = {
     }
   },
   
-  // Get user by ID - new method to fetch a specific user
-  async getUserById(userId) {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      
-      // Validate token exists before making API call
-      if (!token) {
-        console.warn('No authentication token found - user may need to login');
-        return null;
-      }
-      
-      // Try multiple possible endpoints
-      const endpoints = [
-        `/users/${userId}`,
-        `/user/${userId}`,
-        `/auth/users/${userId}`
-      ];
-      
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying to fetch user by ID from: ${API_BASE_URL}${endpoint}`);
-          const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (response.ok) {
-            const userData = await response.json();
-            console.log(`Successfully fetched user from ${endpoint}`);
-            return userData;
-          }
-        } catch (endpointError) {
-          console.warn(`Error for endpoint ${endpoint}:`, endpointError.message);
-        }
-      }
-      
-      throw new Error(`Failed to fetch user with ID ${userId} from any endpoint`);
-    } catch (error) {
-      console.error(`Error fetching user ${userId}:`, error);
-      return null;
-    }
-  },
-  
-  // Update user profile - connects to backend API
+  // Update user profile - connects to profile API
   async updateUserProfile(userData) {
     try {
       // Get authentication token
@@ -157,43 +120,65 @@ const userService = {
         throw new Error('Authentication required');
       }
       
-      // Try multiple possible endpoints for updating profile
-      const endpoints = [
-        '/user/profile',
-        '/users/profile',
-        '/auth/me',
-        '/users/me'
-      ];
-      
-      let updatedUser = null;
-      
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying to update profile at: ${API_BASE_URL}${endpoint}`);
-          const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(userData)
-          });
+      // Try the profile API endpoint
+      try {
+        const response = await fetch(`${API_BASE_URL}/profiles`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(userData)
+        });
+        
+        if (response.ok) {
+          const updatedProfile = await response.json();
           
-          if (response.ok) {
-            updatedUser = await response.json();
-            console.log(`Successfully updated profile at ${endpoint}`);
-            break;
-          } else {
-            console.warn(`Failed to update profile at ${endpoint}: ${response.status}`);
-          }
-        } catch (endpointError) {
-          console.warn(`Error for endpoint ${endpoint}:`, endpointError.message);
+          // Format for consistency
+          const updatedUser = {
+            id: updatedProfile.user,
+            name: updatedProfile.name,
+            email: updatedProfile.user?.email || '',
+            username: updatedProfile.user?.username || '',
+            bio: updatedProfile.bio || '',
+            longTermGoal: updatedProfile.longTermGoal || '',
+            avatarUrl: updatedProfile.avatarUrl,
+            activitySettings: updatedProfile.activitySettings || {
+              physicalActivities: [],
+              mentalActivities: [],
+              bonusActivities: []
+            },
+            status: updatedProfile.status || 'Active',
+            createdAt: updatedProfile.createdAt,
+            updatedAt: updatedProfile.updatedAt
+          };
+          
+          // Update local storage
+          await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+          return updatedUser;
+        } else {
+          console.warn(`Failed to update profile: ${response.status}`);
         }
+      } catch (profileError) {
+        console.warn('Profile API error:', profileError.message);
       }
       
-      if (!updatedUser) {
-        throw new Error('Failed to update profile on any endpoint');
+      // Fallback to legacy user API
+      console.log('Falling back to user API endpoint');
+      const response = await fetch(`${API_BASE_URL}/user/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userData)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update profile: ${response.status}`);
       }
+      
+      const updatedUser = await response.json();
       
       // Update local storage with server response
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
@@ -203,7 +188,6 @@ const userService = {
       console.error('Error updating profile:', error);
       
       // Fallback: If server is unavailable, update local storage only
-      // This is for development/testing - remove in production
       console.warn('Falling back to local storage update');
       try {
         // Get current user data first
@@ -228,7 +212,7 @@ const userService = {
     }
   },
   
-  // Save user activity preferences
+  // Save user activity preferences - updated to use profiles/activities endpoint
   async saveUserActivities(activitySettings) {
     try {
       // Get authentication token
@@ -240,18 +224,49 @@ const userService = {
         throw new Error('Authentication required');
       }
       
-      // Try multiple possible endpoints
-      const endpoints = [
+      // Try profile activities endpoint
+      try {
+        const response = await fetch(`${API_BASE_URL}/profiles/activities`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(activitySettings)
+        });
+        
+        if (response.ok) {
+          const updatedProfile = await response.json();
+          
+          // Get current user data
+          const userJson = await AsyncStorage.getItem('user');
+          const user = userJson ? JSON.parse(userJson) : {};
+          
+          // Update with new activity settings
+          const updatedUser = {
+            ...user,
+            activitySettings: updatedProfile.activitySettings,
+            updatedAt: updatedProfile.updatedAt
+          };
+          
+          // Save to AsyncStorage
+          await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+          
+          return updatedUser;
+        }
+      } catch (profileError) {
+        console.warn('Profile API error:', profileError.message);
+      }
+      
+      // Fallback to legacy activities endpoint
+      const legacyEndpoints = [
         '/user/activities',
         '/users/activities',
         '/activities/user'
       ];
       
-      let updatedUser = null;
-      
-      for (const endpoint of endpoints) {
+      for (const endpoint of legacyEndpoints) {
         try {
-          console.log(`Trying to update activities at: ${API_BASE_URL}${endpoint}`);
           const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'PUT',
             headers: {
@@ -262,28 +277,23 @@ const userService = {
           });
           
           if (response.ok) {
-            updatedUser = await response.json();
-            console.log(`Successfully updated activities at ${endpoint}`);
-            break;
+            const updatedUser = await response.json();
+            
+            // Update local storage with server response
+            await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+            
+            return updatedUser;
           }
         } catch (endpointError) {
           console.warn(`Error for endpoint ${endpoint}:`, endpointError.message);
         }
       }
       
-      if (!updatedUser) {
-        throw new Error('Failed to update activities on any endpoint');
-      }
-      
-      // Update local storage with server response
-      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
-      
-      return updatedUser;
+      throw new Error('Failed to update activities on any endpoint');
     } catch (error) {
       console.error('Error saving user activities:', error);
       
       // Fallback: If server is unavailable, update local storage only
-      // This is for development/testing - remove in production
       console.warn('Falling back to local storage update');
       try {
         // Get current user data
@@ -297,8 +307,8 @@ const userService = {
         // Update with new activity settings
         const updatedUser = {
           ...user,
-          activities: {
-            ...user.activities,
+          activitySettings: {
+            ...user.activitySettings,
             ...activitySettings
           },
           updatedAt: new Date().toISOString()
@@ -316,7 +326,7 @@ const userService = {
   }
 };
 
-// Group service for managing user groups
+// Other services remain unchanged
 const groupService = {
   // Get user's groups with fully populated member data
   async getUserGroups() {
@@ -330,9 +340,6 @@ const groupService = {
         return []; // Return empty array if not authenticated
       }
       
-      // Debug: Log token availability for troubleshooting
-      console.log('Token available for groups API call:', !!token);
-      
       // Make API request to get user's groups
       const response = await fetch(`${API_BASE_URL}/groups`, {
         method: 'GET',
@@ -340,9 +347,6 @@ const groupService = {
           'Authorization': `Bearer ${token}`
         }
       });
-      
-      // Log response status for debugging
-      console.log('Groups API response status:', response.status);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch groups: ${response.status} ${response.statusText}`);
@@ -546,4 +550,96 @@ const groupService = {
   }
 };
 
-export { userService, groupService };
+// Add new profileService for direct profile operations
+const profileService = {
+  // Get the user's profile directly (not through user)
+  async getProfile() {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.warn('No authentication token found - user may need to login');
+        return null;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/profiles/me`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch profile: ${response.status}`);
+      }
+      
+      const profile = await response.json();
+      return profile;
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      return null;
+    }
+  },
+  
+  // Update profile directly
+  async updateProfile(profileData) {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.warn('No authentication token found - user may need to login');
+        throw new Error('Authentication required');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/profiles`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(profileData)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update profile: ${response.status}`);
+      }
+      
+      const updatedProfile = await response.json();
+      return updatedProfile;
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      throw error;
+    }
+  },
+  
+  // Update just the activities portion of the profile
+  async updateActivities(activitySettings) {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.warn('No authentication token found - user may need to login');
+        throw new Error('Authentication required');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/profiles/activities`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(activitySettings)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update activities: ${response.status}`);
+      }
+      
+      const updatedProfile = await response.json();
+      return updatedProfile;
+    } catch (error) {
+      console.error('Error updating activities:', error);
+      throw error;
+    }
+  }
+};
+
+export { userService, groupService, profileService };
