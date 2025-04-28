@@ -10,10 +10,8 @@ router.post('/', authMiddleware, async (req, res) => {
       name,
       description,
       targetName,
-      targetMentalValue,
-      targetPhysicalValue,
-      dailyLimitPhysical = 100,
-      dailyLimitMental = 100
+      weeklyLimitPhysical = 7,
+      weeklyLimitMental = 7
     } = req.body;
 
     const userId = req.user.userId;
@@ -22,10 +20,8 @@ router.post('/', authMiddleware, async (req, res) => {
       name,
       description,
       targetName,
-      targetMentalValue,
-      targetPhysicalValue,
-      dailyLimitPhysical,
-      dailyLimitMental,
+      weeklyLimitPhysical,
+      weeklyLimitMental,
       members: [userId]
     });
 
@@ -157,7 +153,7 @@ router.put('/:teamId', authMiddleware, async (req, res) => {
 router.put('/:teamId/targets', authMiddleware, async (req, res) => {
   try {
     const { teamId } = req.params;
-    const { targetName, targetMentalValue, targetPhysicalValue } = req.body;
+    const { targetName, weeklyLimitPhysical, weeklyLimitMental } = req.body;
     const userId = req.user.userId;
     
     console.log(`User ${userId} attempting to update targets for team ${teamId}`);
@@ -177,16 +173,82 @@ router.put('/:teamId/targets', authMiddleware, async (req, res) => {
     
     // Update team targets
     if (targetName) team.targetName = targetName;
-    if (targetMentalValue !== undefined) team.targetMentalValue = targetMentalValue;
-    if (targetPhysicalValue !== undefined) team.targetPhysicalValue = targetPhysicalValue;
+    if (weeklyLimitPhysical !== undefined) team.weeklyLimitPhysical = weeklyLimitPhysical;
+    if (weeklyLimitMental !== undefined) team.weeklyLimitMental = weeklyLimitMental;
     
-    await team.save();
+    // Manually trigger target value recalculation
+    await team.updateTargetValue();
+    
     console.log(`Team ${teamId} targets updated successfully`);
     
     res.status(200).json(team);
   } catch (error) {
     console.error(`Error updating team targets: ${error.message}`);
     res.status(500).json({ message: 'Failed to update team targets', error: error.message });
+  }
+});
+
+// Get team target value
+router.get('/:teamId/target', authMiddleware, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.user.userId;
+    
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+    
+    // Check if user is a member
+    const isMember = team.members.some(member => member.toString() === userId.toString());
+    if (!isMember) {
+      return res.status(403).json({ message: 'Not authorized to view this team' });
+    }
+    
+    // Force recalculation of target value if requested
+    if (req.query.recalculate === 'true') {
+      await team.updateTargetValue();
+    }
+    
+    res.status(200).json({
+      targetName: team.targetName,
+      targetValue: team.targetValue,
+      weeklyLimitPhysical: team.weeklyLimitPhysical,
+      weeklyLimitMental: team.weeklyLimitMental
+    });
+  } catch (error) {
+    console.error(`Error getting team target: ${error.message}`);
+    res.status(500).json({ message: 'Failed to get team target', error: error.message });
+  }
+});
+
+// Manually update team target value
+router.post('/:teamId/recalculate-target', authMiddleware, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.user.userId;
+    
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+    
+    // Check if user is a member
+    const isMember = team.members.some(member => member.toString() === userId.toString());
+    if (!isMember) {
+      return res.status(403).json({ message: 'Not authorized for this team' });
+    }
+    
+    // Recalculate team target value based on members' personal targets
+    await team.updateTargetValue();
+    
+    res.status(200).json({
+      targetName: team.targetName,
+      targetValue: team.targetValue
+    });
+  } catch (error) {
+    console.error(`Error recalculating team target: ${error.message}`);
+    res.status(500).json({ message: 'Failed to recalculate team target', error: error.message });
   }
 });
 
@@ -254,4 +316,4 @@ router.delete('/:teamId', authMiddleware, async (req, res) => {
 });
 
 // Export the router
-module.exports = router; 
+module.exports = router;

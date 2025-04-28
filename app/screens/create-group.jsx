@@ -21,9 +21,7 @@ export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState(''); // Group name entered by the user
   const [groupDescription, setGroupDescription] = useState(''); // Group description entered by the user
   const [targetName, setTargetName] = useState(''); // Selected target category
-  const [targetMentalValue, setTargetMentalValue] = useState(0); // Mental target value
-  const [targetPhysicalValue, setTargetPhysicalValue] = useState(0); // Physical target value
-  const [targetValue, setTargetValue] = useState(0); // Total target value (mental + physical)
+  const [personalTargetValue, setPersonalTargetValue] = useState(3); // Personal target value (1-7)
   const [dailyLimitPhysical, setDailyLimitPhysical] = useState(7); // Daily physical limit
   const [dailyLimitMental, setDailyLimitMental] = useState(7); // Daily mental limit
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
@@ -55,12 +53,15 @@ export default function CreateGroupScreen() {
     { label: '7', value: 7 },
   ];
 
-  // Automatically calculate the total target value whenever mental or physical values change
-  useEffect(() => {
-    const mental = parseInt(targetMentalValue, 10) || 0;
-    const physical = parseInt(targetPhysicalValue, 10) || 0;
-    setTargetValue(mental + physical);
-  }, [targetMentalValue, targetPhysicalValue]);
+  const personalTargetData = [
+    { label: '1', value: 1 },
+    { label: '2', value: 2 },
+    { label: '3', value: 3 },
+    { label: '4', value: 4 },
+    { label: '5', value: 5 },
+    { label: '6', value: 6 },
+    { label: '7', value: 7 },
+  ];
 
   // Function to handle the creation of a new group
   const handleCreateGroup = async () => {
@@ -99,6 +100,29 @@ export default function CreateGroupScreen() {
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       console.log('Using API URL:', apiUrl);
 
+      // First, update the user's personal target
+      try {
+        const userTargetResponse = await fetch(`${apiUrl}/user-target`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            targetValue: personalTargetValue
+          }),
+        });
+
+        if (!userTargetResponse.ok) {
+          console.warn('Failed to update personal target, but continuing with team creation');
+        } else {
+          console.log('Personal target updated successfully');
+        }
+      } catch (targetError) {
+        console.error('Error updating personal target:', targetError);
+        // Continue with team creation even if setting personal target fails
+      }
+
       // Send a POST request to create the group
       const response = await fetch(`${apiUrl}/teams`, {
         method: 'POST',
@@ -110,8 +134,6 @@ export default function CreateGroupScreen() {
           name: groupName,
           description: groupDescription,
           targetName,
-          targetMentalValue: parseInt(targetMentalValue, 10),
-          targetPhysicalValue: parseInt(targetPhysicalValue, 10),
           dailyLimitPhysical,
           dailyLimitMental,
         }),
@@ -215,22 +237,22 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-          {/* Input for mental target value and daily mental limit */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Mental Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={targetMentalValue.toString()}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setTargetMentalValue(intValue);
-                }}
-                placeholder="e.g., 50, 100"
-                keyboardType="numeric"
-              />
-            </View>
+          {/* Dropdown for personal target value */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Your Personal Target</Text>
+            <Dropdown
+              style={styles.dropdown}
+              data={personalTargetData}
+              labelField="label"
+              valueField="value"
+              placeholder="Select your personal target"
+              value={personalTargetValue}
+              onChange={(item) => setPersonalTargetValue(item.value)}
+            />
+          </View>
 
+          {/* Limits section */}
+          <View style={[styles.formGroup, styles.row]}>
             <View style={styles.halfWidth}>
               <Text style={styles.label}>Daily Mental Limit</Text>
               <Dropdown
@@ -241,23 +263,6 @@ export default function CreateGroupScreen() {
                 placeholder="Select limit"
                 value={dailyLimitMental}
                 onChange={(item) => setDailyLimitMental(item.value)}
-              />
-            </View>
-          </View>
-
-          {/* Input for physical target value and daily physical limit */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Physical Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={targetPhysicalValue.toString()}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setTargetPhysicalValue(intValue);
-                }}
-                placeholder="e.g., 200, 300"
-                keyboardType="numeric"
               />
             </View>
 
@@ -273,12 +278,6 @@ export default function CreateGroupScreen() {
                 onChange={(item) => setDailyLimitPhysical(item.value)}
               />
             </View>
-          </View>
-
-          {/* Display the total target value */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Total Target Value</Text>
-            <Text style={styles.totalValue}>{targetValue}</Text>
           </View>
 
           {/* Button to create the group */}

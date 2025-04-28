@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const UserTarget = require('./UserTarget');
 
 // Function to generate a random six-digit ID
 function generateSixDigitId() {
@@ -34,30 +35,20 @@ const teamSchema = new mongoose.Schema({
     ],
     required: true
   },
-  targetMentalValue: {
-    type: Number, // Mental target value
-    required: true,
-    default: 0
-  },
-  targetPhysicalValue: {
-    type: Number, // Physical target value
-    required: true,
-    default: 0
-  },
   targetValue: {
-    type: Number, // Total target value
+    type: Number, // Total target value (sum of members' personal values)
     required: true,
     default: 0
   },
-  dailyLimitPhysical: {
-    type: Number, // Daily physical limit
+  weeklyLimitPhysical: {
+    type: Number, // Weekly physical limit
     required: true,
-    default: 100
+    default: 7
   },
-  dailyLimitMental: {
-    type: Number, // Daily mental limit
+  weeklyLimitMental: {
+    type: Number, // Weekly mental limit
     required: true,
-    default: 100
+    default: 7
   },
   members: [{
     type: mongoose.Schema.Types.ObjectId, // List of user IDs
@@ -82,11 +73,55 @@ teamSchema.pre('validate', async function(next) {
   next();
 });
 
-// Calculate total target value before saving
-teamSchema.pre('save', function(next) {
-  this.targetValue = this.targetMentalValue + this.targetPhysicalValue;
-  next();
+// Update team targetValue before saving by summing all members' personal target values
+teamSchema.pre('save', async function(next) {
+  try {
+    // Only recalculate if members array has changed or this is a new document
+    if (this.isNew || this.isModified('members')) {
+      // Get personal target values for all team members
+      const userTargets = await UserTarget.find({
+        userId: { $in: this.members }
+      });
+      
+      // Calculate the sum of all personal target values
+      let totalValue = 0;
+      if (userTargets && userTargets.length > 0) {
+        totalValue = userTargets.reduce((sum, target) => sum + (target.targetValue || 1), 0);
+      } else {
+        // If no explicit targets are found, use default value for each member
+        totalValue = this.members.length; // Default targetValue is 1 per member
+      }
+      
+      this.targetValue = totalValue;
+    }
+    next();
+  } catch (error) {
+    console.error('Error calculating team targetValue:', error);
+    next(error);
+  }
 });
 
+// Method to manually update the team's targetValue
+teamSchema.methods.updateTargetValue = async function() {
+  try {
+    const userTargets = await UserTarget.find({
+      userId: { $in: this.members }
+    });
+    
+    let totalValue = 0;
+    if (userTargets && userTargets.length > 0) {
+      totalValue = userTargets.reduce((sum, target) => sum + (target.targetValue || 1), 0);
+    } else {
+      totalValue = this.members.length;
+    }
+    
+    this.targetValue = totalValue;
+    return this.save();
+  } catch (error) {
+    console.error('Error updating team targetValue:', error);
+    throw error;
+  }
+};
+
 // Export the Team model
-module.exports = mongoose.model('Team', teamSchema); 
+module.exports = mongoose.model('Team', teamSchema);
