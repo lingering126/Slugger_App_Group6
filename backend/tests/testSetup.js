@@ -14,6 +14,7 @@ const setupTestDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
+    return mongoServer;
   } catch (error) {
     console.error('Error connecting to test database:', error);
     throw error;
@@ -24,7 +25,9 @@ const setupTestDB = async () => {
 const teardownTestDB = async () => {
   try {
     await mongoose.disconnect();
-    await mongoServer.stop();
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
   } catch (error) {
     console.error('Error closing database connection:', error);
     throw error;
