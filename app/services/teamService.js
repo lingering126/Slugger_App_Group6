@@ -2,10 +2,10 @@ import axios from 'axios';
 import { API_URL } from '../config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// 获取认证token
+// get token
 const getAuthToken = async () => {
   try {
-    const token = await AsyncStorage.getItem('token');
+    const token = await AsyncStorage.getItem('userToken');
     return token;
   } catch (error) {
     console.error('Error getting auth token:', error);

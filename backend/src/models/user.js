@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 
+/**
+ * User Schema
+ * 
+ * Defines the structure for user accounts in the application.
+ * Includes authentication fields, profile information, and verification data.
+ */
 const userSchema = new mongoose.Schema({
+  // Authentication fields
   email: {
     type: String,
     required: true,
@@ -12,6 +19,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  
+  // Profile information
   name: {
     type: String,
     required: true
@@ -24,6 +33,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  
+  // Account verification fields
   isVerified: {
     type: Boolean,
     default: false
@@ -35,11 +46,20 @@ const userSchema = new mongoose.Schema({
   verificationTokenExpires: {
     type: Date,
     default: null
+  },
+  
+  // Password reset fields
+  resetToken: {
+    type: String,
+    default: null
+  },
+  resetTokenExpires: {
+    type: Date,
+    default: null
   }
 }, {
-  timestamps: true
+  timestamps: true  // Automatically add createdAt and updatedAt fields
 });
 
-const User = mongoose.model('User', userSchema);
-
-module.exports = User; 
+// Export the model
+module.exports = mongoose.model('User', userSchema); 

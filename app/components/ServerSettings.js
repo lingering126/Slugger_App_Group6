@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
-import Utils, { getApiUrl, testDirectConnection, checkServerConnection, pingServer, scanNetworkForServer } from '../utils';
+import Utils, { getApiUrl, testDirectConnection, checkServerConnection, pingServer, scanNetworkForServer } from '../_utils';
 import ServerIPModal from './ServerIPModal';
 import NetInfo from '@react-native-community/netinfo';
 import IPConfig from '../config/ipConfig';
