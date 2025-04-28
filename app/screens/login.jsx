@@ -94,7 +94,13 @@ export default function LoginScreen() {
       setError('');
       
       if (!email || !password) {
-        setError('Please fill in all fields');
+        setError('Please enter both email and password');
+        setLoading(false);
+        return;
+      }
+
+      if (!email.includes('@')) {
+        setError('Please enter a valid email address');
         setLoading(false);
         return;
       }
@@ -113,8 +119,10 @@ export default function LoginScreen() {
         setLoading(false);
       }, 15000);
       
+      let response, data;
+      
       try {
-        const response = await fetch(`${apiUrl}/auth/login`, {
+        response = await fetch(`${apiUrl}/auth/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -129,92 +137,106 @@ export default function LoginScreen() {
         // Clear the timeout since we got a response
         clearTimeout(timeoutId);
         
-        console.log('Login response status:', response.status);
+        // Start with assumption that bad credentials were entered
+        // This is a safe fallback for any authentication error
+        setError('Invalid email or password');
         
-        const data = await response.json();
-        
-        if (!response.ok) {
-          console.log('Login error data:', data);
+        try {
+          data = await response.json();
+          console.log('Login response:', {
+            status: response.status,
+            data: data
+          });
           
-          // Check if the user needs to verify their email
           if (response.status === 403 && data.requiresVerification) {
             setNeedsVerification(true);
             setVerificationEmail(data.email || email);
             setError('');
-          } else {
-            setError(data.message || 'Login failed');
+          } else if (!response.ok) {
+            // Keep "Invalid email or password" for 400/401 errors
+            if (response.status !== 400 && response.status !== 401) {
+              setError(data.message || 'An error occurred during login. Please try again.');
+            }
+            setLoading(false);
+            return;
           }
           
-          setLoading(false);
-          return;
-        }
-        
-        console.log('Login successful');
-        
-        // Save credentials if remember password is checked
-        if (rememberPassword) {
-          await AsyncStorage.setItem('savedEmail', email);
-          await AsyncStorage.setItem('savedPassword', password);
-        } else {
-          // Clear saved credentials if not checked
-          await AsyncStorage.removeItem('savedEmail');
-          await AsyncStorage.removeItem('savedPassword');
-        }
-        
-        // Store user data
-        await AsyncStorage.setItem('userToken', data.token);
-        await AsyncStorage.setItem('userId', data.user.id);
-        await AsyncStorage.setItem('username', data.user.username);
-        
-        console.log('User data stored in AsyncStorage');
-        
-        // Check if the user has completed the welcome flow
-        const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
-        console.log('Welcome completed status:', welcomeCompleted);
-        
-        // If the user is logging in for the first time, redirect to welcome page
-        if (!welcomeCompleted) {
-          console.log('First time login detected, redirecting to welcome page');
+          // Process successful login
+          console.log('Login successful');
           
-          try {
-            // Verify that the welcome route exists
-            router.replace('/screens/welcome');
-            console.log('Navigation to welcome page initiated');
-          } catch (navError) {
-            console.error('Error navigating to welcome page:', navError);
-            // Fallback to home if welcome page navigation fails
+          // Save credentials if remember password is checked
+          if (rememberPassword) {
+            await AsyncStorage.setItem('savedEmail', email);
+            await AsyncStorage.setItem('savedPassword', password);
+          } else {
+            // Clear saved credentials if not checked
+            await AsyncStorage.removeItem('savedEmail');
+            await AsyncStorage.removeItem('savedPassword');
+          }
+          
+          // Store user data
+          await AsyncStorage.setItem('userToken', data.token);
+          await AsyncStorage.setItem('userId', data.user.id);
+          await AsyncStorage.setItem('username', data.user.username);
+          
+          console.log('User data stored in AsyncStorage');
+          
+          // Check if the user has completed the welcome flow
+          const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
+          console.log('Welcome completed status:', welcomeCompleted);
+          
+          // If the user is logging in for the first time, redirect to welcome page
+          if (!welcomeCompleted) {
+            console.log('First time login detected, redirecting to welcome page');
+            
+            try {
+              // Verify that the welcome route exists
+              router.replace('/screens/welcome');
+              console.log('Navigation to welcome page initiated');
+            } catch (navError) {
+              console.error('Error navigating to welcome page:', navError);
+              // Fallback to home if welcome page navigation fails
+              router.replace('/screens/(tabs)/home');
+            }
+          } else {
+            console.log('Welcome already completed, redirecting to home page');
+            // Navigate to home screen after successful login
             router.replace('/screens/(tabs)/home');
           }
-        } else {
-          console.log('Welcome already completed, redirecting to home page');
-          // Navigate to home screen after successful login
-          router.replace('/screens/(tabs)/home');
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError);
+          if (response.status === 400 || response.status === 401) {
+            // Keep the default "Invalid email or password" for auth errors
+          } else {
+            setError('An error occurred during login. Please try again.');
+          }
+          setLoading(false);
         }
       } catch (fetchError) {
         clearTimeout(timeoutId);
-        throw fetchError;
+        console.log('Fetch error details:', fetchError);
+        
+        // Only show connection errors for actual network issues
+        if (fetchError.name === 'AbortError') {
+          setError('Connection timed out. Please check your internet connection and try again.');
+        } else if (fetchError.name === 'TypeError' && fetchError.message.includes('Network request failed')) {
+          setError('Network error. Please check your connection and try again.');
+        } else {
+          setError('An error occurred during login. Please try again.');
+        }
+        
+        setLoading(false);
       }
     } catch (error) {
-      console.log('Login error:', error.message);
+      console.log('General error in login:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        type: typeof error
+      });
       setLoading(false);
-      
-      if (error.name === 'AbortError') {
-        setError('Request timed out. Please try again.');
-      } else if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
-        setError('Network error. Please check your connection and try again.');
-        // Try to find another working URL
-        const connectionStatus = await checkServerConnection(API_URLS);
-        if (connectionStatus.status === 'online' && connectionStatus.url) {
-          WORKING_URL = connectionStatus.url;
-          setError('Found a new server connection. Please try again.');
-        } else {
-          setServerStatus('offline');
-        }
-      } else {
-        setError('An unexpected error occurred. Please try again.');
-      }
-      
-      console.log('Error details:', error);
+      // Only show this message if all other error handlers failed
+      setError('An unexpected error occurred. Please try again later.');
     }
   };
 
