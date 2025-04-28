@@ -129,12 +129,37 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
    ..\start-backend.bat
    ```
 
-## Authentication Flow
+## Authentication System
 
-1. **Signup**: Users register with email and password
-2. **Email Verification**: A verification link is sent to the user's email
-3. **Login**: After verification, users can log in with their credentials
-4. **Session Management**: Authentication tokens stored in AsyncStorage
+The Slugger App includes a comprehensive authentication system that handles user registration, login, email verification, and password management.
+
+### Key Authentication Features
+
+- **User Registration**: Create new accounts with email, password, and profile information
+- **Email Verification**: Verify user emails before allowing account access
+- **User Login**: Secure login with JWT token-based authentication
+- **Remember Password**: Save login credentials for faster access with improved convenience
+- **Password Reset**: (Not yet implemented) Ability to request password reset when forgotten
+
+### Authentication Components
+
+- **Routes**: `/backend/src/routes/auth.js` - Contains all authentication API endpoints
+- **Model**: `/backend/src/models/user.js` - Defines the user data structure
+- **Tests**: `/backend/tests/auth/authTests.test.js` - Comprehensive test suite for authentication
+- **Remember Password Test**: `/backend/tests/auth/rememberPassword.test.js` - Tests for credential persistence between sessions
+
+
+### Testing Authentication
+
+The authentication system is tested using a mock-based approach that ensures complete coverage:
+
+```bash
+cd backend
+npm test -- tests/auth/authTests.test.js
+```
+
+
+For detailed test information, see `/backend/User Authentication/README.md`.
 
 ## API Endpoints
 
