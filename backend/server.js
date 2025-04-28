@@ -14,6 +14,9 @@ const activityRoutes = require('./routes/activities');
 const statsRoutes = require('./homepage/routes/index');
 const groupRoutes = require('./routes/group');
 const teamRoutes = require('./src/routes/team');
+const analyticsRoutes = require('./src/analytics/analytics.controller');
+const activityLogRoutes = require('./src/routes/activity-log');
+
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
@@ -193,6 +196,8 @@ app.use('/api/posts', authMiddleware, postsRouter);
 app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/activity-log', activityLogRoutes);
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
