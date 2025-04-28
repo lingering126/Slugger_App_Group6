@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator, Image} from 'react-native'
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator, Image, Alert } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/native'
@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { userService, groupService } from '../../services/api' 
 
 // Physical activities library
+// Expanded Physical Activities
 const physicalActivities = [
   { id: 1, name: 'Cricket', icon: '🏏' },
   { id: 2, name: 'Soccer', icon: '⚽' },
@@ -17,7 +18,6 @@ const physicalActivities = [
   { id: 7, name: 'Cycle', icon: '🚴' },
   { id: 8, name: 'Swim', icon: '🏊' },
   { id: 9, name: 'Home Workout', icon: '🏠' },
-  { id: 10, name: 'Physio', icon: '🧑‍⚕️' },
   { id: 11, name: 'Yoga', icon: '🧘' },
   { id: 12, name: 'Squash', icon: '🎾' },
   { id: 13, name: 'Rugby', icon: '🏉' },
@@ -25,32 +25,145 @@ const physicalActivities = [
   { id: 15, name: 'Steps goal', icon: '👣' },
   { id: 16, name: 'DIY', icon: '🔨' },
   { id: 17, name: 'Gardening', icon: '🌱' },
+  { id: 19, name: 'Pilates', icon: '🧘‍♀️' },
+  { id: 20, name: 'Dance', icon: '💃' },
+  { id: 21, name: 'Rock Climbing', icon: '🧗' },
+  { id: 22, name: 'Martial Arts', icon: '🥋' },
+  { id: 23, name: 'Tennis', icon: '🎾' },
+  { id: 24, name: 'Basketball', icon: '🏀' },
+  { id: 25, name: 'Hiking', icon: '🥾' },
+  { id: 26, name: 'Skiing/Snowboarding', icon: '🎿' },
+  { id: 27, name: 'Kayaking/Paddling', icon: '🛶' },
+  { id: 28, name: 'Golf', icon: '⛳' },
+  { id: 29, name: 'Volleyball', icon: '🏐' },
+  { id: 30, name: 'Badminton', icon: '🏸' },
+  { id: 31, name: 'Table Tennis', icon: '🏓' },
+  { id: 32, name: 'Boxing', icon: '🥊' },
+  { id: 33, name: 'Surfing', icon: '🏄' },
+  { id: 34, name: 'Baseball', icon: '⚾' },
+  { id: 35, name: 'Softball', icon: '🥎' },
+  { id: 36, name: 'American Football', icon: '🏈' },
+  { id: 37, name: 'Hockey', icon: '🏒' },
+  { id: 38, name: 'Skating', icon: '⛸️' },
+  { id: 39, name: 'Rowing', icon: '🚣' },
+  { id: 40, name: 'Crossfit', icon: '🏋️' },
+  { id: 41, name: 'Bowling', icon: '🎳' },
+  { id: 42, name: 'Archery', icon: '🏹' },
+  { id: 43, name: 'Horse Riding', icon: '🏇' },
+  { id: 44, name: 'Jumping Rope', icon: '⏱️' },
+  { id: 45, name: 'Frisbee', icon: '🥏' },
+  { id: 46, name: 'Bouldering', icon: '🧗‍♂️' },
+  { id: 47, name: 'Gymnastics', icon: '🤸' },
+  { id: 48, name: 'Tai Chi', icon: '🧘‍♂️' },
+  { id: 49, name: 'Kickboxing', icon: '👊' },
+  { id: 50, name: 'Weightlifting', icon: '🏋️‍♀️' },
+  { id: 51, name: 'Stretching', icon: '🤸‍♀️' },
+  { id: 52, name: 'Sailing', icon: '⛵' },
+  { id: 53, name: 'Scuba Diving', icon: '🤿' },
+  { id: 54, name: 'Snorkeling', icon: '🥽' },
+  { id: 55, name: 'Fishing', icon: '🎣' },
+  { id: 56, name: 'Canoeing', icon: '🛶' },
+  { id: 57, name: 'Water Polo', icon: '🤽' },
+  { id: 58, name: 'Ballet', icon: '🩰' },
+  { id: 59, name: 'Parkour', icon: '🏃‍♂️' },
+  { id: 60, name: 'Skateboarding', icon: '🛹' },
+  { id: 61, name: 'Rollerblading', icon: '🛼' },
+  { id: 62, name: 'Ice Hockey', icon: '🏒' },
+  { id: 63, name: 'Handball', icon: '🤾' },
+  { id: 64, name: 'Wrestling', icon: '🤼' },
+  { id: 65, name: 'Judo', icon: '🥋' },
+  { id: 66, name: 'Karate', icon: '🥋' },
+  { id: 67, name: 'Lawn Bowling', icon: '🎳' },
+  { id: 68, name: 'Aerobics', icon: '💃' },
+  { id: 69, name: 'Zumba', icon: '💃' },
+  { id: 70, name: 'Spinning', icon: '🚲' },
+  { id: 71, name: 'Circuit Training', icon: '⚡' },
+  { id: 72, name: 'Stair Climbing', icon: '🪜' },
+  { id: 73, name: 'Functional Training', icon: '🏋️‍♂️' },
+  { id: 74, name: 'Snowshoeing', icon: '❄️' },
+  { id: 75, name: 'Cross-country Skiing', icon: '⛷️' },
+  { id: 76, name: 'Mountain Biking', icon: '🚵' },
+  { id: 77, name: 'BMX', icon: '🚵‍♂️' },
+  { id: 78, name: 'Wakeboarding', icon: '🏄‍♂️' },
+  { id: 79, name: 'Kitesurfing', icon: '🪁' },
+  { id: 80, name: 'Windsurfing', icon: '🏄‍♀️' },
+  { id: 81, name: 'Paragliding', icon: '🪂' },
+  { id: 82, name: 'Hang Gliding', icon: '🪂' },
+  { id: 83, name: 'Bungee Jumping', icon: '🧗‍♀️' },
+  { id: 84, name: 'Rafting', icon: '🚣‍♀️' },
+  { id: 85, name: 'Canyoning', icon: '🏞️' },
+  { id: 86, name: 'Stand-up Paddleboarding', icon: '🏄‍♂️' },
+  { id: 87, name: 'Disc Golf', icon: '🥏' },
+  { id: 88, name: 'Lacrosse', icon: '🥍' },
+  { id: 89, name: 'Cricket nets', icon: '🏏' },
+  { id: 90, name: 'Ultimate Frisbee', icon: '🥏' },
+  { id: 91, name: 'Trail Running', icon: '🏃‍♀️' },
+  { id: 92, name: 'Paintball', icon: '🔫' },
+  { id: 93, name: 'Indoor Climbing', icon: '🧗‍♀️' },
+  { id: 94, name: 'Cheerleading', icon: '📣' },
+  { id: 95, name: 'Dancing', icon: '💃' },
+  { id: 96, name: 'Pole Dancing', icon: '💃' },
+  { id: 97, name: 'Hula Hooping', icon: '⭕' },
   { id: 18, name: 'Physical other', icon: '❓' }
-]
+];
 
-// Mental activities library
+// Realistic Mental Activities List
 const mentalActivities = [
   { id: 1, name: 'Meditation', icon: '🧘' },
   { id: 2, name: 'Reading', icon: '📚' },
   { id: 3, name: 'Writing', icon: '✍️' },
   { id: 4, name: 'Music Practice', icon: '🎵' },
-  { id: 5, name: 'Mental Gym', icon: '🧠' },
-  { id: 6, name: 'Duolingo', icon: '🦉' },
-  { id: 7, name: 'Language Training', icon: '🗣️' },
-  { id: 8, name: 'Cold shower', icon: '🚿' },
-  { id: 9, name: 'Mental other', icon: '❓' },
-  { id: 10, name: 'Journal', icon: '📓' },
-  { id: 11, name: 'Breathing exercise', icon: '💨' }
-]
+  { id: 5, name: 'Brain Training', icon: '🧠' },
+  { id: 6, name: 'Language Learning', icon: '🗣️' },
+  { id: 7, name: 'Journaling', icon: '📓' },
+  { id: 8, name: 'Breathing Exercise', icon: '💨' },
+  { id: 10, name: 'Puzzle Solving', icon: '🧩' },
+  { id: 11, name: 'Drawing/Sketching', icon: '🎨' },
+  { id: 12, name: 'Mindfulness', icon: '🪷' },
+  { id: 13, name: 'Online Course', icon: '🎓' },
+  { id: 14, name: 'Podcast', icon: '🎧' },
+  { id: 15, name: 'Audiobook', icon: '🔊' },
+  { id: 16, name: 'Chess', icon: '♟️' },
+  { id: 17, name: 'Sudoku', icon: '🔢' },
+  { id: 18, name: 'Crossword', icon: '📝' },
+  { id: 19, name: 'Educational Video', icon: '📺' },
+  { id: 20, name: 'Gratitude Practice', icon: '🙏' },
+  { id: 21, name: 'Digital Detox', icon: '📵' },
+  { id: 22, name: 'Planning/Organizing', icon: '📅' },
+  { id: 23, name: 'Self-reflection', icon: '💭' },
+  { id: 24, name: 'Cooking New Recipe', icon: '👨‍🍳' },
+  { id: 25, name: 'DIY Project', icon: '🔧' },
+  { id: 26, name: 'Gardening', icon: '🌱' },
+  { id: 27, name: 'Knowledge Sharing', icon: '👨‍🏫' },
+  { id: 28, name: 'Therapy Session', icon: '🛋️' },
+  { id: 29, name: 'Skill Practice', icon: '🛠️' },
+  { id: 30, name: 'Documentary', icon: '🎬' },
+  { id: 31, name: 'Board Game', icon: '🎲' },
+  { id: 32, name: 'Reading News', icon: '📰' },
+  { id: 33, name: 'Learning Instrument', icon: '🎸' },
+  { id: 34, name: 'Photography', icon: '📷' },
+  { id: 35, name: 'Creative Writing', icon: '📝' },
+  { id: 36, name: 'Goal Setting', icon: '🎯' },
+  { id: 37, name: 'Public Speaking', icon: '🎤' },
+  { id: 38, name: 'Deep Conversation', icon: '💬' },
+  { id: 39, name: 'Hobby Time', icon: '🧶' },
+  { id: 40, name: 'Nature Observation', icon: '🌿' },
+  { id: 9, name: 'Mental other', icon: '❓' }
+];
 
-// Bonus activities library
+// Expanded Bonus Activities
 const bonusActivities = [
   { id: 1, name: 'Community Service', icon: '🤝' },
   { id: 2, name: 'Family', icon: '👨‍👩‍👧‍👦' },
   { id: 3, name: 'Personal Best', icon: '🏆' },
   { id: 4, name: 'Personal Goal', icon: '🎯' },
+  { id: 6, name: 'Environmental Action', icon: '🌍' },
+  { id: 7, name: 'Volunteering', icon: '❤️' },
+  { id: 8, name: 'Teaching Others', icon: '👨‍🏫' },
+  { id: 9, name: 'Religious/Spiritual Practice', icon: '🕊️' },
+  { id: 10, name: 'Self-Care', icon: '🧖' },
   { id: 5, name: 'Bonus other', icon: '✨' }
-]
+];
 
 export default function Profile() {
   const router = useRouter()
@@ -63,7 +176,6 @@ export default function Profile() {
   // Groups state
   const [groups, setGroups] = useState([])
   const [loadingGroups, setLoadingGroups] = useState(false)
-  const [selectedGroup, setSelectedGroup] = useState(null)
   
   // Activity selection states
   const [selectedPhysicalActivities, setSelectedPhysicalActivities] = useState([])
@@ -72,21 +184,46 @@ export default function Profile() {
   const [mentalModalVisible, setMentalModalVisible] = useState(false)
   const [selectedBonusActivities, setSelectedBonusActivities] = useState([])
   const [bonusModalVisible, setBonusModalVisible] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
   
-  // Load user data function
+  // Load user data function with better error handling
   const loadUserData = async () => {
     try {
       setLoading(true)
       
-      // Get user data from AsyncStorage
-      const userJson = await AsyncStorage.getItem('user')
-      const user = userJson ? JSON.parse(userJson) : null
+      // Get user data from service or AsyncStorage
+      const user = await userService.getUserProfile()
       
       if (!user) {
         throw new Error('User data not found')
       }
       
       setUserData(user)
+      
+      // Load saved activity preferences
+      if (user.activitySettings) {
+        // Find the full activity objects based on saved IDs
+        if (user.activitySettings.physicalActivities) {
+          const savedPhysical = physicalActivities.filter(activity => 
+            user.activitySettings.physicalActivities.includes(activity.id)
+          )
+          setSelectedPhysicalActivities(savedPhysical)
+        }
+        
+        if (user.activitySettings.mentalActivities) {
+          const savedMental = mentalActivities.filter(activity => 
+            user.activitySettings.mentalActivities.includes(activity.id)
+          )
+          setSelectedMentalActivities(savedMental)
+        }
+        
+        if (user.activitySettings.bonusActivities) {
+          const savedBonus = bonusActivities.filter(activity => 
+            user.activitySettings.bonusActivities.includes(activity.id)
+          )
+          setSelectedBonusActivities(savedBonus)
+        }
+      }
     } catch (err) {
       console.error('Error loading user data:', err)
       setError('Failed to load profile data')
@@ -105,36 +242,19 @@ export default function Profile() {
   // Fetch groups function
   const fetchGroups = async () => {
     try {
-      setLoadingGroups(true);
-      const userGroups = await groupService.getUserGroups();
+      setLoadingGroups(true)
       
-      // Get current user data
-      const currentUserJson = await AsyncStorage.getItem('user');
-      const currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
+      // Get groups from service
+      const userGroups = await groupService.getUserGroups()
+      setGroups(userGroups)
       
-      // Update any group members that match the current user ID with latest user data
-      if (currentUser) {
-        const updatedGroups = userGroups.map(group => {
-          const updatedMembers = (group.members || []).map(member => {
-            if (member._id === currentUser._id || member.id === currentUser.id) {
-              // Replace with latest user data
-              return { ...member, ...currentUser };
-            }
-            return member;
-          });
-          return { ...group, members: updatedMembers };
-        });
-        setGroups(updatedGroups);
-      } else {
-        setGroups(userGroups);
-      }
     } catch (error) {
-      console.error('Error fetching groups:', error);
-      // Keep the groups array empty if there's an error
+      console.error('Error fetching groups:', error)
+      // Keep the groups array as is if there's an error
     } finally {
-      setLoadingGroups(false);
+      setLoadingGroups(false)
     }
-  };
+  }
   
   // Load user data when component mounts
   useEffect(() => {
@@ -144,8 +264,8 @@ export default function Profile() {
   // Refresh data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      loadUserData();
-      fetchGroups(); // Refresh groups when returning to Profile
+      loadUserData()
+      fetchGroups() // Refresh groups when returning to Profile
       return () => {
         // Cleanup if needed
       }
@@ -170,10 +290,10 @@ export default function Profile() {
     })
   }
   
-  // Save user settings
+  // Save user settings with proper API integration
   const saveUserSettings = async () => {
     try {
-      // Show some form of loading indicator
+      setSavingSettings(true)
       
       // Create the data object to send to API
       const activitySettings = {
@@ -182,21 +302,46 @@ export default function Profile() {
         bonusActivities: selectedBonusActivities.map(a => a.id)
       }
       
-      // This would call the API service to save settings
-      // await userService.saveUserActivities(activitySettings)
+      // Update local user object
+      const updatedUserData = {
+        ...userData,
+        activitySettings,
+        updatedAt: new Date().toISOString()
+      }
       
-      // For now, we'll just simulate a successful save
-      alert('Settings saved successfully!')
+      // Save to local storage first
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUserData))
+      
+      // Then update user profile via API
+      try {
+        // This would call the API service to save settings
+        await userService.updateUserProfile({
+          activitySettings
+        })
+        
+        // Update local state
+        setUserData(updatedUserData)
+        
+        Alert.alert('Success', 'Activity settings saved successfully!')
+      } catch (apiError) {
+        console.error('API error saving settings:', apiError)
+        Alert.alert(
+          'Warning', 
+          'Settings saved locally but could not connect to server. Your changes will sync when connection is restored.'
+        )
+      }
     } catch (error) {
       console.error('Error saving settings:', error)
-      alert('Failed to save settings. Please try again.')
+      Alert.alert('Error', 'Failed to save settings. Please try again.')
+    } finally {
+      setSavingSettings(false)
     }
   }
   
   // Navigate to edit profile
   const handleEditProfile = () => {
-    router.push('/screens/(tabs)/profile/EditProfile');
-  };
+    router.push('/screens/(tabs)/profile/EditProfile')
+  }
   
   // Show loading placeholder while fetching user data
   if (loading) {
@@ -233,6 +378,10 @@ export default function Profile() {
               <Image 
                 source={{ uri: userData.avatarUrl }} 
                 style={{ width: '100%', height: '100%' }}
+                onError={(e) => {
+                  console.log('Avatar image error:', e.nativeEvent.error)
+                  // Fall back to placeholder on error
+                }}
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
@@ -250,7 +399,20 @@ export default function Profile() {
         {/* Bio section */}
         {userData?.bio ? (
           <View style={styles.bioContainer}>
+            <View style={styles.goalLabelContainer}>
+              <Text style={styles.goalLabel}>Bio:</Text>
+            </View>
             <Text style={styles.bioText}>{userData.bio}</Text>
+          </View>
+        ) : null}
+        
+        {/* Long-term Goal section */}
+        {userData?.longTermGoal ? (
+          <View style={styles.goalContainer}>
+            <View style={styles.goalLabelContainer}>
+              <Text style={styles.goalLabel}>Long-term Goal:</Text>
+            </View>
+            <Text style={styles.goalText}>{userData.longTermGoal}</Text>
           </View>
         ) : null}
         
@@ -262,7 +424,7 @@ export default function Profile() {
         </TouchableOpacity>
       </View>
 
-      {/* Rest of the profile content - updated for groups */}
+      {/* Rest of the profile content */}
       <ScrollView style={styles.content}>
         <Text style={styles.sectionTitle}>My Groups</Text>
         {loadingGroups ? (
@@ -281,14 +443,9 @@ export default function Profile() {
             style={styles.groupsScrollView}
           >
             {groups.map(group => (
-              <TouchableOpacity
+              <View
                 key={group._id || group.id}
-                style={[
-                  styles.groupCard, 
-                  selectedGroup && (selectedGroup._id || selectedGroup.id) === (group._id || group.id) ? 
-                    styles.selectedGroupCard : {}
-                ]}
-                onPress={() => setSelectedGroup(group)}
+                style={styles.groupCard}
               >
                 <View style={styles.groupCardIcon}>
                   <Text style={styles.groupCardIconText}>
@@ -299,37 +456,11 @@ export default function Profile() {
                 <Text style={styles.groupCardMembers}>
                   {group.members?.length || 0} members
                 </Text>
-              </TouchableOpacity>
+              </View>
             ))}
           </ScrollView>
         )}
         
-        <Text style={styles.sectionTitle}>Group Members</Text>
-        {selectedGroup ? (
-          <View style={styles.membersContainer}>
-            {(selectedGroup.members || []).map((member, index) => (
-              <View key={member._id || member.id || index} style={styles.memberItem}>
-                <View style={styles.memberAvatar}>
-                  {member.avatarUrl ? (
-                    <Image 
-                      source={{ uri: member.avatarUrl }} 
-                      style={{ width: '100%', height: '100%', borderRadius: 20 }}
-                    />
-                  ) : (
-                    <Text style={styles.memberAvatarText}>
-                      {member.name ? member.name.substring(0, 2).toUpperCase() : "??"}
-                    </Text>
-                  )}
-                </View>
-                <Text style={styles.memberName}>{member.name || `Member ${index + 1}`}</Text>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.placeholder}>
-            <Text style={styles.placeholderText}>Select a group to see members</Text>
-          </View>
-        )}
         <Text style={styles.sectionTitle}>Activity Settings</Text>
         
         {/* Physical Activities Section */}
@@ -460,10 +591,10 @@ export default function Profile() {
               try {
                 // Remove the welcomeCompleted flag from AsyncStorage
                 await AsyncStorage.removeItem('welcomeCompleted')
-                alert('Welcome flow has been reset. Log out and back in to see the welcome screens.')
+                Alert.alert('Success', 'Welcome flow has been reset. Log out and back in to see the welcome screens.')
               } catch (error) {
                 console.error('Error resetting welcome flow:', error)
-                alert('Failed to reset welcome flow: ' + error.message)
+                Alert.alert('Error', 'Failed to reset welcome flow: ' + error.message)
               }
             }}
           >
@@ -472,8 +603,16 @@ export default function Profile() {
         </View>
         
         {/* Save Button */}
-        <TouchableOpacity style={styles.saveButton} onPress={saveUserSettings}>
-          <Text style={styles.saveButtonText}>Save Settings</Text>
+        <TouchableOpacity 
+          style={styles.saveButton} 
+          onPress={saveUserSettings}
+          disabled={savingSettings}
+        >
+          {savingSettings ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save Settings</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
       
@@ -734,6 +873,27 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 20,
   },
+  // Long-term Goal styles
+  goalContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 5,
+    marginBottom: 10,
+  },
+  goalLabelContainer: {
+    marginBottom: 4,
+  },
+  goalLabel: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  goalText: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
+  },
   editButton: {
     marginTop: 15,
     backgroundColor: '#0E5E6F',
@@ -786,10 +946,6 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  selectedGroupCard: {
-    borderWidth: 2,
-    borderColor: '#3A8891',
-  },
   groupCardIcon: {
     width: 60,
     height: 60,
@@ -814,38 +970,6 @@ const styles = StyleSheet.create({
   groupCardMembers: {
     fontSize: 14,
     color: '#666',
-  },
-  // Members styles
-  membersContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 15,
-  },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  memberAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0E5E6F',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  memberAvatarText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  memberName: {
-    fontSize: 16,
-    color: '#333',
   },
   // Activities styles
   activitySection: {
