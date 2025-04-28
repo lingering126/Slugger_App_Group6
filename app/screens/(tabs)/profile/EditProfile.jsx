@@ -25,6 +25,7 @@ export default function EditProfile() {
     name: '',
     email: '',
     bio: '',
+    longTermGoal: '', // Added longTermGoal field
   });
   // State for avatar image
   const [avatarSource, setAvatarSource] = useState(null);
@@ -47,6 +48,7 @@ export default function EditProfile() {
           name: user.name || '',
           email: user.email || '',
           bio: user.bio || '',
+          longTermGoal: user.longTermGoal || '', // Load longTermGoal
         });
 
         // Set avatar source if it exists in user data
@@ -249,13 +251,14 @@ export default function EditProfile() {
         console.log("Avatar source starts with:", avatarSource.substring(0, 50) + '...');
       }
       
-      // Update user data with new values including avatar
+      // Update user data with new values including avatar and longTermGoal
       const updatedUserData = {
         ...userData,
         name: formData.name,
         email: formData.email,
         bio: formData.bio,
-        avatarUrl: avatarSource  // CHANGED: using avatarUrl instead of avatar
+        longTermGoal: formData.longTermGoal, // Added longTermGoal
+        avatarUrl: avatarSource
       };
       
       // Add debug log for complete update data
@@ -362,6 +365,22 @@ export default function EditProfile() {
             multiline={true}
             numberOfLines={4}
           />
+          
+          {/* New Long-term Goal Section */}
+          <Text style={styles.fieldLabel}>Long-term Goal</Text>
+          <View style={styles.goalContainer}>
+            <Text style={styles.goalDescription}>
+              Set a meaningful long-term goal that you want to achieve. 
+            </Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={formData.longTermGoal}
+              onChangeText={(text) => handleChange('longTermGoal', text)}
+              placeholder="Example: Run a marathon, Learn to play piano, Write a book..."
+              multiline={true}
+              numberOfLines={3}
+            />
+          </View>
         </View>
 
         {/* Save Button */}
@@ -490,6 +509,15 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  goalContainer: {
+    marginBottom: 10,
+  },
+  goalDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   saveButton: {
     backgroundColor: '#0E5E6F',
