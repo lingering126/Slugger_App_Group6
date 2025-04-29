@@ -239,23 +239,45 @@ export default function Profile() {
     }
   }
   
+
   // Fetch groups function
-  const fetchGroups = async () => {
-    try {
-      setLoadingGroups(true)
-      
-      // Get groups from service
-      const userGroups = await groupService.getUserGroups()
-      setGroups(userGroups)
-      
-    } catch (error) {
-      console.error('Error fetching groups:', error)
-      // Keep the groups array as is if there's an error
-    } finally {
-      setLoadingGroups(false)
+const fetchGroups = async () => {
+  console.log('fetchGroups: Starting to fetch teams data');
+  try {
+    setLoadingGroups(true);
+    
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      console.warn('fetchGroups: No token found');
+      setGroups([]);
+      return;
     }
+    
+    // Using the correct API endpoint (/teams instead of /groups)
+    const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+    console.log('fetchGroups: Using API URL:', `${apiUrl}/teams`);
+    
+    const response = await fetch(`${apiUrl}/teams`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch teams: ${response.status}`);
+    }
+    
+    const teamsData = await response.json();
+    console.log('fetchGroups: Successfully retrieved teams data', teamsData?.length || 0);
+    setGroups(teamsData);
+  } catch (error) {
+    console.error('fetchGroups: Error:', error);
+    // Keep the groups array as is if there's an error
+  } finally {
+    setLoadingGroups(false);
   }
-  
+};
   // Load user data when component mounts
   useEffect(() => {
     loadUserData()
