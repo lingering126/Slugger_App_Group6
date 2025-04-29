@@ -143,6 +143,29 @@ export default function LoginScreen() {
       console.log('Attempting login with:', email);
       console.log('Using API URL:', apiUrl);
       
+      // Quick server check before login - but don't show error to user unless we're sure it's a server issue
+      try {
+        const controller = new AbortController();
+        const quickTimeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const pingResponse = await fetch(`${apiUrl}/ping`, {
+          method: 'GET',
+          signal: controller.signal
+        });
+        
+        clearTimeout(quickTimeoutId);
+        
+        // Don't show server errors to the user at this point
+        // Just log for debugging purposes
+        if (!pingResponse.ok) {
+          console.log('Server ping failed with status:', pingResponse.status);
+          // Don't set error message here as it could be misleading
+        }
+      } catch (pingError) {
+        console.log('Server ping error:', pingError.message);
+        // Continue with login attempt even if ping fails
+      }
+      
       // Create an abort controller for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
@@ -153,111 +176,144 @@ export default function LoginScreen() {
       }, 15000);
       
       let response, data;
+      let retryCount = 0;
+      const maxRetries = 2;
       
-      try {
-        response = await fetch(`${apiUrl}/auth/login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email,
-            password
-          }),
-          signal: controller.signal
-        });
-        
-        // Clear the timeout since we got a response
-        clearTimeout(timeoutId);
-        
-        // Start with assumption that bad credentials were entered
-        // This is a safe fallback for any authentication error
-        setError('Invalid email or password');
-        
+      while (retryCount <= maxRetries) {
         try {
-          data = await response.json();
-          console.log('Login response:', {
-            status: response.status,
-            data: data
+          if (retryCount > 0) {
+            console.log(`Retry attempt ${retryCount}/${maxRetries}...`);
+          }
+          
+          response = await fetch(`${apiUrl}/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email,
+              password
+            }),
+            signal: controller.signal
           });
           
-          if (response.status === 403 && data.requiresVerification) {
-            setNeedsVerification(true);
-            setVerificationEmail(data.email || email);
-            setError('');
-          } else if (!response.ok) {
-            // Keep "Invalid email or password" for 400/401 errors
-            if (response.status !== 400 && response.status !== 401) {
-              setError(data.message || 'An error occurred during login. Please try again.');
-            }
-            setLoading(false);
-            return;
+          // If we got a response (even error response), no need to retry
+          break;
+        } catch (fetchRetryError) {
+          retryCount++;
+          
+          // If we've reached max retries or it's not a network error, don't retry
+          if (retryCount > maxRetries || 
+              fetchRetryError.name !== 'TypeError' || 
+              !fetchRetryError.message.includes('Network request failed')) {
+            throw fetchRetryError;
           }
           
-          // Process successful login
-          console.log('Login successful');
+          console.log(`Network error, retrying (${retryCount}/${maxRetries})...`);
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        }
+      }
+      
+      // Clear the timeout since we got a response
+      clearTimeout(timeoutId);
+      
+      // Don't set an error message here - wait until we know what kind of error it is
+      // We'll set the appropriate error message after checking the response status
+      
+      try {
+        // First check content type to see if it's really JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          // If not JSON, log the text response for debugging
+          const textResponse = await response.text();
+          console.log('Non-JSON response received:', textResponse.substring(0, 150) + '...');
           
-          // Save credentials if remember password is checked
-          if (rememberPassword) {
-            await AsyncStorage.setItem('savedEmail', email);
-            await AsyncStorage.setItem('savedPassword', password);
+          // Check if this is a 401/403 response (likely an authentication error)
+          if (response.status === 401 || response.status === 403) {
+            setError('Invalid email or password');
           } else {
-            // Clear saved credentials if not checked
-            await AsyncStorage.removeItem('savedEmail');
-            await AsyncStorage.removeItem('savedPassword');
-          }
-          
-          // Store user data
-          await AsyncStorage.setItem('userToken', data.token);
-          await AsyncStorage.setItem('userId', data.user.id);
-          await AsyncStorage.setItem('username', data.user.username);
-          
-          console.log('User data stored in AsyncStorage');
-          
-          // Check if the user has completed the welcome flow
-          const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
-          console.log('Welcome completed status:', welcomeCompleted);
-          
-          // If the user is logging in for the first time, redirect to welcome page
-          if (!welcomeCompleted) {
-            console.log('First time login detected, redirecting to welcome page');
-            
-            try {
-              // Verify that the welcome route exists
-              router.replace('/screens/welcome');
-              console.log('Navigation to welcome page initiated');
-            } catch (navError) {
-              console.error('Error navigating to welcome page:', navError);
-              // Fallback to home if welcome page navigation fails
-              router.replace('/screens/(tabs)/home');
-            }
-          } else {
-            console.log('Welcome already completed, redirecting to home page');
-            // Navigate to home screen after successful login
-            router.replace('/screens/(tabs)/home');
-          }
-        } catch (parseError) {
-          console.error('Error parsing response:', parseError);
-          if (response.status === 400 || response.status === 401) {
-            // Keep the default "Invalid email or password" for auth errors
-          } else {
-            setError('An error occurred during login. Please try again.');
+            setError('Please check your connection and try again');
           }
           setLoading(false);
+          return;
         }
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        console.log('Fetch error details:', fetchError);
         
-        // Only show connection errors for actual network issues
-        if (fetchError.name === 'AbortError') {
-          setError('Connection timed out. Please check your internet connection and try again.');
-        } else if (fetchError.name === 'TypeError' && fetchError.message.includes('Network request failed')) {
-          setError('Network error. Please check your connection and try again.');
+        data = await response.json();
+        console.log('Login response:', {
+          status: response.status,
+          data: data
+        });
+        
+        if (response.status === 403 && data.requiresVerification) {
+          setNeedsVerification(true);
+          setVerificationEmail(data.email || email);
+          setError('');
+        } else if (!response.ok) {
+          // For authentication errors (400/401/403), always use clear messaging
+          if (response.status === 400 || response.status === 401 || response.status === 403) {
+            setError('Invalid email or password');
+          } else {
+            setError(data.message || 'An error occurred during login. Please try again.');
+          }
+          setLoading(false);
+          return;
+        }
+        
+        // Process successful login
+        console.log('Login successful');
+        
+        // Save credentials if remember password is checked
+        if (rememberPassword) {
+          await AsyncStorage.setItem('savedEmail', email);
+          await AsyncStorage.setItem('savedPassword', password);
         } else {
-          setError('An error occurred during login. Please try again.');
+          // Clear saved credentials if not checked
+          await AsyncStorage.removeItem('savedEmail');
+          await AsyncStorage.removeItem('savedPassword');
         }
         
+        // Store user data
+        await AsyncStorage.setItem('userToken', data.token);
+        await AsyncStorage.setItem('userId', data.user.id);
+        await AsyncStorage.setItem('username', data.user.name);
+        
+        console.log('User data stored in AsyncStorage');
+        
+        // Check if the user has completed the welcome flow
+        const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
+        console.log('Welcome completed status:', welcomeCompleted);
+        
+        // If the user is logging in for the first time, redirect to welcome page
+        if (!welcomeCompleted) {
+          console.log('First time login detected, redirecting to welcome page');
+          
+          try {
+            // Verify that the welcome route exists
+            router.replace('/screens/welcome');
+            console.log('Navigation to welcome page initiated');
+          } catch (navError) {
+            console.error('Error navigating to welcome page:', navError);
+            // Fallback to home if welcome page navigation fails
+            router.replace('/screens/(tabs)/home');
+          }
+        } else {
+          console.log('Welcome already completed, redirecting to home page');
+          // Navigate to home screen after successful login
+          router.replace('/screens/(tabs)/home');
+        }
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        
+        // For authentication errors (400/401/403), always prioritize showing "Invalid email or password"
+        if (response.status === 400 || response.status === 401 || response.status === 403) {
+          setError('Invalid email or password');
+        } else if (parseError.message === 'Server returned non-JSON response') {
+          // This will never be reached now since we handle non-JSON responses earlier
+          setError('Please check your connection and try again');
+        } else {
+          setError('An error occurred. Please try again.');
+        }
         setLoading(false);
       }
     } catch (error) {
@@ -267,9 +323,18 @@ export default function LoginScreen() {
         stack: error.stack,
         type: typeof error
       });
+      
+      // Provide user-friendly error messages
+      if (error.name === 'AbortError') {
+        setError('Connection timed out. Please try again.');
+      } else if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
+        setError('Network error. Please check your connection.');
+      } else {
+        // Default error message
+        setError('Unable to log in. Please try again.');
+      }
+      
       setLoading(false);
-      // Only show this message if all other error handlers failed
-      setError('An unexpected error occurred. Please try again later.');
     }
   };
 

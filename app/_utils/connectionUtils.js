@@ -313,4 +313,10 @@ export const checkServerConnection = async (apiUrls) => {
       message: 'Cannot connect to server. Please check your network connection and server status.'
     };
   }
+};
+
+// Export all functions as default
+export default {
+  testDirectConnection,
+  checkServerConnection
 }; 

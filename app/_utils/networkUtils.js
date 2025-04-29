@@ -153,4 +153,71 @@ export const resetConnectionStats = () => {
   global.connectionStats = {};
   console.log('Connection stats reset');
   return true;
+};
+
+// Add scan network for server function
+export const scanNetworkForServer = async () => {
+  console.log('Scanning network for server...');
+  
+  try {
+    // Get server IP
+    const serverIP = IPConfig.getServerIP();
+    
+    if (!serverIP) {
+      console.log('No server IP found from Expo Constants');
+      return { status: 'offline', message: 'No server IP found' };
+    }
+    
+    // Try different ports if the server port is not specified
+    const portsToTry = [API_CONFIG.PORT, 5000, 3000];
+    
+    for (const port of portsToTry) {
+      const apiUrl = `http://${serverIP}:${port}/api`;
+      const pingUrl = `http://${serverIP}:${port}/ping`;
+      
+      console.log(`Trying to ping server at: ${pingUrl}`);
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        
+        const response = await fetch(pingUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          console.log(`Server found at ${apiUrl}`);
+          global.workingApiUrl = apiUrl;
+          recordSuccessfulConnection(apiUrl);
+          return { status: 'online', message: 'Server found', url: apiUrl };
+        }
+      } catch (error) {
+        console.log(`Error connecting to ${pingUrl}:`, error.message);
+      }
+    }
+    
+    return { status: 'offline', message: 'No server found on network' };
+  } catch (error) {
+    console.error('Error scanning network:', error);
+    return { status: 'error', message: 'Error scanning network', error: error.message };
+  }
+};
+
+// Export all functions as default
+export default {
+  getPrioritizedUrls,
+  recordSuccessfulConnection,
+  getApiUrl,
+  pingServer,
+  promptForServerIP,
+  clearConnectionCache,
+  getConnectionStats,
+  resetConnectionStats,
+  scanNetworkForServer
 }; 
