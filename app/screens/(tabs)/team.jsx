@@ -7,6 +7,33 @@ import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { Dropdown } from 'react-native-element-dropdown';
 
+// Component to display current user's name
+const CurrentUserDisplay = () => {
+  const [userName, setUserName] = useState('');
+  
+  useEffect(() => {
+    const getUserInfo = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const parsedUser = JSON.parse(userData);
+          // Use name, username, or email as fallbacks
+          const displayName = parsedUser.name || parsedUser.username || 
+                            (parsedUser.email ? parsedUser.email.split('@')[0] : 'User');
+          setUserName(displayName);
+        }
+      } catch (error) {
+        console.error('Error getting user info:', error);
+        setUserName('User');
+      }
+    };
+    
+    getUserInfo();
+  }, []);
+  
+  return <Text style={styles.memberName}>{userName}</Text>;
+};
+
 export default function TeamsScreen() {
   const [teams, setTeams] = useState([]);
   const [userTeam, setUserTeam] = useState(null);
@@ -288,16 +315,71 @@ export default function TeamsScreen() {
         throw new Error(data.message || 'Failed to join team');
       }
 
-      // Update user team status
-      const team = teams.find(t => t._id === teamId);
-      if (team) {
+      // Fetch the updated team data directly from the server to get the current member list
+      const updatedTeamResponse = await fetch(`${apiUrl}/teams/${teamId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!updatedTeamResponse.ok) {
+        console.error('Error fetching updated team data');
+        // Fallback to using the local team data if we can't get updated data
+        const team = teams.find(t => t._id === teamId);
+        if (team) {
+          setIsEditingTeam(false);
+          setEditedTeam({
+            name: team.name || '',
+            description: team.description || ''
+          });
+          setUserTeam(team);
+        }
+      } else {
+        // Use the fresh team data from the server
+        const updatedTeamData = await updatedTeamResponse.json();
+        console.log('Updated team data:', updatedTeamData);
+        
+        // Make sure the current user is included in the members list
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const currentUser = JSON.parse(userData);
+          
+          // Check if current user is already in the members list
+          const userAlreadyInMembers = updatedTeamData.members && updatedTeamData.members.some(member => {
+            if (typeof member === 'object' && member.user) {
+              return member.user._id === currentUser.id || member.user.id === currentUser.id;
+            }
+            return false;
+          });
+          
+          // If user is not in members list, add them (as a fallback)
+          if (!userAlreadyInMembers && updatedTeamData.members) {
+            updatedTeamData.members.push({
+              user: {
+                _id: currentUser.id,
+                id: currentUser.id,
+                name: currentUser.name || currentUser.username,
+                email: currentUser.email
+              },
+              role: 'Member'
+            });
+          }
+        }
+        
         // Initialize edit state
         setIsEditingTeam(false);
         setEditedTeam({
-          name: team.name || '',
-          description: team.description || ''
+          name: updatedTeamData.name || '',
+          description: updatedTeamData.description || ''
         });
-        setUserTeam(team);
+        
+        // Update the team in state
+        setUserTeam(updatedTeamData);
+        
+        // Save the updated team data to AsyncStorage
+        await AsyncStorage.setItem('userTeam', JSON.stringify(updatedTeamData));
       }
 
       Alert.alert('Success', 'Successfully joined the team');
@@ -311,7 +393,7 @@ export default function TeamsScreen() {
   };
 
   // Enhanced leave team functionality to ensure state refresh after leaving
-  const handleLeaveTeam = () => {
+  const handleLeaveTeam = async () => {
     if (!userTeam) {
       console.log('No team to leave');
       return;
@@ -319,29 +401,8 @@ export default function TeamsScreen() {
     
     console.log('Preparing to leave team:', userTeam._id);
     
-    // Save team ID for later use
-    const teamIdToLeave = userTeam._id;
-    
-    // Immediately clear user team state and return to team list
-    setUserTeam(null);
-    
-    // Immediately reload team list
-    loadTeams();
-    
-    // Set a timer to delay refresh of team list to ensure state update
-    setTimeout(() => {
-      console.log('Refreshing team list after delay');
-      loadTeams();
-    }, 1000);
-    
-    // Delay refresh again to ensure backend data is updated
-    setTimeout(() => {
-      console.log('Final refresh of team list');
-      loadTeams();
-    }, 2000);
-    
-    // Attempt to call API to leave team in the background
     try {
+<<<<<<< Updated upstream
       // Get token
       AsyncStorage.getItem('token').then(token => {
         if (!token) return;
@@ -370,9 +431,50 @@ export default function TeamsScreen() {
         xhr.send(JSON.stringify({ groupId: teamIdToLeave }));
       }).catch(err => {
         console.error('Error getting token:', err);
+=======
+      setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+      
+      const teamIdToLeave = userTeam._id;
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      // Use the correct endpoint: /teams/leave instead of /groups/leave
+      const response = await fetch(`${apiUrl}/teams/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          teamId: teamIdToLeave  // Use teamId parameter name to match backend
+        })
+>>>>>>> Stashed changes
       });
+      
+      console.log('Leave team API response status:', response.status);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to leave team');
+      }
+      
+      // Clear user team state
+      setUserTeam(null);
+      
+      // Clear stored team data from AsyncStorage
+      await AsyncStorage.removeItem('userTeam');
+      
+      Alert.alert('Success', 'Successfully left the team');
+      await loadTeams(); // Reload team list
     } catch (error) {
-      console.error('Error in leave team process:', error);
+      console.error('Error leaving team:', error);
+      Alert.alert('Error', error.message || 'Failed to leave team');
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -906,6 +1008,7 @@ export default function TeamsScreen() {
 
       <View style={styles.membersContainer}>
         <Text style={styles.sectionTitle}>Team Members ({userTeam.members?.length || 0})</Text>
+        {/* Display existing team members */}
         {userTeam.members?.map((member, index) => (
           <View key={index} style={styles.memberCard}>
             <Ionicons name="person-circle" size={40} color="#4A90E2" />
@@ -921,6 +1024,29 @@ export default function TeamsScreen() {
             </View>
           </View>
         ))}
+        
+        {/* Always show current user in the members list */}
+        {userId && (!userTeam.members || !userTeam.members.some(member => {
+          // Check if current user is already shown in the list above
+          if (typeof member === 'object' && member.user) {
+            return member.user._id === userId || member.user.id === userId;
+          }
+          if (typeof member === 'string') {
+            return member === userId;
+          }
+          if (typeof member === 'object' && member._id) {
+            return member._id === userId;
+          }
+          return false;
+        })) && (
+          <View style={[styles.memberCard, {backgroundColor: '#E6F2FF'}]}>
+            <Ionicons name="person-circle" size={40} color="#4A90E2" />
+            <View style={styles.memberInfo}>
+              <CurrentUserDisplay />
+              <Text style={styles.memberRole}>Member</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Team targets section */}
@@ -1424,7 +1550,43 @@ export default function TeamsScreen() {
       </View>
 
       <FlatList
-        data={teams.filter(team => team.name.toLowerCase().includes(search.toLowerCase()))}
+        data={teams
+          .filter(team => team.name.toLowerCase().includes(search.toLowerCase()))
+          // Sort teams to keep joined teams at the top
+          .sort((a, b) => {
+            const isUserInTeamA = a.members && Array.isArray(a.members) && a.members.some(member => {
+              if (typeof member === 'object' && member.user) {
+                return member.user._id === userId || member.user.id === userId;
+              }
+              if (typeof member === 'string') {
+                return member === userId;
+              }
+              if (typeof member === 'object' && member._id) {
+                return member._id === userId;
+              }
+              return false;
+            });
+            
+            const isUserInTeamB = b.members && Array.isArray(b.members) && b.members.some(member => {
+              if (typeof member === 'object' && member.user) {
+                return member.user._id === userId || member.user.id === userId;
+              }
+              if (typeof member === 'string') {
+                return member === userId;
+              }
+              if (typeof member === 'object' && member._id) {
+                return member._id === userId;
+              }
+              return false;
+            });
+            
+            // If user is in team A but not in team B, A should come first
+            if (isUserInTeamA && !isUserInTeamB) return -1;
+            // If user is in team B but not in team A, B should come first
+            if (!isUserInTeamA && isUserInTeamB) return 1;
+            // Otherwise maintain original order
+            return 0;
+          })}
         keyExtractor={(item) => item._id}
         renderItem={renderTeamCard}
         ListEmptyComponent={renderEmptyState}
