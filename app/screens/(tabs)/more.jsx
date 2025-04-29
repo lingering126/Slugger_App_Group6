@@ -15,9 +15,11 @@ export default function MoreScreen() {
           // Clear authentication tokens
           await AsyncStorage.removeItem('token');
           await AsyncStorage.removeItem('user');
+          await AsyncStorage.removeItem('userToken');
+          await AsyncStorage.removeItem('userId');
+          await AsyncStorage.removeItem('username');
           
-          // Optionally keep saved email for convenience but clear password
-          await AsyncStorage.removeItem('savedPassword');
+          // Note: We don't remove savedEmail or savedPassword to preserve the "Remember password" feature
           
           // Clear any cached connection URLs (optional)
           global.workingApiUrl = null;
@@ -41,9 +43,11 @@ export default function MoreScreen() {
                 // Clear authentication tokens
                 await AsyncStorage.removeItem('token');
                 await AsyncStorage.removeItem('user');
+                await AsyncStorage.removeItem('userToken');
+                await AsyncStorage.removeItem('userId');
+                await AsyncStorage.removeItem('username');
                 
-                // Optionally keep saved email for convenience but clear password
-                await AsyncStorage.removeItem('savedPassword');
+                // Note: We don't remove savedEmail or savedPassword to preserve the "Remember password" feature
                 
                 // Clear any cached connection URLs (optional)
                 global.workingApiUrl = null;

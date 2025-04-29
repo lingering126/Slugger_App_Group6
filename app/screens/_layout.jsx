@@ -15,9 +15,12 @@ export default function ScreensLayout() {
       {/* Authentication screens */}
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="signup" options={{ headerShown: false }} />
+      <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="reset-password" options={{ headerShown: false }} />
       
       {/* Utility screens */}
       <Stack.Screen name="connection-test" options={{ headerShown: true, title: 'Connection Test' }} />
+      <Stack.Screen name="verify-email" options={{ headerShown: false }} />
       
       {/* Main app screens - using nested tabs */}
       <Stack.Screen 

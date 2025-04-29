@@ -578,7 +578,7 @@ const PostCard = ({ post }) => {
             <Text style={styles.avatarText}>{post.author?.[0] || '?'}</Text>
           </View>
           <View style={styles.userInfoText}>
-            <Text style={styles.username}>{post.author?.name || 'Anonymous'}</Text>
+            <Text style={styles.username}>{post.author || 'Anonymous'}</Text>
             <Text style={styles.postTime}>
               {new Date(post.createdAt).toLocaleDateString('en-US', {
                 year: 'numeric',
@@ -601,13 +601,13 @@ const PostCard = ({ post }) => {
                   <Text style={styles.commentAvatarText}>
                     {comment?.author?.[0] || '?'}
                   </Text>
-          </View>
+                </View>
                 <Text style={styles.commentAuthor}>{comment?.author || 'Anonymous'}</Text>
                 <Text style={styles.commentContent}>{comment?.content || ''}</Text>
-          </View>
-        </View>
+              </View>
+            </View>
           ))}
-      </View>
+        </View>
       )}
 
       {/* 评论按钮和输入框 */}

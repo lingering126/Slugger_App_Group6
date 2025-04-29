@@ -1,29 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getApiUrl, checkServerConnection } from '../utils';
+import { getApiUrl, checkServerConnection } from '../_utils';
 import { FontAwesome } from '@expo/vector-icons';
+
+/**
+ * Signup Screen Component
+ * 
+ * Handles new user registration with features:
+ * - Input validation (name, email format, password strength)
+ * - Server connectivity check
+ * - Registration API integration
+ * - Success/failure state management
+ * - Email verification instructions
+ */
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
-let WORKING_URL = null;
+let WORKING_URL = null; // Cache for the first successfully connected URL
 
 export default function SignupScreen() {
+  // Form fields state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
   const [name, setName] = useState('');
+  
+  // UI and Error state
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState('checking');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // Signup success state
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
+  
   const router = useRouter();
 
-  // Check if the server is reachable
+  // Effect hook to check server connection status on mount
   useEffect(() => {
     const checkServer = async () => {
       try {
@@ -54,13 +70,17 @@ export default function SignupScreen() {
     checkServer();
   }, []);
 
+  /**
+   * Handles the user registration process.
+   * Validates inputs, sends data to the backend API, manages loading state,
+   * displays errors, and shows success/verification instructions.
+   */
   const handleSignup = async () => {
     try {
       setLoading(true);
       setError('');
       
-      // Validate inputs
-
+      // Validate all form inputs
       if (!email || !password || !confirmPassword || !name) {
         setError('Please fill in all fields');
         setLoading(false);
@@ -73,7 +93,7 @@ export default function SignupScreen() {
         return;
       }
       
-      // Simple email validation
+      // Simple email format validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         setError('Please enter a valid email address');
@@ -81,26 +101,22 @@ export default function SignupScreen() {
         return;
       }
       
-      // Password strength validation
+      // Basic password strength validation
       if (password.length < 6) {
         setError('Password must be at least 6 characters long');
         setLoading(false);
         return;
       }
-      
-      // Check if password contains at least one letter (can't be all numbers)
       if (!/[a-zA-Z]/.test(password)) {
         setError('Password must contain at least one letter');
         setLoading(false);
         return;
       }
       
-      // Use the working URL if available, otherwise try all URLs
+      // Determine API URL and set up request timeout
       const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
       console.log('Attempting signup with:', email);
       console.log('Using API URL:', apiUrl);
-      
-      // Create an abort controller for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
@@ -110,6 +126,7 @@ export default function SignupScreen() {
       }, 15000);
       
       try {
+        // Send signup request to the backend
         const response = await fetch(`${apiUrl}/auth/signup`, {
           method: 'POST',
           headers: {
@@ -123,13 +140,11 @@ export default function SignupScreen() {
           signal: controller.signal
         });
         
-        // Clear the timeout since we got a response
         clearTimeout(timeoutId);
-        
         console.log('Signup response status:', response.status);
-        
         const data = await response.json();
         
+        // Handle API response
         if (!response.ok) {
           console.log('Signup error data:', data);
           setError(data.message || 'Signup failed');
@@ -137,23 +152,25 @@ export default function SignupScreen() {
           return;
         }
         
+        // Handle successful signup
         console.log('Signup successful');
         setVerificationEmail(email);
-        setSignupSuccess(true);
+        setSignupSuccess(true); // Update state to show verification screen
         setLoading(false);
       } catch (fetchError) {
+        // Handle network or fetch-related errors
         clearTimeout(timeoutId);
         throw fetchError;
       }
     } catch (error) {
+      // Handle general errors, including timeouts and network issues
       console.log('Signup error:', error.message);
       setLoading(false);
-      
       if (error.name === 'AbortError') {
         setError('Request timed out. Please try again.');
       } else if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
         setError('Network error. Please check your connection and try again.');
-        // Try to find another working URL
+        // Attempt to find a new server connection
         const connectionStatus = await checkServerConnection(API_URLS);
         if (connectionStatus.status === 'online' && connectionStatus.url) {
           WORKING_URL = connectionStatus.url;
@@ -164,11 +181,13 @@ export default function SignupScreen() {
       } else {
         setError('An unexpected error occurred. Please try again.');
       }
-      
       console.log('Error details:', error);
     }
   };
 
+  /**
+   * Navigates the user to the Login screen.
+   */
   const navigateToLogin = () => {
     // Prevent multiple rapid taps
     if (loading) return;
@@ -190,15 +209,21 @@ export default function SignupScreen() {
     }, 300);
   };
 
+  /**
+   * Toggles the visibility of the password input field.
+   */
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
 
+  /**
+   * Toggles the visibility of the confirm password input field.
+   */
   const toggleConfirmPasswordVisibility = () => {
     setShowConfirmPassword(!showConfirmPassword);
   };
 
-  // If signup was successful, show verification instructions
+  // Render the email verification success screen if signup was successful
   if (signupSuccess) {
     return (
       <SafeAreaView style={styles.container}>
@@ -380,23 +405,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
   },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 25,
-    marginBottom: 15,
-  },
-  passwordInput: {
-    flex: 1,
-    height: '100%',
-    paddingHorizontal: 20,
-    fontSize: 16,
-  },
-
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',

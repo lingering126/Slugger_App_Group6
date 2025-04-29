@@ -3,7 +3,7 @@
  * This module handles initial setup tasks when the app first loads
  */
 
-import Utils from '../utils';
+import Utils from '../_utils';
 import { Platform, Alert } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import IPConfig from '../config/ipConfig';

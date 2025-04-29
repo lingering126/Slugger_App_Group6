@@ -1,6 +1,8 @@
 // API Configuration
 const API_CONFIG = {
   API_URL: 'http://localhost:5001/api',
+  PORT: 5001,
+  BASE_URL: 'http://localhost:5001',
   ENDPOINTS: {
     AUTH: {
       LOGIN: '/auth/login',

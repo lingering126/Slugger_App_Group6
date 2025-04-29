@@ -1,3 +1,9 @@
+/**
+ * JWT Token Verification Utility
+ * 
+ * This script verifies a JWT token and displays its decoded contents.
+ * Used for testing and debugging authentication issues.
+ */
 const jwt = require('jsonwebtoken');
 
 const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxIiwiaWF0IjoxNzQ1MjQyMDQ3fQ.DZDnvAGF18E4MnqLe6zBJy5ZUNTNIRdSwwCvhLYcqhw';
