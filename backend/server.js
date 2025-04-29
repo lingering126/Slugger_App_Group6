@@ -9,13 +9,14 @@ const bcrypt = require('bcryptjs');
 const os = require('os');
 const User = require('./src/models/user');
 const postsRouter = require('./homepage/routes/posts');
-const { router: authRoutes, authMiddleware } = require('./routes/auth');
+const { router: authRoutes } = require('./routes/auth');
+const authMiddleware = require('./middleware/auth');
 const activityRoutes = require('./routes/activities');
 const statsRoutes = require('./homepage/routes/index');
-const groupRoutes = require('./routes/group');
-const teamRoutes = require('./src/routes/team');
+const teamRoutes = require('./routes/team');
 // Add this line to import the new profiles routes
 const profileRoutes = require('./routes/profiles');
+
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
@@ -202,7 +203,6 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/posts', authMiddleware, postsRouter);
 app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
-app.use('/api/groups', groupRoutes);
 // Add this line to register the profiles routes
 app.use('/api/profiles', profileRoutes);
 
@@ -333,6 +333,7 @@ app.get('/api/users/:userId', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
 
 app.post('/api/auth/signup', async (req, res) => {
   try {

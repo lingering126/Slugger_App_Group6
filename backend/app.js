@@ -5,6 +5,7 @@ const { errorHandler } = require('./middleware/errorHandler');
 const auth = require('./middleware/auth');
 const activityRoutes = require('./routes/activities');
 const homepageRoutes = require('./homepage/routes');
+const userTargetRoutes = require('./routes/userTarget');
 
 const app = express();
 
@@ -27,7 +28,7 @@ app.use((req, res, next) => {
 });
 
 // Routes
-const authRoutes = require('./routes/auth');
+const authRoutes = require('./routes/auth').router;
 const postRoutes = require('./homepage/routes/posts');
 
 // Public routes
@@ -37,8 +38,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/posts', auth, postRoutes);
 app.use('/api/activities', auth, activityRoutes);
 app.use('/api/homepage', auth, homepageRoutes);
+app.use('/api/user-target', auth, userTargetRoutes);
 
 // Error handling middleware
 app.use(errorHandler);
 
-module.exports = app; 
+module.exports = app;

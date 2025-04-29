@@ -21,15 +21,13 @@ export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState(''); // Group name entered by the user
   const [groupDescription, setGroupDescription] = useState(''); // Group description entered by the user
   const [targetName, setTargetName] = useState(''); // Selected target category
-  const [targetMentalValue, setTargetMentalValue] = useState(0); // Mental target value
-  const [targetPhysicalValue, setTargetPhysicalValue] = useState(0); // Physical target value
-  const [targetValue, setTargetValue] = useState(0); // Total target value (mental + physical)
+  const [personalTargetValue, setPersonalTargetValue] = useState(3); // Personal target value (1-7)
   const [dailyLimitPhysical, setDailyLimitPhysical] = useState(7); // Daily physical limit
   const [dailyLimitMental, setDailyLimitMental] = useState(7); // Daily mental limit
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
   const router = useRouter(); // Router for navigation
 
-  // 定义下拉菜单数据
+  // Define dropdown menu data
   const targetData = [
     { label: 'Select a category', value: '' },
     { label: 'Target 1', value: 'Target 1' },
@@ -55,12 +53,15 @@ export default function CreateGroupScreen() {
     { label: '7', value: 7 },
   ];
 
-  // Automatically calculate the total target value whenever mental or physical values change
-  useEffect(() => {
-    const mental = parseInt(targetMentalValue, 10) || 0;
-    const physical = parseInt(targetPhysicalValue, 10) || 0;
-    setTargetValue(mental + physical);
-  }, [targetMentalValue, targetPhysicalValue]);
+  const personalTargetData = [
+    { label: '1', value: 1 },
+    { label: '2', value: 2 },
+    { label: '3', value: 3 },
+    { label: '4', value: 4 },
+    { label: '5', value: 5 },
+    { label: '6', value: 6 },
+    { label: '7', value: 7 },
+  ];
 
   // Function to handle the creation of a new group
   const handleCreateGroup = async () => {
@@ -88,48 +89,91 @@ export default function CreateGroupScreen() {
 
     try {
       // Retrieve the authentication token from local storage
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
+      console.log('Token retrieved:', token ? 'Token exists' : 'No token found');
+      
       if (!token) {
         throw new Error('No authentication token found');
       }
 
       // Define the API endpoint
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Using API URL:', apiUrl);
+
+      // First, update the user's personal target
+      try {
+        const userTargetResponse = await fetch(`${apiUrl}/user-target`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            targetValue: personalTargetValue
+          }),
+        });
+
+        if (!userTargetResponse.ok) {
+          console.warn('Failed to update personal target, but continuing with team creation');
+        } else {
+          console.log('Personal target updated successfully');
+        }
+      } catch (targetError) {
+        console.error('Error updating personal target:', targetError);
+        // Continue with team creation even if setting personal target fails
+      }
 
       // Send a POST request to create the group
-      const response = await fetch(`${apiUrl}/groups`, {
+      const response = await fetch(`${apiUrl}/teams`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: groupName,
           description: groupDescription,
           targetName,
-          targetMentalValue: parseInt(targetMentalValue, 10),
-          targetPhysicalValue: parseInt(targetPhysicalValue, 10),
           dailyLimitPhysical,
           dailyLimitMental,
         }),
       });
 
+      // Log response status for debugging
+      console.log('API response status:', response.status);
+      
       const data = await response.json();
+      console.log('API response data:', data);
 
       // Check if the response is successful
       if (!response.ok) {
         throw new Error(data.message || 'Failed to create group');
       }
 
+      // Store the newly created team data in AsyncStorage 
+      // so the user is automatically joined to the team
+      try {
+        // Extract the current user data
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          // Save the team data
+          await AsyncStorage.setItem('userTeam', JSON.stringify(data));
+          console.log('Saved team data to AsyncStorage:', data);
+        }
+      } catch (storageError) {
+        console.error('Error saving team data to AsyncStorage:', storageError);
+        // Continue execution even if storage fails
+      }
+
       setLoading(false); // Hide loading indicator
       if (Platform.OS === 'web') {
-        alert(`Group "${groupName}" created successfully!`);
-        router.replace('/screens/(tabs)/home'); // Navigate to the home screen
+        alert(`Team "${groupName}" created successfully!`);
+        router.replace('/screens/(tabs)/team'); // Navigate directly to team screen
       } else {
-        Alert.alert('Success', `Group "${groupName}" created successfully!`, [
+        Alert.alert('Success', `Team "${groupName}" created successfully!`, [
           {
             text: 'OK',
-            onPress: () => router.replace('/screens/(tabs)/home'),
+            onPress: () => router.replace('/screens/(tabs)/team'),
           },
         ]);
       }
@@ -193,22 +237,22 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-          {/* Input for mental target value and daily mental limit */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Mental Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={targetMentalValue.toString()}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setTargetMentalValue(intValue);
-                }}
-                placeholder="e.g., 50, 100"
-                keyboardType="numeric"
-              />
-            </View>
+          {/* Dropdown for personal target value */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Your Personal Target</Text>
+            <Dropdown
+              style={styles.dropdown}
+              data={personalTargetData}
+              labelField="label"
+              valueField="value"
+              placeholder="Select your personal target"
+              value={personalTargetValue}
+              onChange={(item) => setPersonalTargetValue(item.value)}
+            />
+          </View>
 
+          {/* Limits section */}
+          <View style={[styles.formGroup, styles.row]}>
             <View style={styles.halfWidth}>
               <Text style={styles.label}>Daily Mental Limit</Text>
               <Dropdown
@@ -219,23 +263,6 @@ export default function CreateGroupScreen() {
                 placeholder="Select limit"
                 value={dailyLimitMental}
                 onChange={(item) => setDailyLimitMental(item.value)}
-              />
-            </View>
-          </View>
-
-          {/* Input for physical target value and daily physical limit */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Physical Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={targetPhysicalValue.toString()}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setTargetPhysicalValue(intValue);
-                }}
-                placeholder="e.g., 200, 300"
-                keyboardType="numeric"
               />
             </View>
 
@@ -251,12 +278,6 @@ export default function CreateGroupScreen() {
                 onChange={(item) => setDailyLimitPhysical(item.value)}
               />
             </View>
-          </View>
-
-          {/* Display the total target value */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Total Target Value</Text>
-            <Text style={styles.totalValue}>{targetValue}</Text>
           </View>
 
           {/* Button to create the group */}
