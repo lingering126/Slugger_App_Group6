@@ -175,6 +175,10 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    // Update last login time
+    user.lastLogin = new Date();
+    await user.save();
+
     // Generate token
     const token = jwt.sign(
       { userId: user._id },
@@ -182,13 +186,133 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    // Return user data including longTermGoal and activitySettings
     res.json({
       token,
       user: {
         id: user._id,
         email: user.email,
-        name: user.name
+        name: user.name,
+        bio: user.bio,
+        longTermGoal: user.longTermGoal,
+        avatarUrl: user.avatarUrl,
+        status: user.status,
+        activitySettings: user.activitySettings || {
+          physicalActivities: [],
+          mentalActivities: [],
+          bonusActivities: []
+        },
+        createdAt: user.createdAt
       }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get user profile
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userData.userId;
+    
+    // Find user by ID
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Return user data without sensitive fields
+    res.json({
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+      bio: user.bio,
+      longTermGoal: user.longTermGoal,
+      avatarUrl: user.avatarUrl,
+      status: user.status,
+      activitySettings: user.activitySettings || {
+        physicalActivities: [],
+        mentalActivities: [],
+        bonusActivities: []
+      },
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// NEW ENDPOINT: Get current user profile (/me)
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userData.userId;
+    
+    // Find user by ID
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Return user data without sensitive fields
+    res.json({
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+      bio: user.bio,
+      longTermGoal: user.longTermGoal,
+      avatarUrl: user.avatarUrl,
+      status: user.status,
+      activitySettings: user.activitySettings || {
+        physicalActivities: [],
+        mentalActivities: [],
+        bonusActivities: []
+      },
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update user profile
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userData.userId;
+    const { name, bio, longTermGoal, avatarUrl, activitySettings } = req.body;
+    
+    // Find user by ID
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Update fields if provided
+    if (name) user.name = name;
+    if (bio !== undefined) user.bio = bio;
+    if (longTermGoal !== undefined) user.longTermGoal = longTermGoal;
+    if (avatarUrl) user.avatarUrl = avatarUrl;
+    if (activitySettings) user.activitySettings = activitySettings;
+    
+    // Save updated user
+    await user.save();
+    
+    // Return updated user data
+    res.json({
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+      bio: user.bio,
+      longTermGoal: user.longTermGoal,
+      avatarUrl: user.avatarUrl,
+      status: user.status,
+      activitySettings: user.activitySettings,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -420,4 +544,25 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-module.exports = router; 
+// Authentication middleware
+const authMiddleware = (req, res, next) => {
+  try {
+    // Get authorization header
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication failed. No token provided.' });
+    }
+    
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Add user ID to request object
+    req.userData = { userId: decoded.userId };
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Authentication failed. Invalid token.' });
+  }
+};
+
+module.exports = { router, authMiddleware };
