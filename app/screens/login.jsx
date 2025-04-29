@@ -178,6 +178,8 @@ export default function LoginScreen() {
           await AsyncStorage.setItem('userToken', data.token);
           await AsyncStorage.setItem('userId', data.user.id);
           await AsyncStorage.setItem('username', data.user.username);
+          await AsyncStorage.setItem('user', JSON.stringify(data.user));
+
           
           console.log('User data stored in AsyncStorage');
           

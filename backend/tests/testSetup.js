@@ -1,33 +1,37 @@
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const User = require('../src/models/user');
 
 let mongoServer;
 
-// Setup function to run before tests
+// 连接到测试数据库
 const setupTestDB = async () => {
   try {
     mongoServer = await MongoMemoryServer.create();
     const mongoUri = mongoServer.getUri();
-    await mongoose.connect(mongoUri);
+    await mongoose.connect(mongoUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
   } catch (error) {
-    console.error('Error setting up test database:', error);
+    console.error('Error connecting to test database:', error);
     throw error;
   }
 };
 
-// Cleanup function to run after tests
+// 断开数据库连接
 const teardownTestDB = async () => {
   try {
     await mongoose.disconnect();
     await mongoServer.stop();
   } catch (error) {
-    console.error('Error tearing down test database:', error);
+    console.error('Error closing database connection:', error);
     throw error;
   }
 };
 
-// Clear all collections after each test
+// 清空数据库
 const clearDatabase = async () => {
   try {
     const collections = mongoose.connection.collections;
@@ -40,21 +44,23 @@ const clearDatabase = async () => {
   }
 };
 
-// Create a mock user and generate a valid JWT token
-const createMockUserAndToken = () => {
-  const mockUser = {
-    _id: new mongoose.Types.ObjectId(),
+// 创建模拟用户和令牌
+const createMockUserAndToken = async () => {
+  const mockUser = new User({
     name: 'Test User',
-    email: 'test@example.com'
-  };
-
+    username: 'testuser',
+    email: 'test@example.com',
+    password: 'password123'
+  });
+  await mockUser.save();
+  
   const token = jwt.sign(
     { id: mockUser._id },
-    process.env.JWT_SECRET || 'test-secret-key',
+    process.env.JWT_SECRET || 'your-secret-key',
     { expiresIn: '1h' }
   );
-
-  return { mockUser, token };
+  
+  return { user: mockUser, token };
 };
 
 module.exports = {
