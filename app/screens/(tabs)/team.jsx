@@ -403,6 +403,7 @@ export default function TeamsScreen() {
     
     try {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       // Get token
       AsyncStorage.getItem('token').then(token => {
         if (!token) return;
@@ -432,6 +433,8 @@ export default function TeamsScreen() {
       }).catch(err => {
         console.error('Error getting token:', err);
 =======
+=======
+>>>>>>> Stashed changes
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
@@ -452,6 +455,9 @@ export default function TeamsScreen() {
         body: JSON.stringify({
           teamId: teamIdToLeave  // Use teamId parameter name to match backend
         })
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
       });
       
