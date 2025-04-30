@@ -402,63 +402,26 @@ export default function TeamsScreen() {
     console.log('Preparing to leave team:', userTeam._id);
     
     try {
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-      // Get token
-      AsyncStorage.getItem('token').then(token => {
-        if (!token) return;
-        
-        const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${apiUrl}/groups/leave`);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-        
-        xhr.onload = function() {
-          console.log('Leave team API response status:', xhr.status);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            console.log('Successfully left team, refreshing team list');
-            // Refresh team list after successful API call
-            loadTeams();
-          } else {
-            console.error('Error leaving team:', xhr.responseText);
-          }
-        };
-        
-        xhr.onerror = function() {
-          console.error('Network error when leaving team');
-        };
-        
-        xhr.send(JSON.stringify({ groupId: teamIdToLeave }));
-      }).catch(err => {
-        console.error('Error getting token:', err);
-=======
-=======
->>>>>>> Stashed changes
-      setLoading(true);
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        Alert.alert('Error', 'Please log in first');
-        return;
-      }
-      
-      const teamIdToLeave = userTeam._id;
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      
-      // Use the correct endpoint: /teams/leave instead of /groups/leave
-      const response = await fetch(`${apiUrl}/teams/leave`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          teamId: teamIdToLeave  // Use teamId parameter name to match backend
-        })
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
+setLoading(true);
+const token = await AsyncStorage.getItem('userToken');
+if (!token) {
+  Alert.alert('Error', 'Please log in first');
+  return;
+}      
+const teamIdToLeave = userTeam._id;
+const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';      
+// Use the correct endpoint: /teams/leave instead of /groups/leave
+const response = await fetch(`${apiUrl}/teams/leave`, {
+  method: 'POST',
+  headers: {          
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    teamId: teamIdToLeave  // Use teamId parameter name to match backend
+  })
+});
+
       });
       
       console.log('Leave team API response status:', response.status);
