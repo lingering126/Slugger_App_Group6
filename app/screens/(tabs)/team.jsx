@@ -368,28 +368,26 @@ export default function TeamsScreen() {
     console.log('Preparing to leave team:', userTeam._id);
     
     try {
-
-setLoading(true);
-const token = await AsyncStorage.getItem('userToken');
-if (!token) {
-  Alert.alert('Error', 'Please log in first');
-  return;
-}      
-const teamIdToLeave = userTeam._id;
-const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';      
-// Use the correct endpoint: /teams/leave instead of /groups/leave
-const response = await fetch(`${apiUrl}/teams/leave`, {
-  method: 'POST',
-  headers: {          
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  },
-  body: JSON.stringify({
-    teamId: teamIdToLeave  // Use teamId parameter name to match backend
-  })
-});
-
-
+      setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+      
+      const teamIdToLeave = userTeam._id;
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      // Use the correct endpoint: /teams/leave instead of /groups/leave
+      const response = await fetch(`${apiUrl}/teams/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          teamId: teamIdToLeave  // Use teamId parameter name to match backend
+        })
       });
       
       console.log('Leave team API response status:', response.status);
