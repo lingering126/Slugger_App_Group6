@@ -43,10 +43,8 @@ export default function TeamsScreen() {
     name: '',
     description: '',
     targetName: '',
-    targetMentalValue: 0,
-    targetPhysicalValue: 0,
-    dailyLimitPhysical: 7,
-    dailyLimitMental: 7
+    weeklyLimitPhysical: 7,
+    weeklyLimitMental: 7
   });
   const [modalVisible, setModalVisible] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
@@ -92,50 +90,49 @@ export default function TeamsScreen() {
       if (userData) {
         const parsedUser = JSON.parse(userData);
         setUserId(parsedUser.id);
-        await loadTeams();
+        await loadTeams(false); // Don't load from storage by default
       }
     } catch (error) {
       console.error('Error loading user data:', error);
     }
   };
 
-  const loadTeams = async () => {
+  const loadTeams = async (loadFromStorage = false) => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         console.log('No token found');
         return;
       }
 
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      console.log('Loading teams from:', `${apiUrl}/groups/all`);
-      
-      const response = await fetch(`${apiUrl}/groups/all`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      // Only load from storage if explicitly asked to
+      if (loadFromStorage) {
+        // Check for saved userTeam data in AsyncStorage
+        const savedUserTeam = await AsyncStorage.getItem('userTeam');
+        if (savedUserTeam) {
+          try {
+            const parsedTeam = JSON.parse(savedUserTeam);
+            console.log('Found saved user team in AsyncStorage:', parsedTeam);
+            setUserTeam(parsedTeam);
+          } catch (error) {
+            console.error('Error parsing saved team data:', error);
+          }
         }
-      });
-
-      console.log('Response status:', response.status);
-      const data = await response.json();
-      console.log('Response data:', data);
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to load teams');
       }
 
-      if (!Array.isArray(data)) {
-        console.error('Teams data is not an array:', data);
+      console.log('Loading teams...');
+      const teamsData = await teamService.getAllTeams();
+      console.log('Teams data:', teamsData);
+
+      if (!Array.isArray(teamsData)) {
+        console.error('Teams data is not an array:', teamsData);
         setTeams([]);
         return;
       }
 
-      // Filter out teams with no members
-      const activeTeams = data.filter(team => team.members && team.members.length > 0);
-      setTeams(activeTeams);
+      // Display all teams, not just those with members
+      setTeams(teamsData);
 
       // Find the team that the user belongs to
       const userData = await AsyncStorage.getItem('user');
@@ -143,7 +140,7 @@ export default function TeamsScreen() {
         const parsedUser = JSON.parse(userData);
         console.log('Current user ID:', parsedUser.id);
         
-        const userTeam = activeTeams.find(team => {
+        const userTeam = teamsData.find(team => {
           console.log('Checking team:', team._id);
           console.log('Team members:', team.members);
           return team.members && team.members.some(member => {
@@ -153,7 +150,11 @@ export default function TeamsScreen() {
         });
         
         console.log('Found user team:', userTeam);
-        setUserTeam(userTeam);
+        if (userTeam && loadFromStorage) {
+          setUserTeam(userTeam);
+          // Save the team data to AsyncStorage for persistence
+          await AsyncStorage.setItem('userTeam', JSON.stringify(userTeam));
+        }
       }
     } catch (error) {
       console.error('Error loading teams:', error);
@@ -176,44 +177,35 @@ export default function TeamsScreen() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert('Error', 'Please log in first');
-        return;
+      
+      const teamData = {
+        name: newTeam.name,
+        description: newTeam.description,
+        targetName: newTeam.targetName,
+        weeklyLimitPhysical: parseInt(newTeam.weeklyLimitPhysical),
+        weeklyLimitMental: parseInt(newTeam.weeklyLimitMental)
+      };
+      
+      const createdTeam = await teamService.createTeam(teamData);
+      
+      // Store the newly created team data in AsyncStorage
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          await AsyncStorage.setItem('userTeam', JSON.stringify(createdTeam));
+          console.log('Saved team data to AsyncStorage:', createdTeam);
+        }
+      } catch (storageError) {
+        console.error('Error saving team data to AsyncStorage:', storageError);
       }
-
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      const response = await fetch(`${apiUrl}/groups`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: newTeam.name,
-          description: newTeam.description,
-          targetName: newTeam.targetName,
-          targetMentalValue: parseInt(newTeam.targetMentalValue),
-          targetPhysicalValue: parseInt(newTeam.targetPhysicalValue),
-          dailyLimitPhysical: parseInt(newTeam.dailyLimitPhysical),
-          dailyLimitMental: parseInt(newTeam.dailyLimitMental)
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to create team');
-      }
-
+      
       setModalVisible(false);
       setNewTeam({
         name: '',
         description: '',
         targetName: '',
-        targetMentalValue: 0,
-        targetPhysicalValue: 0,
-        dailyLimitPhysical: 7,
-        dailyLimitMental: 7
+        weeklyLimitPhysical: 7,
+        weeklyLimitMental: 7
       });
       Alert.alert('Success', 'Team created successfully');
       await loadTeams();
@@ -234,38 +226,11 @@ export default function TeamsScreen() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert('Error', 'Please log in first');
-        return;
-      }
-
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      console.log('Joining team by ID:', teamIdToJoin);
+      await teamService.joinTeamById(teamIdToJoin);
       
-      const response = await fetch(`${apiUrl}/groups/join-by-id`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ groupId: teamIdToJoin })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to join team');
-      }
-
       Alert.alert('Success', 'Joined team successfully');
       setTeamIdToJoin('');
       await loadTeams();
-      
-      // Find the recently joined team and set it as current team
-      const joinedTeam = teams.find(team => team._id === teamIdToJoin);
-      if (joinedTeam) {
-        setUserTeam(joinedTeam);
-      }
     } catch (error) {
       console.error('Error joining team by ID:', error);
       Alert.alert('Error', error.message || 'Failed to join team');
@@ -277,7 +242,7 @@ export default function TeamsScreen() {
   const handleJoinTeam = async (teamId) => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -286,14 +251,15 @@ export default function TeamsScreen() {
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       console.log('Joining team:', teamId);
       
-      const response = await fetch(`${apiUrl}/groups/join`, {
+      // Change endpoint from /groups/join to /teams/join to match the backend route
+      const response = await fetch(`${apiUrl}/teams/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          groupId: teamId
+          teamId: teamId  // Use teamId explicitly to avoid confusion
         })
       });
 
@@ -402,6 +368,7 @@ export default function TeamsScreen() {
     console.log('Preparing to leave team:', userTeam._id);
     
     try {
+
 setLoading(true);
 const token = await AsyncStorage.getItem('userToken');
 if (!token) {
@@ -421,6 +388,7 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
     teamId: teamIdToLeave  // Use teamId parameter name to match backend
   })
 });
+
 
       });
       
@@ -448,8 +416,15 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
   };
   
   // Separate function to handle "Back" button in team list
-  const handleBackToTeamList = () => {
+  const handleBackToTeamList = async () => {
     console.log('Returning to team list without leaving');
+    // Clear stored team data from AsyncStorage
+    try {
+      await AsyncStorage.removeItem('userTeam');
+      console.log('Cleared team data from AsyncStorage');
+    } catch (error) {
+      console.error('Error clearing team data from AsyncStorage:', error);
+    }
     setUserTeam(null);
   };
 
@@ -639,7 +614,7 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
             <Text style={styles.teamName}>{item.name}</Text>
           </View>
           <View style={styles.teamIdBadge}>
-            <Text style={styles.teamIdBadgeText}>ID: {item.groupId}</Text>
+            <Text style={styles.teamIdBadgeText}>ID: {item.teamId || item.groupId || 'N/A'}</Text>
           </View>
         </View>
         <View style={styles.teamCardBody}>
@@ -743,7 +718,7 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
   const handleUpdateTeam = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -790,7 +765,7 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
   const handleSaveTeamInfo = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -829,7 +804,7 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
   const handleSaveTargets = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -941,15 +916,16 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
           <View style={styles.teamIdContainer}>
             <View style={styles.teamIdInner}>
               <Text style={styles.teamIdLabel}>Team ID:</Text>
-              <Text style={styles.teamId}>{userTeam.groupId}</Text>
+              <Text style={styles.teamId}>{userTeam.teamId || userTeam.groupId || 'N/A'}</Text>
             </View>
             <TouchableOpacity 
               style={styles.copyButton}
               onPress={async () => {
                 try {
                   // Use the newly installed expo-clipboard package
-                  if (userTeam.groupId) {
-                    await Clipboard.setStringAsync(userTeam.groupId.toString());
+                  const teamId = userTeam.teamId || userTeam.groupId;
+                  if (teamId) {
+                    await Clipboard.setStringAsync(teamId.toString());
                     Alert.alert('Copied', 'Team ID copied to clipboard');
                   } else {
                     Alert.alert('Error', 'No team ID available to copy');
@@ -1055,29 +1031,60 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
                 }}
               />
             </View>
-            <View style={styles.editTargetField}>
-              <Text style={styles.editTargetLabel}>Mental Value:</Text>
-              <TextInput
-                style={styles.targetInput}
-                value={String(editedTeamInfo.targetMentalValue)}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setEditedTeamInfo({...editedTeamInfo, targetMentalValue: intValue});
-                }}
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.editTargetField}>
-              <Text style={styles.editTargetLabel}>Physical Value:</Text>
-              <TextInput
-                style={styles.targetInput}
-                value={String(editedTeamInfo.targetPhysicalValue)}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setEditedTeamInfo({...editedTeamInfo, targetPhysicalValue: intValue});
-                }}
-                keyboardType="numeric"
-              />
+            <View style={[styles.formGroup, styles.row]}>
+              <View style={styles.halfWidth}>
+                <Text style={styles.label}>Weekly Mental Limit</Text>
+                <Dropdown
+                  style={styles.dropdown}
+                  placeholderStyle={styles.placeholderStyle}
+                  selectedTextStyle={styles.selectedTextStyle}
+                  data={[
+                    { label: '0', value: 0 },
+                    { label: '1', value: 1 },
+                    { label: '2', value: 2 },
+                    { label: '3', value: 3 },
+                    { label: '4', value: 4 },
+                    { label: '5', value: 5 },
+                    { label: '6', value: 6 },
+                    { label: '7', value: 7 },
+                  ]}
+                  maxHeight={300}
+                  labelField="label"
+                  valueField="value"
+                  placeholder="Select limit"
+                  value={newTeam.weeklyLimitMental}
+                  onChange={item => {
+                    setNewTeam({...newTeam, weeklyLimitMental: item.value});
+                  }}
+                />
+              </View>
+
+              <View style={styles.halfWidth}>
+                <Text style={styles.label}>Weekly Physical Limit</Text>
+                <Dropdown
+                  style={styles.dropdown}
+                  placeholderStyle={styles.placeholderStyle}
+                  selectedTextStyle={styles.selectedTextStyle}
+                  data={[
+                    { label: '0', value: 0 },
+                    { label: '1', value: 1 },
+                    { label: '2', value: 2 },
+                    { label: '3', value: 3 },
+                    { label: '4', value: 4 },
+                    { label: '5', value: 5 },
+                    { label: '6', value: 6 },
+                    { label: '7', value: 7 },
+                  ]}
+                  maxHeight={300}
+                  labelField="label"
+                  valueField="value"
+                  placeholder="Select limit"
+                  value={newTeam.weeklyLimitPhysical}
+                  onChange={item => {
+                    setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
+                  }}
+                />
+              </View>
             </View>
             <View style={styles.editActions}>
               <TouchableOpacity 
@@ -1360,21 +1367,7 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
 
           <View style={[styles.formGroup, styles.row]}>
             <View style={styles.halfWidth}>
-              <Text style={styles.label}>Mental Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={String(newTeam.targetMentalValue)}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setNewTeam({ ...newTeam, targetMentalValue: intValue });
-                }}
-                placeholder="e.g., 50, 100"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Mental Limit</Text>
+              <Text style={styles.label}>Weekly Mental Limit</Text>
               <Dropdown
                 style={styles.dropdown}
                 placeholderStyle={styles.placeholderStyle}
@@ -1393,31 +1386,15 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
                 labelField="label"
                 valueField="value"
                 placeholder="Select limit"
-                value={newTeam.dailyLimitMental}
+                value={newTeam.weeklyLimitMental}
                 onChange={item => {
-                  setNewTeam({...newTeam, dailyLimitMental: item.value});
+                  setNewTeam({...newTeam, weeklyLimitMental: item.value});
                 }}
-              />
-            </View>
-          </View>
-
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Physical Target Value</Text>
-              <TextInput
-                style={styles.input}
-                value={String(newTeam.targetPhysicalValue)}
-                onChangeText={(text) => {
-                  const intValue = text.replace(/[^0-9]/g, '');
-                  setNewTeam({ ...newTeam, targetPhysicalValue: intValue });
-                }}
-                placeholder="e.g., 200, 300"
-                keyboardType="numeric"
               />
             </View>
 
             <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Physical Limit</Text>
+              <Text style={styles.label}>Weekly Physical Limit</Text>
               <Dropdown
                 style={styles.dropdown}
                 placeholderStyle={styles.placeholderStyle}
@@ -1436,9 +1413,9 @@ const response = await fetch(`${apiUrl}/teams/leave`, {
                 labelField="label"
                 valueField="value"
                 placeholder="Select limit"
-                value={newTeam.dailyLimitPhysical}
+                value={newTeam.weeklyLimitPhysical}
                 onChange={item => {
-                  setNewTeam({...newTeam, dailyLimitPhysical: item.value});
+                  setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
                 }}
               />
             </View>

@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import API_CONFIG from '../../config/api';
 import ActivityCard from '../../components/ActivityCard';
 
-// 活动分类数据
+// Activity category data
 const activityData = {
   Physical: [
     "Cricket", "Soccer", "Run", "Walk", "HIIT", "Gym Workout", 
@@ -28,14 +28,14 @@ const activityData = {
   ]
 };
 
-// 示例团队数据
+// Example team data
 const teams = [
   { id: 1, name: "Alpha Team" },
   { id: 2, name: "Beta Squad" },
   { id: 3, name: "Gamma Force" }
 ];
 
-// 更新示例帖子数据 - 按频道分类
+// Updated sample posts data - organized by channel
 const samplePosts = {
   public: [
     {
@@ -254,7 +254,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
-      // 将小时转换为分钟
+      // Convert hours to minutes
       const durationInMinutes = parseInt(selectedTime) * 60;
       
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.CREATE}`, {
@@ -328,7 +328,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             style={styles.picker} 
               onValueChange={(itemValue) => {
                 setSelectedTime(itemValue);
-                console.log('选择的时间:', itemValue); // 添加日志
+                console.log('Selected time:', itemValue); // Changed from Chinese to English
               }}
           >
             {[...Array(24).keys()].map((num) => (
@@ -349,7 +349,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
                 ]}
                   onPress={() => {
                     setSelectedActivity(activity);
-                    console.log('选择的活动:', activity); // 添加日志
+                    console.log('Selected activity:', activity); // Changed from Chinese to English
                   }}
               >
                 <Text style={[
@@ -454,14 +454,14 @@ const PostCard = ({ post }) => {
         setIsLiked(serverLikeStatus);
         setLikesCount(serverLikesCount);
       } else {
-        // 如果请求失败，恢复之前的状态
+        // If request fails, restore previous state
         console.error('Failed to update like status:', data);
         setIsLiked(prevIsLiked);
         setLikesCount(prevLikesCount);
         Alert.alert('Error', 'Failed to update like status');
       }
     } catch (error) {
-      // 发生错误时恢复之前的状态
+      // Restore previous state in case of error
       console.error('Error updating like status:', error);
       setIsLiked(prevIsLiked);
       setLikesCount(prevLikesCount);
@@ -1726,4 +1726,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HomeScreen; 
+export default HomeScreen;

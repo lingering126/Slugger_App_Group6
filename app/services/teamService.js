@@ -2,10 +2,11 @@ import axios from 'axios';
 import { API_URL } from '../config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// 获取认证token
+// Get auth token
 const getAuthToken = async () => {
   try {
-    const token = await AsyncStorage.getItem('token');
+    const token = await AsyncStorage.getItem('userToken');
+    console.log('Auth token retrieved:', token ? 'Token exists' : 'No token found');
     return token;
   } catch (error) {
     console.error('Error getting auth token:', error);
@@ -13,7 +14,7 @@ const getAuthToken = async () => {
   }
 };
 
-// 创建axios实例
+// Create axios instance
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -21,7 +22,7 @@ const api = axios.create({
   }
 });
 
-// 添加请求拦截器
+// Add request interceptor
 api.interceptors.request.use(
   async (config) => {
     const token = await getAuthToken();
@@ -35,10 +36,21 @@ api.interceptors.request.use(
   }
 );
 
+// Helper function to get the API base URL
+const getApiBaseUrl = () => {
+  return global.workingApiUrl || API_URL;
+};
+
+// Helper to determine which endpoint to use
+const getEndpoint = (path) => {
+  // This uses the team routes consistently
+  return path;
+};
+
 const teamService = {
   async getAllTeams() {
     try {
-      const response = await api.get('/teams');
+      const response = await api.get(getEndpoint('/teams/all'));
       console.log('Teams response:', response.data);
       return response.data;
     } catch (error) {
@@ -47,14 +59,24 @@ const teamService = {
     }
   },
 
+  async getUserTeams() {
+    try {
+      const response = await api.get(getEndpoint('/teams'));
+      console.log('User teams response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user teams:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
   async createTeam(teamData) {
     try {
-      const response = await api.post('/teams', teamData);
+      const response = await api.post(getEndpoint('/teams'), teamData);
       return response.data;
     } catch (error) {
       console.error('Error creating team:', error);
       if (error.response) {
-        // 如果有响应，显示服务器返回的错误信息
         throw new Error(error.response.data.message || 'Failed to create team');
       }
       throw error;
@@ -63,7 +85,7 @@ const teamService = {
 
   async getTeamById(teamId) {
     try {
-      const response = await api.get(`/teams/${teamId}`);
+      const response = await api.get(getEndpoint(`/teams/${teamId}`));
       return response.data;
     } catch (error) {
       console.error('Error fetching team:', error);
@@ -74,7 +96,7 @@ const teamService = {
   async joinTeam(teamId) {
     try {
       console.log('Joining team:', teamId);
-      const response = await api.post(`/teams/${teamId}/join`);
+      const response = await api.post(getEndpoint(`/teams/join`), { teamId });
       console.log('Join team response:', response.data);
       return response.data;
     } catch (error) {
@@ -83,147 +105,83 @@ const teamService = {
     }
   },
 
+  async joinTeamById(teamId) {
+    try {
+      console.log('Joining team by ID:', teamId);
+      const response = await api.post(getEndpoint('/teams/join-by-id'), { teamId });
+      console.log('Join team by ID response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error joining team by ID:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
   async leaveTeam(teamId) {
     try {
       console.log('Attempting to leave team with ID:', teamId);
-      // 使用完全原生的fetch调用，绕过可能的拦截器问题
-      const token = await getAuthToken();
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
-      
-      const apiUrl = global.workingApiUrl || API_URL;
-      console.log(`Using API URL: ${apiUrl}/groups/leave`);
-      
-      const response = await fetch(`${apiUrl}/groups/leave`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ groupId: teamId })
-      });
-      
-      console.log('Leave team response status:', response.status);
-      const data = await response.json();
-      console.log('Leave team response data:', data);
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to leave team');
-      }
-      
-      return data;
+      const response = await api.post(getEndpoint('/teams/leave'), { teamId });
+      console.log('Leave team response:', response.data);
+      return response.data;
     } catch (error) {
       console.error('Error leaving team:', error);
       throw error;
     }
   },
 
-  async addGoal(teamId, goalData) {
+  async updateTeamInfo(teamId, teamData) {
     try {
-      const response = await api.post(`/teams/${teamId}/goals`, goalData);
+      const response = await api.put(getEndpoint(`/teams/${teamId}`), teamData);
       return response.data;
     } catch (error) {
-      console.error('Error adding goal:', error);
+      console.error('Error updating team info:', error);
+      if (error.response) {
+        throw new Error(error.response.data.message || 'Failed to update team information');
+      }
+      throw error;
+    }
+  },
+  
+  async updateTeamTargets(teamId, targetsData) {
+    try {
+      const response = await api.put(getEndpoint(`/teams/${teamId}/targets`), targetsData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating team targets:', error);
+      if (error.response) {
+        throw new Error(error.response.data.message || 'Failed to update team targets');
+      }
       throw error;
     }
   },
 
-  async updateGoalProgress(teamId, goalId, progress) {
+  async getTeamTarget(teamId, recalculate = false) {
     try {
-      const response = await api.patch(`/teams/${teamId}/goals/${goalId}`, {
-        current: progress
-      });
+      const url = recalculate 
+        ? getEndpoint(`/teams/${teamId}/target?recalculate=true`)
+        : getEndpoint(`/teams/${teamId}/target`);
+      
+      const response = await api.get(url);
       return response.data;
     } catch (error) {
-      console.error('Error updating goal progress:', error);
+      console.error('Error getting team target:', error);
       throw error;
     }
   },
 
-  async addForfeit(teamId, forfeitData) {
+  async recalculateTeamTarget(teamId) {
     try {
-      const response = await api.post(`/teams/${teamId}/forfeits`, forfeitData);
+      const response = await api.post(getEndpoint(`/teams/${teamId}/recalculate-target`));
       return response.data;
     } catch (error) {
-      console.error('Error adding forfeit:', error);
-      throw error;
-    }
-  },
-
-  async updateMemberPoints(teamId, memberId, points) {
-    try {
-      const response = await api.patch(`/teams/${teamId}/members/${memberId}/points`, {
-        points
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error updating member points:', error);
-      throw error;
-    }
-  },
-
-  async updateGoal(teamId, goalId, goalData) {
-    try {
-      const response = await api.patch(`/teams/${teamId}/goals/${goalId}`, goalData);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating goal:', error.response?.data || error.message);
-      throw error;
-    }
-  },
-
-  async deleteGoal(teamId, goalId) {
-    try {
-      console.log('Attempting to delete goal:', { teamId, goalId });
-      const response = await api.delete(`/teams/${teamId}/goals/${goalId}`);
-      console.log('Delete goal response:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting goal:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
-      throw error;
-    }
-  },
-
-  async updateForfeit(teamId, forfeitId, forfeitData) {
-    try {
-      console.log('Attempting to update forfeit:', { teamId, forfeitId, forfeitData });
-      const response = await api.patch(`/teams/${teamId}/forfeits/${forfeitId}`, forfeitData);
-      console.log('Update forfeit response:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating forfeit:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
-      throw error;
-    }
-  },
-
-  async deleteForfeit(teamId, forfeitId) {
-    try {
-      console.log('Attempting to delete forfeit:', { teamId, forfeitId });
-      const response = await api.delete(`/teams/${teamId}/forfeits/${forfeitId}`);
-      console.log('Delete forfeit response:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting forfeit:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
+      console.error('Error recalculating team target:', error);
       throw error;
     }
   },
 
   async deleteTeam(teamId) {
     try {
-      const response = await api.delete(`/teams/${teamId}`);
+      const response = await api.delete(getEndpoint(`/teams/${teamId}`));
       return response.data;
     } catch (error) {
       console.error('Error deleting team:', error);
@@ -235,4 +193,4 @@ const teamService = {
   }
 };
 
-export default teamService; 
+export default teamService;
