@@ -365,45 +365,189 @@ const groupService = {
       console.log('Using API URL for group fetch:', apiUrl);
       
       // Make API request to get user's groups
-      const response = await fetch(`${apiUrl}/teams`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
+      try {
+        const response = await fetch(`${apiUrl}/teams`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch groups: ${response.status} ${response.statusText}`);
         }
-      });
+        
+        const groups = await response.json();
+        
+        // Get current user for updating member data
+        const currentUserJson = await AsyncStorage.getItem('user');
+        const currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
+        
+        // Process groups to handle populated vs unpopulated members
+        const processedGroups = await Promise.all(groups.map(async (group) => {
+          // Check if members is an array of IDs or objects
+          const populatedMembers = await Promise.all((group.members || []).map(async (member) => {
+            // If member is just an ID string or ObjectId reference
+            if (typeof member === 'string' || (member && !member.name && (member._id || member.id))) {
+              const memberId = typeof member === 'string' ? member : (member._id || member.id);
+              
+              // If this is the current user, use current user data
+              if (currentUser && (memberId === currentUser._id || memberId === currentUser.id)) {
+                // Return user with a consistent id field
+                return {
+                  id: currentUser._id || currentUser.id, // Choose one consistent id field
+                  name: currentUser.name,
+                  email: currentUser.email,
+                  bio: currentUser.bio,
+                  avatarUrl: currentUser.avatarUrl,
+                  // Include other needed fields but avoid duplicate IDs
+                };
+              }
+              
+              // Otherwise fetch user data from API
+              try {
+                const userData = await userService.getUserById(memberId);
+                if (userData) {
+                  // Return user with consistent ID field
+                  return {
+                    id: userData._id || userData.id, // Choose one consistent id field
+                    name: userData.name,
+                    email: userData.email,
+                    bio: userData.bio || '',
+                    avatarUrl: userData.avatarUrl,
+                    // Include other needed fields
+                  };
+                } else {
+                  // Return minimal user info with only id field
+                  return { 
+                    id: memberId,  // Use only one ID field
+                    name: `Member ${memberId.substring(0, 4)}` 
+                  };
+                }
+              } catch (err) {
+                console.error(`Error fetching member ${memberId}:`, err);
+                // Return minimal user info with only id field
+                return { 
+                  id: memberId,  // Use only one ID field
+                  name: `Member ${memberId.substring(0, 4)}` 
+                };
+              }
+            }
+            
+            // If it's already a user object but it's the current user, update with latest data
+            if (currentUser && (member._id === currentUser._id || member.id === currentUser.id)) {
+              // Merge, but ensure only one ID field
+              return {
+                id: currentUser._id || currentUser.id, // Choose one consistent id field
+                name: currentUser.name,
+                email: currentUser.email,
+                bio: currentUser.bio || '',
+                avatarUrl: currentUser.avatarUrl,
+                // Include other needed fields
+                ...member,
+                _id: undefined // Remove the _id field to prevent duplication
+              };
+            }
+            
+            // Otherwise return as is, but ensure only one ID field
+            if (member._id && member.id) {
+              // If both fields exist, keep only one
+              const { _id, ...rest } = member;
+              return rest; // Return object without _id
+            }
+            return member;
+          }));
+          
+          return { ...group, members: populatedMembers };
+        }));
+        
+        return processedGroups;
+      } catch (fetchError) {
+        console.error('Error fetching teams with main endpoint:', fetchError);
+        
+        // Try the alternative endpoint as a fallback
+        console.log('Attempting to use alternative endpoint...');
+        try {
+          // Try with the teamService as fallback
+          const { default: teamService } = await import('../services/teamService');
+          const teams = await teamService.getUserTeams();
+          console.log('Successfully retrieved teams from teamService:', teams.length);
+          return teams;
+        } catch (teamServiceError) {
+          console.error('TeamService fallback also failed:', teamServiceError);
+          throw new Error('All team/group fetch attempts failed');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching user groups with populated members:', error);
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch groups: ${response.status} ${response.statusText}`);
+      // More detailed logging to help debug
+      if (error.response) {
+        console.error('Response error:', error.response.status, error.response.statusText);
+        console.error('Response data:', error.response.data);
+      } else if (error.request) {
+        console.error('Request error - no response received');
+      } else {
+        console.error('Error message:', error.message);
       }
       
-      const groups = await response.json();
+      // Return empty array if error occurs
+      return [];
+    }
+  },
+  
+  // Get a specific group by ID with populated members
+  async getGroupById(groupId) {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
       
-      // Get current user for updating member data
-      const currentUserJson = await AsyncStorage.getItem('user');
-      const currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
+      // Validate token exists
+      if (!token) {
+        console.warn('No authentication token found - user may need to login');
+        return null;
+      }
       
-      // Process groups to handle populated vs unpopulated members
-      const processedGroups = await Promise.all(groups.map(async (group) => {
-        // Check if members is an array of IDs or objects
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for group fetch by ID:', apiUrl);
+      
+      try {
+        const response = await fetch(`${apiUrl}/teams/${groupId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch group with ID ${groupId}`);
+        }
+        
+        // Get group data
+        const group = await response.json();
+        
+        // Process members similar to getUserGroups method
+        const currentUserJson = await AsyncStorage.getItem('user');
+        const currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
+        
         const populatedMembers = await Promise.all((group.members || []).map(async (member) => {
-          // If member is just an ID string or ObjectId reference
           if (typeof member === 'string' || (member && !member.name && (member._id || member.id))) {
             const memberId = typeof member === 'string' ? member : (member._id || member.id);
             
-            // If this is the current user, use current user data
             if (currentUser && (memberId === currentUser._id || memberId === currentUser.id)) {
               // Return user with a consistent id field
               return {
                 id: currentUser._id || currentUser.id, // Choose one consistent id field
                 name: currentUser.name,
                 email: currentUser.email,
-                bio: currentUser.bio,
+                bio: currentUser.bio || '',
                 avatarUrl: currentUser.avatarUrl,
-                // Include other needed fields but avoid duplicate IDs
+                // Include other needed fields
               };
             }
             
-            // Otherwise fetch user data from API
             try {
               const userData = await userService.getUserById(memberId);
               if (userData) {
@@ -458,132 +602,34 @@ const groupService = {
         }));
         
         return { ...group, members: populatedMembers };
-      }));
-      
-      return processedGroups;
+      } catch (fetchError) {
+        console.error(`Error fetching team with ID ${groupId}:`, fetchError);
+        
+        // Try the alternative service as a fallback
+        console.log('Attempting to use teamService as fallback...');
+        try {
+          const { default: teamService } = await import('../services/teamService');
+          const team = await teamService.getTeamById(groupId);
+          console.log('Successfully retrieved team from teamService');
+          return team;
+        } catch (teamServiceError) {
+          console.error('TeamService fallback also failed:', teamServiceError);
+          throw new Error(`All attempts to fetch team/group ${groupId} failed`);
+        }
+      }
     } catch (error) {
-      console.error('Error fetching user groups with populated members:', error);
+      console.error(`Error in getGroupById for ${groupId}:`, error);
       
-      // More detailed logging to help debug
+      // More detailed error logging
       if (error.response) {
         console.error('Response error:', error.response.status, error.response.statusText);
+        console.error('Response data:', error.response.data);
       } else if (error.request) {
         console.error('Request error - no response received');
       } else {
         console.error('Error message:', error.message);
       }
       
-      // Return empty array if error occurs
-      return [];
-    }
-  },
-  
-  // Get a specific group by ID with populated members
-  async getGroupById(groupId) {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      
-      // Validate token exists
-      if (!token) {
-        console.warn('No authentication token found - user may need to login');
-        return null;
-      }
-      
-      // Get the API URL from utils and use the deployed URL
-      const API_URLS = await import('../utils').then(module => module.getApiUrl());
-      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
-      
-      console.log('Using API URL for group fetch by ID:', apiUrl);
-      
-      const response = await fetch(`${apiUrl}/teams/${groupId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch group with ID ${groupId}`);
-      }
-      
-      // Get group data
-      const group = await response.json();
-      
-      // Process members similar to getUserGroups method
-      const currentUserJson = await AsyncStorage.getItem('user');
-      const currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
-      
-      const populatedMembers = await Promise.all((group.members || []).map(async (member) => {
-        if (typeof member === 'string' || (member && !member.name && (member._id || member.id))) {
-          const memberId = typeof member === 'string' ? member : (member._id || member.id);
-          
-          if (currentUser && (memberId === currentUser._id || memberId === currentUser.id)) {
-            // Return user with a consistent id field
-            return {
-              id: currentUser._id || currentUser.id, // Choose one consistent id field
-              name: currentUser.name,
-              email: currentUser.email,
-              bio: currentUser.bio || '',
-              avatarUrl: currentUser.avatarUrl,
-              // Include other needed fields
-            };
-          }
-          
-          try {
-            const userData = await userService.getUserById(memberId);
-            if (userData) {
-              // Return user with consistent ID field
-              return {
-                id: userData._id || userData.id, // Choose one consistent id field
-                name: userData.name,
-                email: userData.email,
-                bio: userData.bio || '',
-                avatarUrl: userData.avatarUrl,
-                // Include other needed fields
-              };
-            } else {
-              // Return minimal user info with only id field
-              return { 
-                id: memberId,  // Use only one ID field
-                name: `Member ${memberId.substring(0, 4)}` 
-              };
-            }
-          } catch (err) {
-            console.error(`Error fetching member ${memberId}:`, err);
-            // Return minimal user info with only id field
-            return { 
-              id: memberId,  // Use only one ID field
-              name: `Member ${memberId.substring(0, 4)}` 
-            };
-          }
-        }
-        
-        if (currentUser && (member._id === currentUser._id || member.id === currentUser.id)) {
-          // Merge, but ensure only one ID field
-          return {
-            id: currentUser._id || currentUser.id, // Choose one consistent id field
-            name: currentUser.name,
-            email: currentUser.email,
-            bio: currentUser.bio || '',
-            avatarUrl: currentUser.avatarUrl,
-            // Include other needed fields
-            ...member,
-            _id: undefined // Remove the _id field to prevent duplication
-          };
-        }
-        
-        // Otherwise return as is, but ensure only one ID field
-        if (member._id && member.id) {
-          // If both fields exist, keep only one
-          const { _id, ...rest } = member;
-          return rest; // Return object without _id
-        }
-        return member;
-      }));
-      
-      return { ...group, members: populatedMembers };
-    } catch (error) {
-      console.error(`Error fetching group ${groupId}:`, error);
       return null;
     }
   }
