@@ -114,6 +114,87 @@ const userService = {
     }
   },
   
+  // Added missing function - Get user by ID
+  async getUserById(userId) {
+    try {
+      // Check for cached user data if it matches the requested ID
+      const userJson = await AsyncStorage.getItem('user');
+      const currentUser = userJson ? JSON.parse(userJson) : null;
+      
+      // If this is the current user, return from cache
+      if (currentUser && (currentUser.id === userId || currentUser._id === userId)) {
+        console.log('Returning current user from cache for ID:', userId);
+        return currentUser;
+      }
+      
+      // Otherwise fetch from server
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.warn('No authentication token found when fetching user by ID');
+        return null;
+      }
+      
+      // Get the API URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0];
+      
+      // First try profiles endpoint
+      try {
+        const response = await fetch(`${apiUrl}/profiles/user/${userId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const profileData = await response.json();
+          return {
+            id: profileData.user || profileData._id,
+            name: profileData.name,
+            email: profileData.email || '',
+            bio: profileData.bio || '',
+            avatarUrl: profileData.avatarUrl
+          };
+        }
+      } catch (profileError) {
+        console.warn(`Failed to get user ${userId} from profiles API:`, profileError.message);
+      }
+      
+      // Then try users endpoint
+      try {
+        const response = await fetch(`${apiUrl}/users/${userId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          return {
+            id: userData._id || userData.id,
+            name: userData.name || userData.username,
+            email: userData.email || '',
+            bio: userData.bio || '',
+            avatarUrl: userData.avatarUrl
+          };
+        }
+      } catch (userError) {
+        console.warn(`Failed to get user ${userId} from users API:`, userError.message);
+      }
+      
+      // If we reach here, we couldn't find the user
+      console.warn(`User with ID ${userId} not found`);
+      return null;
+    } catch (error) {
+      console.error(`Error in getUserById for ${userId}:`, error);
+      return null;
+    }
+  },
+  
   // Update user profile - connects to profile API
   async updateUserProfile(userData) {
     try {

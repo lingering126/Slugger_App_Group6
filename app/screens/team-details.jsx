@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import teamService from '../services/teamService';
@@ -79,6 +80,121 @@ export default function TeamDetailsScreen({ route, navigation }) {
     return Math.round(totalProgress / team.goals.length);
   };
 
+  // Member item renderer for FlatList
+  const renderMember = ({ item }) => (
+    <View key={item._id} style={styles.memberCard}>
+      <Image 
+        source={{ uri: item.avatar || 'https://via.placeholder.com/50' }} 
+        style={styles.avatar} 
+      />
+      <View style={styles.memberInfo}>
+        <Text style={styles.memberName}>{item.name}</Text>
+        <Text style={styles.memberRole}>{item.role}</Text>
+        <Text style={styles.memberPoints}>{item.points} points</Text>
+      </View>
+    </View>
+  );
+
+  // Goal item renderer for FlatList
+  const renderGoal = ({ item }) => (
+    <View key={item._id} style={styles.goalCard}>
+      <Text style={styles.goalTitle}>{item.title}</Text>
+      <View style={styles.goalProgress}>
+        <View style={styles.progressBar}>
+          <View 
+            style={[
+              styles.progressFill, 
+              { width: `${(item.current / item.target) * 100}%` }
+            ]} 
+          />
+        </View>
+        <Text style={styles.progressText}>
+          {item.current} / {item.target}
+        </Text>
+      </View>
+    </View>
+  );
+
+  // Main content renderer - now divided into sections to avoid the VirtualizedList warning
+  const renderContent = () => {
+    if (!team) {
+      return (
+        <View style={styles.container}>
+          <Text>Team not found</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.container}>
+        {/* Team Header */}
+        <View style={styles.header}>
+          <Text style={styles.teamName}>{team.name}</Text>
+          <Text style={styles.teamDescription}>{team.description}</Text>
+        </View>
+
+        {/* Progress Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Team Progress</Text>
+          <View style={styles.progressBar}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { width: `${calculateProgress()}%` }
+              ]} 
+            />
+          </View>
+          <Text style={styles.progressText}>{calculateProgress()}% Complete</Text>
+        </View>
+
+        {/* Target Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Team Target</Text>
+          <View style={styles.targetContainer}>
+            <View style={styles.targetItem}>
+              <Text style={styles.targetLabel}>Mental Target</Text>
+              <Text style={styles.targetValue}>{team.targetMentalValue}</Text>
+            </View>
+            <View style={styles.targetItem}>
+              <Text style={styles.targetLabel}>Physical Target</Text>
+              <Text style={styles.targetValue}>{team.targetPhysicalValue}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Members Section - Using FlatList */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Team Members</Text>
+          <FlatList
+            data={team.members}
+            renderItem={renderMember}
+            keyExtractor={item => item._id || item.id}
+            scrollEnabled={false} // Disable scrolling to avoid nesting issues
+          />
+        </View>
+
+        {/* Goals Section - Using FlatList */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Team Goals</Text>
+          <FlatList
+            data={team.goals || []}
+            renderItem={renderGoal}
+            keyExtractor={item => item._id || item.id}
+            scrollEnabled={false} // Disable scrolling to avoid nesting issues
+          />
+        </View>
+
+        {/* Leave Team Button */}
+        <TouchableOpacity 
+          style={styles.leaveButton}
+          onPress={handleLeaveTeam}
+        >
+          <Text style={styles.leaveButtonText}>Leave Team</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -87,99 +203,10 @@ export default function TeamDetailsScreen({ route, navigation }) {
     );
   }
 
-  if (!team) {
-    return (
-      <View style={styles.container}>
-        <Text>Team not found</Text>
-      </View>
-    );
-  }
-
+  // Wrap the main content in a ScrollView
   return (
-    <ScrollView style={styles.container}>
-      {/* Team Header */}
-      <View style={styles.header}>
-        <Text style={styles.teamName}>{team.name}</Text>
-        <Text style={styles.teamDescription}>{team.description}</Text>
-      </View>
-
-      {/* Progress Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Team Progress</Text>
-        <View style={styles.progressBar}>
-          <View 
-            style={[
-              styles.progressFill, 
-              { width: `${calculateProgress()}%` }
-            ]} 
-          />
-        </View>
-        <Text style={styles.progressText}>{calculateProgress()}% Complete</Text>
-      </View>
-
-      {/* Target Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Team Target</Text>
-        <View style={styles.targetContainer}>
-          <View style={styles.targetItem}>
-            <Text style={styles.targetLabel}>Mental Target</Text>
-            <Text style={styles.targetValue}>{team.targetMentalValue}</Text>
-          </View>
-          <View style={styles.targetItem}>
-            <Text style={styles.targetLabel}>Physical Target</Text>
-            <Text style={styles.targetValue}>{team.targetPhysicalValue}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Members Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Team Members</Text>
-        {team.members.map((member) => (
-          <View key={member._id} style={styles.memberCard}>
-            <Image 
-              source={{ uri: member.avatar || 'https://via.placeholder.com/50' }} 
-              style={styles.avatar} 
-            />
-            <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>{member.name}</Text>
-              <Text style={styles.memberRole}>{member.role}</Text>
-              <Text style={styles.memberPoints}>{member.points} points</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {/* Goals Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Team Goals</Text>
-        {team.goals.map((goal) => (
-          <View key={goal._id} style={styles.goalCard}>
-            <Text style={styles.goalTitle}>{goal.title}</Text>
-            <View style={styles.goalProgress}>
-              <View style={styles.progressBar}>
-                <View 
-                  style={[
-                    styles.progressFill, 
-                    { width: `${(goal.current / goal.target) * 100}%` }
-                  ]} 
-                />
-              </View>
-              <Text style={styles.progressText}>
-                {goal.current} / {goal.target}
-              </Text>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {/* Leave Team Button */}
-      <TouchableOpacity 
-        style={styles.leaveButton}
-        onPress={handleLeaveTeam}
-      >
-        <Text style={styles.leaveButtonText}>Leave Team</Text>
-      </TouchableOpacity>
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      {renderContent()}
     </ScrollView>
   );
 }
@@ -315,5 +342,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  scrollContainer: {
+    padding: 16,
   },
 }); 
