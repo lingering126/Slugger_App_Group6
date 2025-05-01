@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Base API URL - consider moving this to an environment config
-const API_BASE_URL = 'http://localhost:5001/api';
+// Base API URL - updated to use the deployed server 
+const API_BASE_URL = 'https://slugger-app-group6.onrender.com/api';
 
 const userService = {
   // Get user information from local storage (cached)
@@ -14,9 +14,15 @@ const userService = {
         return null;
       }
       
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for user profile fetch:', apiUrl);
+      
       try {
         // First try to get the profile from the profiles endpoint
-        const response = await fetch(`${API_BASE_URL}/profiles/me`, {
+        const response = await fetch(`${apiUrl}/profiles/me`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -54,7 +60,7 @@ const userService = {
         // Fallback to legacy endpoint if profile API fails
         console.warn('Profile API failed, falling back to user API');
         
-        const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+        const userResponse = await fetch(`${apiUrl}/auth/me`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -120,9 +126,15 @@ const userService = {
         throw new Error('Authentication required');
       }
       
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for profile update:', apiUrl);
+      
       // Try the profile API endpoint
       try {
-        const response = await fetch(`${API_BASE_URL}/profiles`, {
+        const response = await fetch(`${apiUrl}/profiles`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -224,9 +236,15 @@ const userService = {
         throw new Error('Authentication required');
       }
       
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for activities update:', apiUrl);
+      
       // Try profile activities endpoint
       try {
-        const response = await fetch(`${API_BASE_URL}/profiles/activities`, {
+        const response = await fetch(`${apiUrl}/profiles/activities`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -267,7 +285,7 @@ const userService = {
       
       for (const endpoint of legacyEndpoints) {
         try {
-          const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          const response = await fetch(`${apiUrl}${endpoint}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -340,8 +358,14 @@ const groupService = {
         return []; // Return empty array if not authenticated
       }
       
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for group fetch:', apiUrl);
+      
       // Make API request to get user's groups
-      const response = await fetch(`${API_BASE_URL}/groups`, {
+      const response = await fetch(`${apiUrl}/groups`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -456,7 +480,13 @@ const groupService = {
         return null;
       }
       
-      const response = await fetch(`${API_BASE_URL}/groups/${groupId}`, {
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for group fetch by ID:', apiUrl);
+      
+      const response = await fetch(`${apiUrl}/groups/${groupId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -561,7 +591,13 @@ const profileService = {
         return null;
       }
       
-      const response = await fetch(`${API_BASE_URL}/profiles/me`, {
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for profile fetch:', apiUrl);
+      
+      const response = await fetch(`${apiUrl}/profiles/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -590,7 +626,13 @@ const profileService = {
         throw new Error('Authentication required');
       }
       
-      const response = await fetch(`${API_BASE_URL}/profiles`, {
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for profile update:', apiUrl);
+      
+      const response = await fetch(`${apiUrl}/profiles`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -620,7 +662,13 @@ const profileService = {
         throw new Error('Authentication required');
       }
       
-      const response = await fetch(`${API_BASE_URL}/profiles/activities`, {
+      // Get the API URL from utils and use the deployed URL
+      const API_URLS = await import('../utils').then(module => module.getApiUrl());
+      const apiUrl = API_URLS[0]; // Use the first URL which should be the deployed one
+      
+      console.log('Using API URL for activities update:', apiUrl);
+      
+      const response = await fetch(`${apiUrl}/profiles/activities`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
