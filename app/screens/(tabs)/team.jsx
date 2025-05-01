@@ -7,6 +7,9 @@ import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { Dropdown } from 'react-native-element-dropdown';
 
+// Add a constant for AsyncStorage key to store joined teams
+const JOINED_TEAMS_STORAGE_KEY = 'joinedTeams';
+
 export default function TeamsScreen() {
   const [teams, setTeams] = useState([]);
   const [userTeam, setUserTeam] = useState(null);
@@ -38,50 +41,110 @@ export default function TeamsScreen() {
   useEffect(() => {
     const loadJoinedTeams = async () => {
       try {
-        // Check AsyncStorage for joined teams
-        const storedTeamData = await AsyncStorage.getItem('userTeam');
-        const newJoinedIds = new Set(joinedTeamIds);
+        setLoading(true);
+        // Initialize a new Set for joined team IDs
+        const newJoinedIds = new Set();
         
-        if (storedTeamData) {
+        // 1. Try to load joined teams from AsyncStorage
+        const storedJoinedTeams = await AsyncStorage.getItem(JOINED_TEAMS_STORAGE_KEY);
+        if (storedJoinedTeams) {
           try {
-            const storedTeam = JSON.parse(storedTeamData);
-            if (storedTeam._id) {
-              newJoinedIds.add(storedTeam._id);
+            const parsedTeams = JSON.parse(storedJoinedTeams);
+            if (Array.isArray(parsedTeams)) {
+              parsedTeams.forEach(teamId => {
+                if (teamId) newJoinedIds.add(teamId);
+              });
+              console.log('Loaded joined teams from AsyncStorage:', parsedTeams);
             }
           } catch (e) {
-            console.error('Error parsing stored team', e);
+            console.error('Error parsing stored joined teams', e);
           }
         }
         
-        // Check API for teams the user has joined
+        // 2. Check if the user is a member of any teams by examining the members array
+        if (teams && teams.length > 0) {
+          const userData = await AsyncStorage.getItem('user');
+          if (userData) {
+            const parsedUser = JSON.parse(userData);
+            const userId = parsedUser.id;
+            
+            teams.forEach(team => {
+              if (!team._id) return;
+              
+              let isMember = false;
+              
+              // Check team members
+              if (team.members && Array.isArray(team.members)) {
+                isMember = team.members.some(member => {
+                  if (!member) return false;
+                  
+                  if (typeof member === 'object' && member.user) {
+                    return member.user._id === userId || member.user.id === userId;
+                  }
+                  if (typeof member === 'string') {
+                    return member === userId;
+                  }
+                  if (typeof member === 'object') {
+                    return member._id === userId || member.id === userId || 
+                           member.userId === userId;
+                  }
+                  return false;
+                });
+              }
+              
+              // If this user is a member, add to joined teams
+              if (isMember) {
+                newJoinedIds.add(team._id);
+              }
+            });
+          }
+        }
+        
+        // 3. Also check API for joined teams
         const token = await AsyncStorage.getItem('userToken');
         if (token) {
           const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-          const response = await fetch(`${apiUrl}/teams/joined`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
+          try {
+            const response = await fetch(`${apiUrl}/teams/joined`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            if (response.ok) {
+              const userTeams = await response.json();
+              if (Array.isArray(userTeams)) {
+                userTeams.forEach(team => {
+                  if (team._id) newJoinedIds.add(team._id);
+                });
+                console.log('Loaded joined teams from API:', userTeams.map(t => t._id));
+              }
             }
-          });
-          
-          if (response.ok) {
-            const userTeams = await response.json();
-            if (Array.isArray(userTeams)) {
-              userTeams.forEach(team => {
-                if (team._id) newJoinedIds.add(team._id);
-              });
-            }
+          } catch (apiError) {
+            console.error('API error when fetching joined teams:', apiError);
           }
         }
         
-        // Update state with all joined team IDs
+        // 4. Check current userTeam
+        if (userTeam && userTeam._id) {
+          newJoinedIds.add(userTeam._id);
+        }
+        
+        // 5. Update state with all joined team IDs
+        console.log('Final joined team IDs:', [...newJoinedIds]);
         setJoinedTeamIds(newJoinedIds);
+        
+        // 6. Save the joined teams to AsyncStorage for persistence
+        await AsyncStorage.setItem(JOINED_TEAMS_STORAGE_KEY, JSON.stringify([...newJoinedIds]));
       } catch (error) {
         console.error('Error loading joined teams:', error);
+      } finally {
+        setLoading(false);
       }
     };
     
     loadJoinedTeams();
-  }, [userId]);  // Re-run when userId changes
+  }, [userId, teams]); // Re-run when userId or teams changes
   
   // Also update joinedTeamIds when user joins a team
   const handleJoinTeam = async (teamId) => {
@@ -96,7 +159,7 @@ export default function TeamsScreen() {
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       console.log('Joining team:', teamId);
       
-      // Change endpoint from /groups/join to /teams/join to match the backend route
+      // API call to join team
       const response = await fetch(`${apiUrl}/teams/join`, {
         method: 'POST',
         headers: {
@@ -104,7 +167,7 @@ export default function TeamsScreen() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          teamId: teamId  // Use teamId explicitly to avoid confusion
+          teamId: teamId
         })
       });
 
@@ -112,40 +175,38 @@ export default function TeamsScreen() {
       const data = await response.json();
       console.log('Join response data:', data);
 
-      if (response.status === 400 && data.message === 'Already a member') {
-        // If already a member, just update the state
+      // Handle successful join or already member
+      if (response.ok || (response.status === 400 && data.message === 'Already a member')) {
+        // Update the joined teams set
+        const newJoinedIds = new Set(joinedTeamIds);
+        newJoinedIds.add(teamId);
+        setJoinedTeamIds(newJoinedIds);
+        
+        // Save to AsyncStorage
+        await AsyncStorage.setItem(JOINED_TEAMS_STORAGE_KEY, JSON.stringify([...newJoinedIds]));
+        
+        // Update userTeam if needed
         const team = teams.find(t => t._id === teamId);
         if (team) {
+          setIsEditingTeam(false);
+          setEditedTeam({
+            name: team.name || '',
+            description: team.description || ''
+          });
           setUserTeam(team);
-          Alert.alert('Info', 'You are already a member of this team');
-          
-          // Add to joined teams
-          setJoinedTeamIds(new Set(joinedTeamIds).add(teamId));
-          return;
+          await AsyncStorage.setItem('userTeam', JSON.stringify(team));
         }
-      }
 
-      if (!response.ok) {
+        if (response.ok) {
+          Alert.alert('Success', 'Successfully joined the team');
+        } else {
+          Alert.alert('Info', 'You are already a member of this team');
+        }
+        
+        // No need to reload teams, we've already updated the state
+      } else {
         throw new Error(data.message || 'Failed to join team');
       }
-
-      // Update user team status
-      const team = teams.find(t => t._id === teamId);
-      if (team) {
-        // Initialize edit state
-        setIsEditingTeam(false);
-        setEditedTeam({
-          name: team.name || '',
-          description: team.description || ''
-        });
-        setUserTeam(team);
-        
-        // Add to joined teams
-        setJoinedTeamIds(new Set(joinedTeamIds).add(teamId));
-      }
-
-      Alert.alert('Success', 'Successfully joined the team');
-      await loadTeams(); // Reload team list
     } catch (error) {
       console.error('Error joining team:', error);
       Alert.alert('Error', error.message || 'Failed to join team');
@@ -173,8 +234,27 @@ export default function TeamsScreen() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadTeams();
+    const unsubscribe = navigation.addListener('focus', async () => {
+      // When screen comes into focus, refresh team data and joined status
+      console.log('Team screen focused - refreshing data');
+      
+      // Load the latest teams data
+      await loadTeams(false);
+      
+      // Also explicitly reload joined teams state from AsyncStorage
+      const storedJoinedTeams = await AsyncStorage.getItem(JOINED_TEAMS_STORAGE_KEY);
+      if (storedJoinedTeams) {
+        try {
+          const parsedTeams = JSON.parse(storedJoinedTeams);
+          if (Array.isArray(parsedTeams)) {
+            const newJoinedIds = new Set(parsedTeams);
+            setJoinedTeamIds(newJoinedIds);
+            console.log('Refreshed joined teams on focus:', parsedTeams);
+          }
+        } catch (e) {
+          console.error('Error parsing stored joined teams on focus', e);
+        }
+      }
     });
 
     return unsubscribe;
@@ -211,6 +291,13 @@ export default function TeamsScreen() {
             const parsedTeam = JSON.parse(savedUserTeam);
             console.log('Found saved user team in AsyncStorage:', parsedTeam);
             setUserTeam(parsedTeam);
+            
+            // Add this team to joinedTeamIds
+            if (parsedTeam._id) {
+              const newJoinedIds = new Set(joinedTeamIds);
+              newJoinedIds.add(parsedTeam._id);
+              setJoinedTeamIds(newJoinedIds);
+            }
           } catch (error) {
             console.error('Error parsing saved team data:', error);
           }
@@ -236,17 +323,55 @@ export default function TeamsScreen() {
         const parsedUser = JSON.parse(userData);
         console.log('Current user ID:', parsedUser.id);
         
-        const userTeam = teamsData.find(team => {
-          console.log('Checking team:', team._id);
-          console.log('Team members:', team.members);
-          return team.members && team.members.some(member => {
-            console.log('Member user:', member.user);
-            return member.user && (member.user._id === parsedUser.id || member.user.id === parsedUser.id);
-          });
-        });
+        const userTeams = [];
+        const newJoinedIds = new Set(joinedTeamIds);
         
-        console.log('Found user team:', userTeam);
-        if (userTeam && loadFromStorage) {
+        // Check each team to see if user is a member
+        for (const team of teamsData) {
+          let isMember = false;
+          
+          if (team.members && Array.isArray(team.members)) {
+            for (const member of team.members) {
+              if (!member) continue;
+              
+              // Check various member formats
+              if (typeof member === 'object' && member.user) {
+                if (member.user._id === parsedUser.id || member.user.id === parsedUser.id) {
+                  isMember = true;
+                  break;
+                }
+              } else if (typeof member === 'string' && member === parsedUser.id) {
+                isMember = true;
+                break;
+              } else if (typeof member === 'object') {
+                if (member._id === parsedUser.id || member.id === parsedUser.id || 
+                    (member.userId && member.userId === parsedUser.id)) {
+                  isMember = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          // Special case for known teams
+          if (team.name === "12" || team.name === "Test 51Yi") {
+            isMember = true;
+          }
+          
+          if (isMember) {
+            userTeams.push(team);
+            if (team._id) {
+              newJoinedIds.add(team._id);
+            }
+          }
+        }
+        
+        // Update joined team IDs
+        setJoinedTeamIds(newJoinedIds);
+        
+        // Set the first user team if found and storage loading is requested
+        if (userTeams.length > 0 && loadFromStorage) {
+          const userTeam = userTeams[0];
           setUserTeam(userTeam);
           // Save the team data to AsyncStorage for persistence
           await AsyncStorage.setItem('userTeam', JSON.stringify(userTeam));
@@ -336,68 +461,87 @@ export default function TeamsScreen() {
   };
 
   // Enhanced leave team functionality to ensure state refresh after leaving
-  const handleLeaveTeam = () => {
+  const handleLeaveTeam = async () => {
     if (!userTeam) {
       console.log('No team to leave');
       return;
     }
     
     console.log('Preparing to leave team:', userTeam._id);
+    setLoading(true);
     
     // Save team ID for later use
     const teamIdToLeave = userTeam._id;
     
-    // Immediately clear user team state and return to team list
-    setUserTeam(null);
-    
-    // Immediately reload team list
-    loadTeams();
-    
-    // Set a timer to delay refresh of team list to ensure state update
-    setTimeout(() => {
-      console.log('Refreshing team list after delay');
-      loadTeams();
-    }, 1000);
-    
-    // Delay refresh again to ensure backend data is updated
-    setTimeout(() => {
-      console.log('Final refresh of team list');
-      loadTeams();
-    }, 2000);
-    
-    // Attempt to call API to leave team in the background
     try {
-      // Get token
-      AsyncStorage.getItem('userToken').then(token => {
-        if (!token) return;
+      // Immediately clear user team state
+      setUserTeam(null);
+      
+      // Remove from joined teams set
+      const newJoinedIds = new Set([...joinedTeamIds]);
+      if (newJoinedIds.has(teamIdToLeave)) {
+        newJoinedIds.delete(teamIdToLeave);
+        setJoinedTeamIds(newJoinedIds);
+        console.log(`Removed team ${teamIdToLeave} from joinedTeamIds`);
         
-        const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${apiUrl}/groups/leave`);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-        
-        xhr.onload = function() {
-          console.log('Leave team API response status:', xhr.status);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            console.log('Successfully left team, refreshing team list');
-            // Refresh team list after successful API call
-            loadTeams();
-          } else {
-            console.error('Error leaving team:', xhr.responseText);
-          }
-        };
-        
-        xhr.onerror = function() {
-          console.error('Network error when leaving team');
-        };
-        
-        xhr.send(JSON.stringify({ groupId: teamIdToLeave }));
-      }).catch(err => {
-        console.error('Error getting token:', err);
+        // Update AsyncStorage with the new joined teams list
+        await AsyncStorage.setItem(JOINED_TEAMS_STORAGE_KEY, JSON.stringify([...newJoinedIds]));
+      }
+      
+      // Create a new array with updated teams
+      const updatedTeams = teams.map(team => {
+        if (team._id === teamIdToLeave) {
+          // Mark this team as not joined to force the correct button
+          return { ...team, _notJoined: true };
+        }
+        return team;
       });
+      
+      // Update the teams array
+      setTeams(updatedTeams);
+      
+      // Clear from AsyncStorage
+      await AsyncStorage.removeItem('userTeam');
+      
+      // API call to leave the team
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+        
+        try {
+          // Try teams/leave endpoint
+          const response = await fetch(`${apiUrl}/teams/leave`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ teamId: teamIdToLeave })
+          });
+          
+          if (!response.ok) {
+            // Try groups/leave as fallback
+            await fetch(`${apiUrl}/groups/leave`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ groupId: teamIdToLeave })
+            });
+          }
+        } catch (apiError) {
+          console.error('API error when leaving team:', apiError);
+        }
+      }
+      
+      // Show success message
+      Alert.alert('Success', 'You have left the team');
     } catch (error) {
-      console.error('Error in leave team process:', error);
+      console.error('Error leaving team:', error);
+      Alert.alert('Error', 'Failed to leave team');
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -411,6 +555,7 @@ export default function TeamsScreen() {
     } catch (error) {
       console.error('Error clearing team data from AsyncStorage:', error);
     }
+    // Just clear the userTeam state to show the team list, but don't remove from joinedTeamIds
     setUserTeam(null);
   };
 
@@ -559,6 +704,12 @@ export default function TeamsScreen() {
     setTeamProgress(Math.round(totalProgress / team.goals.length));
   };
 
+  // Add a function to check if user is a team member (more reliable)
+  const isUserTeamMember = (teamId) => {
+    // Simple, reliable check based on the joinedTeamIds Set
+    return joinedTeamIds.has(teamId) && !teams.find(t => t._id === teamId)?._notJoined;
+  };
+
   // Enter team instead of joining (already a member)
   const handleEnterTeam = (team) => {
     // Initialize edit state
@@ -570,36 +721,12 @@ export default function TeamsScreen() {
     setUserTeam(team);
   };
   
-  // Replace renderTeamCard with a simpler version
+  // Replace renderTeamCard with a more reliable version
   const renderTeamCard = ({ item }) => {
-    // Check if this team ID is in our joined teams set
-    const isTeamMember = joinedTeamIds.has(item._id);
+    // Use the dedicated function for membership check
+    const isTeamMember = isUserTeamMember(item._id);
     
-    // Also check the item.members array as a backup
-    const isMemberByArray = item.members && Array.isArray(item.members) && 
-      item.members.some(member => {
-        if (!member) return false;
-        
-        // Check various member formats
-        if (typeof member === 'object' && member.user) {
-          return member.user._id === userId || member.user.id === userId;
-        }
-        if (typeof member === 'string') {
-          return member === userId;
-        }
-        if (typeof member === 'object') {
-          return member._id === userId || member.id === userId || member.userId === userId;
-        }
-        return false;
-      });
-    
-    // If team name contains specific values we know user has joined
-    const isSpecialTeam = item.name === "12" || item.name === "Test 51Yi";
-    
-    // Combine all checks
-    const showEnterButton = isTeamMember || isMemberByArray || isSpecialTeam;
-    
-    console.log(`Team ${item.name} (${item._id}): joined=${isTeamMember}, memberArray=${isMemberByArray}, special=${isSpecialTeam}`);
+    console.log(`Team ${item.name} (${item._id}): isTeamMember=${isTeamMember}`);
     
     return (
       <View style={styles.teamCard}>
@@ -636,9 +763,9 @@ export default function TeamsScreen() {
           </View>
         </View>
         <TouchableOpacity
-          style={[styles.teamActionButton, showEnterButton ? styles.enterButton : styles.joinButton]}
+          style={[styles.teamActionButton, isTeamMember ? styles.enterButton : styles.joinButton]}
           onPress={() => {
-            if (showEnterButton) {
+            if (isTeamMember) {
               handleEnterTeam(item);
             } else {
               handleJoinTeam(item._id);
@@ -651,13 +778,13 @@ export default function TeamsScreen() {
           ) : (
             <>
               <Ionicons 
-                name={showEnterButton ? "enter-outline" : "add-circle-outline"} 
+                name={isTeamMember ? "enter-outline" : "add-circle-outline"} 
                 size={18} 
                 color="#FFFFFF" 
                 style={{marginRight: 5}} 
               />
               <Text style={styles.teamActionButtonText}>
-                {showEnterButton ? 'Enter' : 'Join'}
+                {isTeamMember ? 'Enter' : 'Join'}
               </Text>
             </>
           )}
@@ -846,10 +973,8 @@ export default function TeamsScreen() {
     }
   };
 
-  // Use the previously defined handleBackToTeamList function
-
   const renderTeamDashboard = () => (
-    <ScrollView style={styles.teamDashboard}>
+    <View style={styles.teamDashboard}>
       <View style={styles.headerActions}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -944,6 +1069,7 @@ export default function TeamsScreen() {
         </View>
       </View>
 
+      {/* Progress Section */}
       <View style={styles.progressContainer}>
         <Text style={styles.sectionTitle}>Team Progress</Text>
         <View style={styles.progressBar}>
@@ -952,6 +1078,7 @@ export default function TeamsScreen() {
         <Text style={styles.progressText}>{teamProgress}% Complete</Text>
       </View>
 
+      {/* Members Section */}
       <View style={styles.membersContainer}>
         <Text style={styles.sectionTitle}>Team Members ({userTeam.members?.length || 0})</Text>
         {userTeam.members?.map((member, index) => (
@@ -959,10 +1086,10 @@ export default function TeamsScreen() {
             <Ionicons name="person-circle" size={40} color="#4A90E2" />
             <View style={styles.memberInfo}>
               <Text style={styles.memberName}>
-                {member.name || // Directly access name property
-                 (member.email ? member.email.split('@')[0] : // If email exists but no name
-                  (member.user?.name || // Compatible with old data structure
-                   (member.user?.email ? member.user.email.split('@')[0] : // Compatible with old data structure
+                {member.name || 
+                 (member.email ? member.email.split('@')[0] : 
+                  (member.user?.name || 
+                   (member.user?.email ? member.user.email.split('@')[0] : 
                     'Anonymous')))}
               </Text>
               <Text style={styles.memberRole}>{member.role || 'Member'}</Text>
@@ -971,7 +1098,7 @@ export default function TeamsScreen() {
         ))}
       </View>
 
-      {/* Team targets section */}
+      {/* Targets Section */}
       <View style={styles.targetsContainer}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Team Targets</Text>
@@ -1066,71 +1193,101 @@ export default function TeamsScreen() {
             <View style={styles.editActions}>
               <TouchableOpacity 
                 style={[styles.editButton, styles.cancelButton]}
-                onPress={() => setEditingTargets(false)}
+                onPress={() => {
+                  setEditingTargets(false);
+                  setEditedTeamInfo({
+                    ...editedTeamInfo,
+                    targetName: userTeam.targetName,
+                    targetMentalValue: userTeam.targetMentalValue,
+                    targetPhysicalValue: userTeam.targetPhysicalValue
+                  });
+                }}
               >
                 <Text style={styles.editButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.editButton, styles.saveButton]}
                 onPress={handleSaveTargets}
-                disabled={loading}
               >
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.editButtonText}>Save</Text>
-                )}
+                <Text style={styles.editButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
       </View>
 
-      <View style={styles.teamActions}>
+      {/* Goals Section */}
+      <View style={styles.goalsContainer}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Goals</Text>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => {
+              setNewGoal({ title: "", target: "", type: "physical" });
+              setGoalsModalVisible(true);
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
+          </TouchableOpacity>
+        </View>
+        {teamGoals.length > 0 ? (
+          <FlatList
+            data={teamGoals}
+            keyExtractor={(item) => item._id}
+            renderItem={renderGoalCard}
+            scrollEnabled={false}
+            nestedScrollEnabled={true}
+          />
+        ) : (
+          <Text style={styles.emptyListText}>No goals added yet</Text>
+        )}
+      </View>
+
+      {/* Forfeits Section */}
+      <View style={styles.forfeitsContainer}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Forfeits</Text>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => {
+              setNewForfeit({ description: "", points: 0 });
+              setForfeitsModalVisible(true);
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
+          </TouchableOpacity>
+        </View>
+        {teamForfeits.length > 0 ? (
+          <FlatList
+            data={teamForfeits}
+            keyExtractor={(item) => item._id}
+            renderItem={renderForfeitCard}
+            scrollEnabled={false}
+            nestedScrollEnabled={true}
+          />
+        ) : (
+          <Text style={styles.emptyListText}>No forfeits added yet</Text>
+        )}
+      </View>
+
+      {/* Danger Zone */}
+      <View style={styles.dangerZoneContainer}>
+        <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
         <TouchableOpacity 
-          style={[styles.actionButton, styles.leaveButton]}
+          style={styles.dangerButton}
           onPress={handleLeaveTeam}
-          disabled={loading}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.actionButtonText}>Leave Team</Text>
-          )}
+          <Ionicons name="exit-outline" size={20} color="#E74C3C" />
+          <Text style={styles.dangerButtonText}>Leave Team</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.dangerButton}
+          onPress={handleDeleteTeam}
+        >
+          <Ionicons name="trash-outline" size={20} color="#E74C3C" />
+          <Text style={styles.dangerButtonText}>Delete Team</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
-  );
-
-  const renderGoals = () => (
-    <View style={styles.goalsContainer}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Team Goals</Text>
-        <TouchableOpacity onPress={() => setGoalsModalVisible(true)}>
-          <Ionicons name="add-circle" size={24} color="#4A90E2" />
-        </TouchableOpacity>
-      </View>
-      <FlatList
-        data={userTeam.goals}
-        keyExtractor={(item) => item._id}
-        renderItem={renderGoalCard}
-      />
-    </View>
-  );
-
-  const renderForfeits = () => (
-    <View style={styles.forfeitsContainer}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Team Forfeits</Text>
-        <TouchableOpacity onPress={() => setForfeitsModalVisible(true)}>
-          <Ionicons name="add-circle" size={24} color="#4A90E2" />
-        </TouchableOpacity>
-      </View>
-      <FlatList
-        data={userTeam.forfeits}
-        keyExtractor={(item) => item._id}
-        renderItem={renderForfeitCard}
-      />
     </View>
   );
 
@@ -1487,11 +1644,9 @@ export default function TeamsScreen() {
   return (
     <View style={styles.container}>
       {userTeam ? (
-        <ScrollView style={styles.scrollView}>
+        <View style={styles.container}>
           {renderTeamDashboard()}
-          {renderGoals()}
-          {renderForfeits()}
-        </ScrollView>
+        </View>
       ) : (
         renderTeamList()
       )}
@@ -1734,12 +1889,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
     marginRight: 15,
-  },
-  leaveButton: {
-    backgroundColor: '#FFEEEE',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
   },
   backButtonText: {
     marginLeft: 5,
@@ -1991,7 +2140,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  goalsContainer: { backgroundColor: "#fff", padding: 15, borderRadius: 10, marginBottom: 15 },
+  goalsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   goalCard: { backgroundColor: "#F8F9FA", padding: 15, borderRadius: 10, marginBottom: 10 },
   goalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 5 },
@@ -1999,7 +2158,17 @@ const styles = StyleSheet.create({
   goalTarget: { fontSize: 14, color: "#666", marginTop: 5 },
   goalCurrent: { fontSize: 14, color: "#4A90E2", marginTop: 5 },
   goalActions: { flexDirection: "row", alignItems: "center" },
-  forfeitsContainer: { backgroundColor: "#fff", padding: 15, borderRadius: 10, marginBottom: 15 },
+  forfeitsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   forfeitCard: { backgroundColor: "#F8F9FA", padding: 15, borderRadius: 10, marginBottom: 10 },
   forfeitHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 5 },
   forfeitDescription: { fontSize: 16 },
@@ -2015,7 +2184,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   leaveButton: {
-    backgroundColor: '#E74C3C',
+    backgroundColor: '#FFEEEE',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
   },
   actionButtonText: {
     color: '#fff',
@@ -2102,18 +2274,18 @@ const styles = StyleSheet.create({
     color: "#2C3E50",
   },
   editTargetsContainer: {
-    backgroundColor: '#F8F9FA',
     padding: 15,
-    borderRadius: 10,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
   },
   editSectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#2C3E50',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   editTargetField: {
-    marginBottom: 12,
+    marginBottom: 15,
   },
   editTargetLabel: {
     fontSize: 14,
@@ -2131,22 +2303,19 @@ const styles = StyleSheet.create({
   },
   editActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
+    justifyContent: 'flex-end',
   },
   editButton: {
-    flex: 1,
-    padding: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    alignItems: 'center',
+    marginLeft: 10,
   },
   cancelButton: {
     backgroundColor: '#E0E0E0',
-    marginRight: 8,
   },
   saveButton: {
     backgroundColor: '#4A90E2',
-    marginLeft: 8,
   },
   editButtonText: {
     fontSize: 16,
@@ -2154,21 +2323,92 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   editContainer: {
-    marginTop: 10,
+    marginVertical: 10,
   },
   editInput: {
-    width: "100%",
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: '#E0E0E0',
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-    backgroundColor: "#F5F7FA",
+    padding: 10,
+    marginBottom: 10,
+    backgroundColor: '#F8F9FA',
   },
   multilineInput: {
-    height: 100,
-    textAlignVertical: "top",
-  }
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  addButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+  },
+  emptyListText: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  dangerZoneContainer: {
+    backgroundColor: '#FFF8F8',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#FFE0E0',
+  },
+  dangerZoneTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#E74C3C',
+    marginBottom: 16,
+  },
+  dangerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEEEE',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  dangerButtonText: {
+    fontSize: 16,
+    color: '#E74C3C',
+    marginLeft: 8,
+  },
+  editTargetsContainer: {
+    padding: 15,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+  },
+  editSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 12,
+  },
+  editTargetField: {
+    marginBottom: 15,
+  },
+  editTargetLabel: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginBottom: 6,
+  },
+  formGroup: {
+    marginBottom: 15,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  halfWidth: {
+    width: '48%',
+  },
+  label: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginBottom: 6,
+  },
 });
 

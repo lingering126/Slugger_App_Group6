@@ -221,7 +221,7 @@ export default function TeamDetailsScreen({ route, navigation }) {
     );
   }
 
-  // Return the main content directly without a ScrollView
+  // Return the main content directly without wrapping in a ScrollView
   return (
     <View style={styles.container}>
       {renderContent()}
