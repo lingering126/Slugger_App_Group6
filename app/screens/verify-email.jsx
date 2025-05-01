@@ -1,6 +1,6 @@
 // VerifyEmail.js
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Button, Alert, TouchableOpacity, Linking } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { API_URL } from '../config'; // Import the deployed API URL
@@ -11,9 +11,46 @@ export default function VerifyEmail({ navigation }) {
   const [error, setError] = useState('');
   
   const route = useRoute();
-  const { token, email, status } = route.params;
+  const { token, email, status } = route.params || {};
+  
+  // Function to manually open the verification link in browser
+  const openInBrowser = async () => {
+    if (!token || !email) {
+      Alert.alert('Error', 'Missing verification information');
+      return;
+    }
+    
+    const url = `https://slugger-app-group6.onrender.com/api/auth/verify-email?token=${token}&email=${email}`;
+    console.log('Opening verification link in browser:', url);
+    
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Cannot open the verification link in a browser');
+      }
+    } catch (err) {
+      console.error('Error opening URL:', err);
+      Alert.alert('Error', 'Failed to open the link: ' + err.message);
+    }
+  };
+  
+  // Function to go back to login
+  const goToLogin = () => {
+    navigation.navigate('Login');
+  };
   
   useEffect(() => {
+    console.log('VerifyEmail screen params:', route.params);
+    
+    // If we don't have necessary parameters, show error
+    if (!token && !email && !status) {
+      setLoading(false);
+      setError('Missing verification information. Please use the link from your email.');
+      return;
+    }
+    
     // If the status is already provided (from the redirect), use it
     if (status) {
       console.log('Verification status from redirect:', status);
@@ -38,12 +75,10 @@ export default function VerifyEmail({ navigation }) {
       try {
         console.log('Verifying email with token:', token);
         
-        // Use the deployed URL, not the localhost URL
-        const deployedUrl = API_URL;
+        // Use the deployed URL from config.js
+        console.log('Using API URL for verification:', API_URL);
         
-        console.log('Using API URL for verification:', deployedUrl);
-        
-        const response = await axios.get(`${deployedUrl}/auth/verify-email`, {
+        const response = await axios.get(`${API_URL}/auth/verify-email`, {
           params: { 
             token,
             email 
@@ -93,11 +128,24 @@ export default function VerifyEmail({ navigation }) {
         <View style={styles.messageContainer}>
           <Text style={styles.title}>Email Verified!</Text>
           <Text style={styles.message}>Your email has been successfully verified. Redirecting to login...</Text>
+          <TouchableOpacity style={styles.button} onPress={goToLogin}>
+            <Text style={styles.buttonText}>Go to Login</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.messageContainer}>
           <Text style={styles.title}>Verification Failed</Text>
           <Text style={styles.errorMessage}>{error}</Text>
+          
+          {token && email && (
+            <TouchableOpacity style={styles.button} onPress={openInBrowser}>
+              <Text style={styles.buttonText}>Try in Browser</Text>
+            </TouchableOpacity>
+          )}
+          
+          <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={goToLogin}>
+            <Text style={styles.buttonText}>Back to Login</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -122,6 +170,8 @@ const styles = StyleSheet.create({
   },
   messageContainer: {
     alignItems: 'center',
+    width: '100%',
+    maxWidth: 400,
   },
   title: {
     fontSize: 24,
@@ -133,10 +183,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     color: '#666',
+    marginBottom: 20,
   },
   errorMessage: {
     fontSize: 16,
     textAlign: 'center',
     color: 'red',
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#6A4BFF',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 5,
+    marginVertical: 10,
+    width: '80%',
+    alignItems: 'center',
+  },
+  secondaryButton: {
+    backgroundColor: '#8F8F8F',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

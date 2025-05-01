@@ -130,11 +130,19 @@ const corsOptions = {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Middleware
+// Add CORS middleware early in the chain before other middleware
 app.use(cors(corsOptions));
 
 // Add OPTIONS handling for preflight requests
 app.options('*', cors(corsOptions));
+
+// Add response headers for more CORS flexibility
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
+});
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI, {
@@ -416,21 +424,14 @@ app.post('/api/auth/signup', async (req, res) => {
       console.log('User registered in memory:', email);
     }
     
-    // Send verification email
-    const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
+    // Get frontend URL from environment
+    const frontendUrl = process.env.FRONTEND_URL || 'https://slugger-app-group6.onrender.com';
+    console.log('Using frontend URL for verification:', frontendUrl);
     
-    console.log('=== Signup Email Link Details ===');
-    console.log('Available server IPs:', serverIPs);
-    console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', process.env.PORT || 5001);
-    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
-    console.log('===============================');
-    
-    // 确保有邮件发送配置
+    // Configure email transporter if needed
     if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
       console.warn('Email configuration missing. Setting up a default transporter for development.');
-      // 如果没有配置邮件服务，创建一个测试用的transporter
+      // If no email service configured, create a test transporter
       const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
         host: 'smtp.ethereal.email',
@@ -454,7 +455,7 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app" 
+            <a href="${frontendUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -462,7 +463,7 @@ app.post('/api/auth/signup', async (req, res) => {
           
           <p style="font-size: 14px; color: #666;">If the button doesn't work, copy and paste this link into your browser:</p>
           <p style="font-size: 14px; color: #666; word-break: break-all;">
-            ${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app
+            ${frontendUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app
           </p>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -484,7 +485,7 @@ app.post('/api/auth/signup', async (req, res) => {
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
       
-      // 如果使用了Ethereal测试账户，提供预览链接
+      // If using Ethereal test account, provide preview link
       if (info.messageId && info.messageId.includes('ethereal')) {
         console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
         console.log('IMPORTANT: This is a test email. Check the preview URL above to view it.');
@@ -707,21 +708,9 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       return res.status(404).json({ message: 'User not found or already verified' });
     }
     
-    // Send verification email
-    const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-    const port = process.env.PORT || 5001;
-    
-    console.log('=== Resend Email Link Details ===');
-    console.log('Available server IPs:', serverIPs);
-    console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', port);
-    console.log('Generated verification links:');
-    serverIPs.forEach((ip, index) => {
-      console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
-    });
-    console.log('Localhost link:', `http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
-    console.log('================================');
+    // Get frontend URL from environment
+    const frontendUrl = process.env.FRONTEND_URL || 'https://slugger-app-group6.onrender.com';
+    console.log('Using frontend URL for verification:', frontendUrl);
     
     const mailOptions = {
       from: process.env.MAIL_FROM,
@@ -733,7 +722,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_URL}/api/auth/verify-email?token=${user.verificationToken}&email=${email}&redirect=app" 
+            <a href="${frontendUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}&redirect=app" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -741,7 +730,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           
           <p style="font-size: 14px; color: #666;">If the button doesn't work, copy and paste this link into your browser:</p>
           <p style="font-size: 14px; color: #666; word-break: break-all;">
-            ${process.env.FRONTEND_URL}/api/auth/verify-email?token=${user.verificationToken}&email=${email}&redirect=app
+            ${frontendUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}&redirect=app
           </p>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
