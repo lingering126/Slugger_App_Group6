@@ -137,11 +137,25 @@ export default function LoginScreen() {
         // Clear the timeout since we got a response
         clearTimeout(timeoutId);
         
-        // Start with assumption that bad credentials were entered
-        // This is a safe fallback for any authentication error
-        setError('Invalid email or password');
-        
         try {
+          // First check if the response is actually JSON by checking the Content-Type header
+          const contentType = response.headers.get('Content-Type');
+          if (!contentType || !contentType.includes('application/json')) {
+            console.error('Response is not JSON. Content-Type:', contentType);
+            const responseText = await response.text();
+            console.log('Raw response text:', responseText.substring(0, 200)); // Log first 200 chars
+            
+            if (responseText.includes('please verify your email')) {
+              setNeedsVerification(true);
+              setVerificationEmail(email);
+              setError('');
+              setLoading(false);
+              return;
+            } else {
+              throw new Error('Server returned non-JSON response');
+            }
+          }
+          
           data = await response.json();
           console.log('Login response:', {
             status: response.status,
@@ -152,9 +166,13 @@ export default function LoginScreen() {
             setNeedsVerification(true);
             setVerificationEmail(data.email || email);
             setError('');
+            setLoading(false);
+            return;
           } else if (!response.ok) {
-            // Keep "Invalid email or password" for 400/401 errors
-            if (response.status !== 400 && response.status !== 401) {
+            // Only set error for failed login attempts
+            if (response.status === 400 || response.status === 401) {
+              setError('Invalid email or password');
+            } else {
               setError(data.message || 'An error occurred during login. Please try again.');
             }
             setLoading(false);
@@ -212,8 +230,31 @@ export default function LoginScreen() {
           }
         } catch (parseError) {
           console.error('Error parsing response:', parseError);
+          
+          try {
+            // Try to get the raw text to see what's actually being returned
+            const responseText = await response.text();
+            console.log('Raw response text for error diagnosis:', responseText.substring(0, 200));
+            
+            // Check if it's an HTML error page with verification message
+            if (responseText.includes('verify your email')) {
+              setNeedsVerification(true);
+              setVerificationEmail(email);
+              setError('');
+              setLoading(false);
+              return;
+            }
+          } catch (textError) {
+            console.error('Error getting response text:', textError);
+          }
+          
           if (response.status === 400 || response.status === 401) {
             // Keep the default "Invalid email or password" for auth errors
+            setError('Invalid email or password');
+          } else if (response.status === 403) {
+            setNeedsVerification(true);
+            setVerificationEmail(email);
+            setError('');
           } else {
             setError('An error occurred during login. Please try again.');
           }
@@ -253,6 +294,21 @@ export default function LoginScreen() {
       
       // Use the working URL if available, otherwise try all URLs
       const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
+      console.log('Resending verification email to:', verificationEmail || email);
+      console.log('Using API URL:', apiUrl);
+      
+      // Create an abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.log('Resend request timed out after 15 seconds');
+        Alert.alert(
+          'Error',
+          'Request timed out. Server might be unavailable.',
+          [{ text: 'OK' }]
+        );
+        setResendingEmail(false);
+      }, 15000);
       
       const response = await fetch(`${apiUrl}/auth/resend-verification`, {
         method: 'POST',
@@ -261,23 +317,65 @@ export default function LoginScreen() {
         },
         body: JSON.stringify({
           email: verificationEmail || email
-        })
+        }),
+        signal: controller.signal
       });
       
-      const data = await response.json();
+      // Clear the timeout since we got a response
+      clearTimeout(timeoutId);
       
-      if (response.ok) {
-        Alert.alert(
-          'Verification Email Sent',
-          'Please check your inbox for the verification link.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert(
-          'Error',
-          data.message || 'Failed to resend verification email',
-          [{ text: 'OK' }]
-        );
+      try {
+        // Check if the response is actually JSON
+        const contentType = response.headers.get('Content-Type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error('Response is not JSON. Content-Type:', contentType);
+          const responseText = await response.text();
+          console.log('Raw response text:', responseText.substring(0, 200));
+          
+          // If we got any kind of response, assume it worked
+          if (response.ok) {
+            Alert.alert(
+              'Verification Email Sent',
+              'Please check your inbox for the verification link.',
+              [{ text: 'OK' }]
+            );
+          } else {
+            throw new Error('Server returned non-JSON response');
+          }
+        } else {
+          const data = await response.json();
+          
+          if (response.ok) {
+            Alert.alert(
+              'Verification Email Sent',
+              'Please check your inbox for the verification link.',
+              [{ text: 'OK' }]
+            );
+          } else {
+            Alert.alert(
+              'Error',
+              data.message || 'Failed to resend verification email',
+              [{ text: 'OK' }]
+            );
+          }
+        }
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        
+        if (response.ok) {
+          // If response was OK but we couldn't parse JSON, still consider it successful
+          Alert.alert(
+            'Verification Email Sent',
+            'Please check your inbox for the verification link.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Error',
+            'Failed to resend verification email. Please try again later.',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
       console.error('Error resending verification email:', error);
