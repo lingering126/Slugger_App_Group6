@@ -194,6 +194,22 @@ export default function TeamsScreen() {
             description: team.description || ''
           });
           setUserTeam(team);
+          
+          // Load team goals and forfeits
+          if (team.goals) {
+            setTeamGoals(team.goals);
+            calculateTeamProgress(team);
+          } else {
+            setTeamGoals([]);
+            setTeamProgress(0);
+          }
+          
+          if (team.forfeits) {
+            setTeamForfeits(team.forfeits);
+          } else {
+            setTeamForfeits([]);
+          }
+          
           await AsyncStorage.setItem('userTeam', JSON.stringify(team));
         }
 
@@ -202,8 +218,6 @@ export default function TeamsScreen() {
         } else {
           Alert.alert('Info', 'You are already a member of this team');
         }
-        
-        // No need to reload teams, we've already updated the state
       } else {
         throw new Error(data.message || 'Failed to join team');
       }
@@ -292,6 +306,16 @@ export default function TeamsScreen() {
             console.log('Found saved user team in AsyncStorage:', parsedTeam);
             setUserTeam(parsedTeam);
             
+            // Also load team goals and forfeits
+            if (parsedTeam.goals) {
+              setTeamGoals(parsedTeam.goals);
+              calculateTeamProgress(parsedTeam);
+            }
+            
+            if (parsedTeam.forfeits) {
+              setTeamForfeits(parsedTeam.forfeits);
+            }
+            
             // Add this team to joinedTeamIds
             if (parsedTeam._id) {
               const newJoinedIds = new Set(joinedTeamIds);
@@ -373,6 +397,17 @@ export default function TeamsScreen() {
         if (userTeams.length > 0 && loadFromStorage) {
           const userTeam = userTeams[0];
           setUserTeam(userTeam);
+          
+          // Also load team goals and forfeits
+          if (userTeam.goals) {
+            setTeamGoals(userTeam.goals);
+            calculateTeamProgress(userTeam);
+          }
+          
+          if (userTeam.forfeits) {
+            setTeamForfeits(userTeam.forfeits);
+          }
+          
           // Save the team data to AsyncStorage for persistence
           await AsyncStorage.setItem('userTeam', JSON.stringify(userTeam));
         }
@@ -719,6 +754,21 @@ export default function TeamsScreen() {
       description: team.description || ''
     });
     setUserTeam(team);
+    
+    // Also load team goals and forfeits
+    if (team.goals) {
+      setTeamGoals(team.goals);
+      calculateTeamProgress(team);
+    } else {
+      setTeamGoals([]);
+      setTeamProgress(0);
+    }
+    
+    if (team.forfeits) {
+      setTeamForfeits(team.forfeits);
+    } else {
+      setTeamForfeits([]);
+    }
   };
   
   // Replace renderTeamCard with a more reliable version
@@ -1048,7 +1098,6 @@ export default function TeamsScreen() {
               style={styles.copyButton}
               onPress={async () => {
                 try {
-                  // Use the newly installed expo-clipboard package
                   const teamId = userTeam.teamId || userTeam.groupId;
                   if (teamId) {
                     await Clipboard.setStringAsync(teamId.toString());
@@ -1230,14 +1279,39 @@ export default function TeamsScreen() {
             <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
           </TouchableOpacity>
         </View>
-        {teamGoals.length > 0 ? (
-          <FlatList
-            data={teamGoals}
-            keyExtractor={(item) => item._id}
-            renderItem={renderGoalCard}
-            scrollEnabled={false}
-            nestedScrollEnabled={true}
-          />
+        {teamGoals && teamGoals.length > 0 ? (
+          teamGoals.map((goal) => (
+            <View key={goal._id} style={styles.goalCard}>
+              <View style={styles.goalHeader}>
+                <Text style={styles.goalTitle}>{goal.title}</Text>
+                <View style={styles.goalActions}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setNewGoal(goal);
+                      setGoalsModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="create-outline" size={24} color="#4A90E2" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteGoal(goal._id)}
+                  >
+                    <Ionicons name="trash-outline" size={24} color="#E74C3C" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={styles.goalTarget}>Target: {goal.target}</Text>
+              <Text style={styles.goalCurrent}>Current: {goal.current}</Text>
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${(goal.current / goal.target) * 100}%` }
+                  ]}
+                />
+              </View>
+            </View>
+          ))
         ) : (
           <Text style={styles.emptyListText}>No goals added yet</Text>
         )}
@@ -1257,14 +1331,30 @@ export default function TeamsScreen() {
             <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
           </TouchableOpacity>
         </View>
-        {teamForfeits.length > 0 ? (
-          <FlatList
-            data={teamForfeits}
-            keyExtractor={(item) => item._id}
-            renderItem={renderForfeitCard}
-            scrollEnabled={false}
-            nestedScrollEnabled={true}
-          />
+        {teamForfeits && teamForfeits.length > 0 ? (
+          teamForfeits.map((forfeit) => (
+            <View key={forfeit._id} style={styles.forfeitCard}>
+              <View style={styles.forfeitHeader}>
+                <Text style={styles.forfeitDescription}>{forfeit.description}</Text>
+                <View style={styles.forfeitActions}>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setNewForfeit(forfeit);
+                      setForfeitsModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="create-outline" size={24} color="#4A90E2" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => handleDeleteForfeit(forfeit._id)}
+                  >
+                    <Ionicons name="trash-outline" size={24} color="#E74C3C" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={styles.forfeitPoints}>{forfeit.points} points</Text>
+            </View>
+          ))
         ) : (
           <Text style={styles.emptyListText}>No forfeits added yet</Text>
         )}
@@ -1644,15 +1734,14 @@ export default function TeamsScreen() {
   return (
     <View style={styles.container}>
       {userTeam ? (
-        <View style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
           {renderTeamDashboard()}
-        </View>
+        </ScrollView>
       ) : (
         renderTeamList()
       )}
 
       {renderCreateTeamModal()}
-
       {renderGoalModal()}
       {renderForfeitModal()}
     </View>
@@ -2065,7 +2154,12 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.7,
   },
-  scrollView: { padding: 16 },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    paddingBottom: 40,
+  },
   teamDashboard: { marginBottom: 20 },
   teamHeader: {
     marginBottom: 20,
