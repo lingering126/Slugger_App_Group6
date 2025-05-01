@@ -244,13 +244,34 @@ export default function Profile() {
     try {
       setLoadingGroups(true)
       
-      // Get groups from service
-      const userGroups = await groupService.getUserGroups()
-      setGroups(userGroups)
-      
+      // First try to get groups from groupService
+      try {
+        console.log('Attempting to fetch groups with groupService...')
+        const userGroups = await groupService.getUserGroups()
+        setGroups(userGroups)
+        console.log('Successfully fetched groups with groupService:', userGroups.length)
+        return
+      } catch (groupsError) {
+        console.error('Failed with groupService:', groupsError)
+        
+        // If groupService fails, try teamService as fallback
+        try {
+          console.log('Falling back to teamService...')
+          const { default: teamService } = await import('../services/teamService')
+          const userTeams = await teamService.getUserTeams()
+          setGroups(userTeams)
+          console.log('Successfully fetched teams with teamService:', userTeams.length)
+        } catch (teamsError) {
+          console.error('Fallback also failed:', teamsError)
+          // If both fail, show empty groups
+          setGroups([])
+          throw new Error('Both services failed to fetch groups/teams')
+        }
+      }
     } catch (error) {
-      console.error('Error fetching groups:', error)
-      // Keep the groups array as is if there's an error
+      console.error('Error fetching groups/teams:', error)
+      // Keep the groups array as is if there's an error or set to empty array
+      setGroups([])
     } finally {
       setLoadingGroups(false)
     }

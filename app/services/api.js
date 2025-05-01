@@ -365,7 +365,7 @@ const groupService = {
       console.log('Using API URL for group fetch:', apiUrl);
       
       // Make API request to get user's groups
-      const response = await fetch(`${apiUrl}/groups`, {
+      const response = await fetch(`${apiUrl}/teams`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -464,6 +464,15 @@ const groupService = {
     } catch (error) {
       console.error('Error fetching user groups with populated members:', error);
       
+      // More detailed logging to help debug
+      if (error.response) {
+        console.error('Response error:', error.response.status, error.response.statusText);
+      } else if (error.request) {
+        console.error('Request error - no response received');
+      } else {
+        console.error('Error message:', error.message);
+      }
+      
       // Return empty array if error occurs
       return [];
     }
@@ -486,7 +495,7 @@ const groupService = {
       
       console.log('Using API URL for group fetch by ID:', apiUrl);
       
-      const response = await fetch(`${apiUrl}/groups/${groupId}`, {
+      const response = await fetch(`${apiUrl}/teams/${groupId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
