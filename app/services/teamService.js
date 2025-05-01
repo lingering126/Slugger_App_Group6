@@ -14,9 +14,22 @@ const getAuthToken = async () => {
   }
 };
 
-// Create axios instance
+// Get the API URL from utils.js
+const getDeployedApiUrl = async () => {
+  try {
+    const { getApiUrl } = await import('../utils');
+    const apiUrls = getApiUrl();
+    console.log('API URLs from utils:', apiUrls);
+    return apiUrls[0]; // Use the first URL which should be the deployed one
+  } catch (error) {
+    console.error('Error getting API URL from utils:', error);
+    return API_URL; // Fallback to config API_URL
+  }
+};
+
+// Create axios instance - we'll update the baseURL before each request
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL, // Initial value, will be updated
   headers: {
     'Content-Type': 'application/json'
   }
@@ -25,6 +38,12 @@ const api = axios.create({
 // Add request interceptor
 api.interceptors.request.use(
   async (config) => {
+    // Update baseURL to use the deployed URL
+    const deployedUrl = await getDeployedApiUrl();
+    config.baseURL = deployedUrl;
+    console.log('Using API URL for team request:', deployedUrl);
+    
+    // Add auth token
     const token = await getAuthToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -35,11 +54,6 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
-
-// Helper function to get the API base URL
-const getApiBaseUrl = () => {
-  return global.workingApiUrl || API_URL;
-};
 
 // Helper to determine which endpoint to use
 const getEndpoint = (path) => {

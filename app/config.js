@@ -1,1 +1,1 @@
-export const API_URL = 'http://localhost:5001/api'; // 根据你的后端服务器地址修改 
+export const API_URL = 'https://slugger-app-group6.onrender.com/api'; // Updated to use deployed server 
