@@ -8,7 +8,8 @@ import {
   Image,
   Alert,
   ActivityIndicator,
-  FlatList
+  FlatList,
+  SectionList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import teamService from '../services/teamService';
@@ -115,7 +116,7 @@ export default function TeamDetailsScreen({ route, navigation }) {
     </View>
   );
 
-  // Main content renderer - now divided into sections to avoid the VirtualizedList warning
+  // Main content renderer - using SectionList to avoid the VirtualizedList warning
   const renderContent = () => {
     if (!team) {
       return (
@@ -125,73 +126,90 @@ export default function TeamDetailsScreen({ route, navigation }) {
       );
     }
 
+    // Prepare sections for SectionList
+    const sections = [
+      {
+        title: 'Team Information',
+        data: [{ type: 'header' }],
+        renderItem: () => (
+          <View style={styles.header}>
+            <Text style={styles.teamName}>{team.name}</Text>
+            <Text style={styles.teamDescription}>{team.description}</Text>
+          </View>
+        )
+      },
+      {
+        title: 'Team Progress',
+        data: [{ type: 'progress' }],
+        renderItem: () => (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Team Progress</Text>
+            <View style={styles.progressBar}>
+              <View 
+                style={[
+                  styles.progressFill, 
+                  { width: `${calculateProgress()}%` }
+                ]} 
+              />
+            </View>
+            <Text style={styles.progressText}>{calculateProgress()}% Complete</Text>
+          </View>
+        )
+      },
+      {
+        title: 'Team Target',
+        data: [{ type: 'target' }],
+        renderItem: () => (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Team Target</Text>
+            <View style={styles.targetContainer}>
+              <View style={styles.targetItem}>
+                <Text style={styles.targetLabel}>Mental Target</Text>
+                <Text style={styles.targetValue}>{team.targetMentalValue}</Text>
+              </View>
+              <View style={styles.targetItem}>
+                <Text style={styles.targetLabel}>Physical Target</Text>
+                <Text style={styles.targetValue}>{team.targetPhysicalValue}</Text>
+              </View>
+            </View>
+          </View>
+        )
+      },
+      {
+        title: 'Team Members',
+        data: team.members || [],
+        renderItem: ({ item }) => renderMember({ item })
+      },
+      {
+        title: 'Team Goals',
+        data: team.goals || [],
+        renderItem: ({ item }) => renderGoal({ item })
+      },
+      {
+        title: 'Actions',
+        data: [{ type: 'actions' }],
+        renderItem: () => (
+          <TouchableOpacity 
+            style={styles.leaveButton}
+            onPress={handleLeaveTeam}
+          >
+            <Text style={styles.leaveButtonText}>Leave Team</Text>
+          </TouchableOpacity>
+        )
+      }
+    ];
+
     return (
-      <View style={styles.container}>
-        {/* Team Header */}
-        <View style={styles.header}>
-          <Text style={styles.teamName}>{team.name}</Text>
-          <Text style={styles.teamDescription}>{team.description}</Text>
-        </View>
-
-        {/* Progress Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Team Progress</Text>
-          <View style={styles.progressBar}>
-            <View 
-              style={[
-                styles.progressFill, 
-                { width: `${calculateProgress()}%` }
-              ]} 
-            />
-          </View>
-          <Text style={styles.progressText}>{calculateProgress()}% Complete</Text>
-        </View>
-
-        {/* Target Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Team Target</Text>
-          <View style={styles.targetContainer}>
-            <View style={styles.targetItem}>
-              <Text style={styles.targetLabel}>Mental Target</Text>
-              <Text style={styles.targetValue}>{team.targetMentalValue}</Text>
-            </View>
-            <View style={styles.targetItem}>
-              <Text style={styles.targetLabel}>Physical Target</Text>
-              <Text style={styles.targetValue}>{team.targetPhysicalValue}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Members Section - Using FlatList */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Team Members</Text>
-          <FlatList
-            data={team.members}
-            renderItem={renderMember}
-            keyExtractor={item => item._id || item.id}
-            scrollEnabled={false} // Disable scrolling to avoid nesting issues
-          />
-        </View>
-
-        {/* Goals Section - Using FlatList */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Team Goals</Text>
-          <FlatList
-            data={team.goals || []}
-            renderItem={renderGoal}
-            keyExtractor={item => item._id || item.id}
-            scrollEnabled={false} // Disable scrolling to avoid nesting issues
-          />
-        </View>
-
-        {/* Leave Team Button */}
-        <TouchableOpacity 
-          style={styles.leaveButton}
-          onPress={handleLeaveTeam}
-        >
-          <Text style={styles.leaveButtonText}>Leave Team</Text>
-        </TouchableOpacity>
-      </View>
+      <SectionList
+        sections={sections}
+        keyExtractor={(item, index) => item._id || item.id || index.toString()}
+        renderSectionHeader={({ section }) => (
+          section.title !== 'Team Information' && section.title !== 'Actions' ? 
+            <Text style={styles.sectionTitle}>{section.title}</Text> : null
+        )}
+        stickySectionHeadersEnabled={false}
+        contentContainerStyle={styles.sectionListContent}
+      />
     );
   };
 
@@ -203,11 +221,11 @@ export default function TeamDetailsScreen({ route, navigation }) {
     );
   }
 
-  // Wrap the main content in a ScrollView
+  // Return the main content directly without a ScrollView
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
+    <View style={styles.container}>
       {renderContent()}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -343,7 +361,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  scrollContainer: {
-    padding: 16,
+  sectionListContent: {
+    paddingBottom: 20,
   },
 }); 
