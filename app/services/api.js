@@ -445,9 +445,12 @@ const groupService = {
       
       console.log('Using API URL for group fetch:', apiUrl);
       
-      // Make API request to get user's groups
       try {
-        const response = await fetch(`${apiUrl}/teams`, {
+        // Make sure we're not adding /api twice
+        const endpoint = apiUrl.endsWith('/api') ? `${apiUrl}/teams` : `${apiUrl}/api/teams`;
+        console.log('Full endpoint URL for teams:', endpoint);
+        
+        const response = await fetch(endpoint, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -595,7 +598,11 @@ const groupService = {
       console.log('Using API URL for group fetch by ID:', apiUrl);
       
       try {
-        const response = await fetch(`${apiUrl}/teams/${groupId}`, {
+        // Make sure we're not adding /api twice
+        const endpoint = apiUrl.endsWith('/api') ? `${apiUrl}/teams/${groupId}` : `${apiUrl}/api/teams/${groupId}`;
+        console.log('Full endpoint URL for team by ID:', endpoint);
+        
+        const response = await fetch(endpoint, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`

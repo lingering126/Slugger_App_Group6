@@ -40,8 +40,16 @@ api.interceptors.request.use(
   async (config) => {
     // Update baseURL to use the deployed URL
     const deployedUrl = await getDeployedApiUrl();
-    config.baseURL = deployedUrl;
-    console.log('Using API URL for team request:', deployedUrl);
+    
+    // Fix duplicate /api issue by ensuring we don't append /api if it already exists in the URL
+    // Check if the URL has /api in it already
+    if (deployedUrl.endsWith('/api')) {
+      config.baseURL = deployedUrl;
+    } else {
+      config.baseURL = `${deployedUrl}${deployedUrl.endsWith('/') ? '' : '/'}api`;
+    }
+    
+    console.log('Using API URL for team request:', config.baseURL);
     
     // Add auth token
     const token = await getAuthToken();

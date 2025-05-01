@@ -50,6 +50,19 @@ export const clearConnectionCache = () => {
   global.workingApiUrl = null;
 };
 
+// Helper to standardize API URL formatting
+export const formatApiUrl = (url) => {
+  if (!url) return null;
+  
+  // If URL already ends with /api, return it as is
+  if (url.endsWith('/api')) {
+    return url;
+  }
+  
+  // Otherwise, add /api to the URL, making sure we don't duplicate slashes
+  return `${url}${url.endsWith('/') ? '' : '/'}api`;
+};
+
 // Get all relevant API URLs to try
 export const getApiUrl = () => {
   const urls = [];
@@ -58,7 +71,7 @@ export const getApiUrl = () => {
   try {
     const API_CONFIG = require('./config/api').default;
     if (API_CONFIG.API_URL) {
-      urls.push(API_CONFIG.API_URL);
+      urls.push(formatApiUrl(API_CONFIG.API_URL));
     }
   } catch (err) {
     console.error('Failed to load API_CONFIG:', err);
@@ -66,17 +79,17 @@ export const getApiUrl = () => {
   
   // If we already have a working URL, include it first
   if (global.workingApiUrl && !urls.includes(global.workingApiUrl)) {
-    urls.unshift(global.workingApiUrl);
+    urls.unshift(formatApiUrl(global.workingApiUrl));
   }
   
   // Add the deployed server URL if not already included
-  const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+  const deployedUrl = formatApiUrl('https://slugger-app-group6.onrender.com');
   if (!urls.includes(deployedUrl)) {
     urls.push(deployedUrl);
   }
   
   // Add localhost URL if not already included
-  const localhostUrl = 'http://localhost:5001/api';
+  const localhostUrl = formatApiUrl('http://localhost:5001');
   if (!urls.includes(localhostUrl)) {
     urls.push(localhostUrl);
   }

@@ -336,7 +336,7 @@ export default function LoginScreen() {
           if (response.ok) {
             Alert.alert(
               'Verification Email Sent',
-              'Please check your inbox for the verification link.',
+              'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.',
               [{ text: 'OK' }]
             );
           } else {
@@ -348,7 +348,7 @@ export default function LoginScreen() {
           if (response.ok) {
             Alert.alert(
               'Verification Email Sent',
-              'Please check your inbox for the verification link.',
+              'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.',
               [{ text: 'OK' }]
             );
           } else {
@@ -366,7 +366,7 @@ export default function LoginScreen() {
           // If response was OK but we couldn't parse JSON, still consider it successful
           Alert.alert(
             'Verification Email Sent',
-            'Please check your inbox for the verification link.',
+            'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.',
             [{ text: 'OK' }]
           );
         } else {
