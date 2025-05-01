@@ -167,10 +167,7 @@ export default function LoginScreen() {
         // Clear the timeout since we got a response
         clearTimeout(timeoutId);
         
-        // Start with assumption that bad credentials were entered
-        // This is a safe fallback for any authentication error
-        setError('Invalid email or password');
-        
+        // Get the response data first
         try {
           data = await response.json();
           console.log('Login response:', {
@@ -183,69 +180,70 @@ export default function LoginScreen() {
             setVerificationEmail(data.email || email);
             setError('');
           } else if (!response.ok) {
-            // Keep "Invalid email or password" for 400/401 errors
+            // Only set error message if the response was not successful
             if (response.status !== 400 && response.status !== 401) {
               setError(data.message || 'An error occurred during login. Please try again.');
+            } else {
+              setError('Invalid email or password');
             }
             setLoading(false);
             return;
-          }
-          
-          // Process successful login
-          console.log('Login successful');
-          
-          // Save credentials if remember password is checked
-          if (rememberPassword) {
-            await AsyncStorage.setItem('savedEmail', email);
-            await AsyncStorage.setItem('savedPassword', password);
           } else {
-            // Clear saved credentials if not checked
-            await AsyncStorage.removeItem('savedEmail');
-            await AsyncStorage.removeItem('savedPassword');
-          }
-          
-          // Store user data
-          await AsyncStorage.setItem('userToken', data.token);
-          await AsyncStorage.setItem('userId', data.user.id);
-          
-          // Check if username exists before storing it
-          if (data.user.username) {
-            await AsyncStorage.setItem('username', data.user.username);
-          }
-          
-          await AsyncStorage.setItem('user', JSON.stringify(data.user));
-          
-          console.log('User data stored in AsyncStorage');
-          
-          // Check if the user has completed the welcome flow
-          const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
-          console.log('Welcome completed status:', welcomeCompleted);
-          
-          // If the user is logging in for the first time, redirect to welcome page
-          if (!welcomeCompleted) {
-            console.log('First time login detected, redirecting to welcome page');
+            // Process successful login
+            console.log('Login successful');
             
-            try {
-              // Verify that the welcome route exists
-              router.replace('/screens/welcome');
-              console.log('Navigation to welcome page initiated');
-            } catch (navError) {
-              console.error('Error navigating to welcome page:', navError);
-              // Fallback to home if welcome page navigation fails
+            // Save credentials if remember password is checked
+            if (rememberPassword) {
+              await AsyncStorage.setItem('savedEmail', email);
+              await AsyncStorage.setItem('savedPassword', password);
+            } else {
+              // Clear saved credentials if not checked
+              await AsyncStorage.removeItem('savedEmail');
+              await AsyncStorage.removeItem('savedPassword');
+            }
+            
+            // Clear any previous error
+            setError('');
+            
+            // Store user data
+            await AsyncStorage.setItem('userToken', data.token);
+            await AsyncStorage.setItem('userId', data.user.id);
+            
+            // Check if username exists before storing it
+            if (data.user.username) {
+              await AsyncStorage.setItem('username', data.user.username);
+            }
+            
+            await AsyncStorage.setItem('user', JSON.stringify(data.user));
+            
+            console.log('User data stored in AsyncStorage');
+            
+            // Check if the user has completed the welcome flow
+            const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
+            console.log('Welcome completed status:', welcomeCompleted);
+            
+            // If the user is logging in for the first time, redirect to welcome page
+            if (!welcomeCompleted) {
+              console.log('First time login detected, redirecting to welcome page');
+              
+              try {
+                // Verify that the welcome route exists
+                router.replace('/screens/welcome');
+                console.log('Navigation to welcome page initiated');
+              } catch (navError) {
+                console.error('Error navigating to welcome page:', navError);
+                // Fallback to home if welcome page navigation fails
+                router.replace('/screens/(tabs)/home');
+              }
+            } else {
+              console.log('Welcome already completed, redirecting to home page');
+              // Navigate to home screen after successful login
               router.replace('/screens/(tabs)/home');
             }
-          } else {
-            console.log('Welcome already completed, redirecting to home page');
-            // Navigate to home screen after successful login
-            router.replace('/screens/(tabs)/home');
           }
         } catch (parseError) {
           console.error('Error parsing response:', parseError);
-          if (response.status === 400 || response.status === 401) {
-            // Keep the default "Invalid email or password" for auth errors
-          } else {
-            setError('An error occurred during login. Please try again.');
-          }
+          setError('An error occurred during login. Please try again.');
           setLoading(false);
         }
       } catch (fetchError) {
