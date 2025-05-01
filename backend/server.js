@@ -130,19 +130,11 @@ const corsOptions = {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Add CORS middleware early in the chain before other middleware
+// Middleware
 app.use(cors(corsOptions));
 
 // Add OPTIONS handling for preflight requests
 app.options('*', cors(corsOptions));
-
-// Add response headers for more CORS flexibility
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  next();
-});
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI, {
@@ -424,14 +416,24 @@ app.post('/api/auth/signup', async (req, res) => {
       console.log('User registered in memory:', email);
     }
     
-    // Get frontend URL from environment
-    const frontendUrl = process.env.FRONTEND_URL || 'https://slugger-app-group6.onrender.com';
-    console.log('Using frontend URL for verification:', frontendUrl);
+    // Send verification email
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
     
-    // Configure email transporter if needed
+    // Use Render URL for deployed app in verification emails
+    const verificationBaseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://slugger-app-group6.onrender.com'
+      : `http://${primaryIP}:${process.env.PORT || 5001}`;
+    
+    console.log('=== Signup Email Link Details ===');
+    console.log('Using verification base URL:', verificationBaseUrl);
+    console.log('Full verification link:', `${verificationBaseUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
+    console.log('===============================');
+    
+    // 确保有邮件发送配置
     if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
       console.warn('Email configuration missing. Setting up a default transporter for development.');
-      // If no email service configured, create a test transporter
+      // 如果没有配置邮件服务，创建一个测试用的transporter
       const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
         host: 'smtp.ethereal.email',
@@ -455,15 +457,15 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${frontendUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app" 
+            <a href="${verificationBaseUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
           </div>
           
-          <p style="font-size: 14px; color: #666;">If the button doesn't work, copy and paste this link into your browser:</p>
+          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can copy and paste this link into your browser:</p>
           <p style="font-size: 14px; color: #666; word-break: break-all;">
-            ${frontendUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app
+            ${verificationBaseUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}
           </p>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -485,7 +487,7 @@ app.post('/api/auth/signup', async (req, res) => {
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
       
-      // If using Ethereal test account, provide preview link
+      // 如果使用了Ethereal测试账户，提供预览链接
       if (info.messageId && info.messageId.includes('ethereal')) {
         console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
         console.log('IMPORTANT: This is a test email. Check the preview URL above to view it.');
@@ -596,14 +598,17 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/verify-email', async (req, res) => {
   try {
-    const { token, email, redirect } = req.query;
+    const { token, email } = req.query;
     
     if (!token || !email) {
       return res.status(400).json({ message: 'Invalid verification link' });
     }
     
+    // Get server IP addresses for building App links
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost';
+    
     let user;
-    let verificationSuccess = false;
     
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
@@ -619,7 +624,6 @@ app.get('/api/auth/verify-email', async (req, res) => {
         user.verificationToken = null;
         user.verificationTokenExpires = null;
         await user.save();
-        verificationSuccess = true;
       }
     } else {
       // Fallback to in-memory storage
@@ -634,34 +638,235 @@ app.get('/api/auth/verify-email', async (req, res) => {
         inMemoryUsers[userIndex].verificationToken = null;
         inMemoryUsers[userIndex].verificationTokenExpires = null;
         user = inMemoryUsers[userIndex];
-        verificationSuccess = true;
       }
     }
     
-    // Handle redirect for app deep linking
-    if (redirect === 'app') {
-      // This is for redirecting to the mobile app via deep linking
-      if (verificationSuccess) {
-        return res.redirect(`slugger://verify-email?token=${token}&email=${email}&status=success`);
-      } else {
-        return res.redirect(`slugger://verify-email?token=${token}&email=${email}&status=failed`);
-      }
-    }
-    
-    // Standard web response
+    // Add fallback values for verification links
     const frontendUrl = process.env.FRONTEND_URL || 'https://slugger-app-group6.onrender.com';
     
-    if (verificationSuccess) {
-      // Redirect to the app with success status
-      return res.redirect(`${frontendUrl}/screens/verify-email?token=${token}&email=${email}&status=success`);
-    } else {
-      // Redirect to the app with failure status
-      return res.redirect(`${frontendUrl}/screens/verify-email?token=${token}&email=${email}&status=failed`);
+    // Update error page
+    if (!user) {
+      console.log('Verification failed: user not found or token expired');
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Verification Failed</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px 20px; background-color: #f9f9f9; }
+              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+              h1 { color: #e74c3c; }
+              p { font-size: 18px; line-height: 1.6; color: #555; }
+              .button { 
+                display: inline-block; 
+                background-color: #6c63ff; 
+                color: white; 
+                padding: 12px 30px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                margin-top: 20px; 
+                font-size: 16px;
+                font-weight: bold;
+                transition: background-color 0.3s;
+                margin: 10px;
+              }
+              .button:hover {
+                background-color: #5a52d5;
+              }
+              .error-icon {
+                font-size: 64px;
+                color: #e74c3c;
+                margin-bottom: 20px;
+              }
+              .button-container {
+                margin-top: 20px;
+              }
+              .note {
+                margin-top: 20px;
+                font-size: 14px;
+                color: #777;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="error-icon">✗</div>
+              <h1>Verification Failed</h1>
+              <p>The verification link is invalid or has expired.</p>
+              <p>Please try logging in or request a new verification email.</p>
+              
+              <div class="button-container">
+                <a href="slugger://login" class="button">Open Slugger App</a>
+                <a href="exp://login" class="button">Alternative Link</a>
+              </div>
+              
+              <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
+            </div>
+          </body>
+        </html>
+      `);
     }
+    
+    // Send HTML response with success message and redirect button
+    console.log('Email verification successful for:', email);
+    res.status(200).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Email Verified</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 40px 20px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #2ecc71; margin-top: 10px; }
+            p { font-size: 18px; line-height: 1.6; color: #555; }
+            .button { 
+              display: inline-block; 
+              background-color: #6c63ff; 
+              color: white; 
+              padding: 12px 30px; 
+              text-decoration: none; 
+              border-radius: 4px; 
+              margin-top: 20px; 
+              font-size: 16px;
+              font-weight: bold;
+              transition: background-color 0.3s;
+              margin: 10px;
+            }
+            .button:hover {
+              background-color: #5a52d5;
+            }
+            .success-icon {
+              font-size: 70px;
+              color: #2ecc71;
+              margin-bottom: 10px;
+            }
+            .button-container {
+              margin-top: 25px;
+            }
+            .note {
+              margin-top: 20px;
+              font-size: 14px;
+              color: #777;
+            }
+            .redirect-message {
+              margin-top: 15px;
+              color: #666;
+              font-size: 14px;
+            }
+            .countdown {
+              font-weight: bold;
+              color: #6c63ff;
+            }
+          </style>
+          <script>
+            // Auto redirect after 5 seconds
+            let secondsLeft = 5;
+            
+            function updateCountdown() {
+              const countdownEl = document.getElementById('countdown');
+              if (countdownEl) {
+                countdownEl.textContent = secondsLeft;
+              }
+              
+              if (secondsLeft <= 0) {
+                // Try multiple ways to open the app
+                window.location.href = 'slugger://login?verified=true';
+              } else {
+                secondsLeft--;
+                setTimeout(updateCountdown, 1000);
+              }
+            }
+            
+            window.onload = function() {
+              updateCountdown();
+            };
+          </script>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">✓</div>
+            <h1>Email Verified Successfully!</h1>
+            <p>Your email has been verified. You can now log in to your account.</p>
+            
+            <div class="button-container">
+              <a href="slugger://login?verified=true" class="button">Open Slugger App</a>
+              <a href="exp://login?verified=true" class="button">Alternative Link</a>
+            </div>
+            
+            <p class="redirect-message">
+              Redirecting to app in <span id="countdown" class="countdown">5</span> seconds...
+            </p>
+            
+            <p class="note">
+              If the automatic redirect doesn't work, please manually open the Slugger app on your device.
+            </p>
+          </div>
+        </body>
+      </html>
+    `);
   } catch (error) {
     console.error('Verification error:', error);
-    const frontendUrl = process.env.FRONTEND_URL || 'https://slugger-app-group6.onrender.com';
-    return res.redirect(`${frontendUrl}/screens/verify-email?status=error&message=${encodeURIComponent(error.message)}`);
+    res.status(500).send(`
+      <html>
+        <head>
+          <title>Verification Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #e74c3c; }
+            p { font-size: 18px; line-height: 1.6; color: #555; }
+            .error { color: #e74c3c; font-family: monospace; margin: 20px 0; padding: 10px; background: #f8f8f8; border-radius: 4px; }
+            .button { 
+              display: inline-block; 
+              background-color: #6c63ff; 
+              color: white; 
+              padding: 12px 30px; 
+              text-decoration: none; 
+              border-radius: 4px; 
+              margin-top: 20px; 
+              font-size: 16px;
+              font-weight: bold;
+              transition: background-color 0.3s;
+              margin: 10px;
+            }
+            .button:hover {
+              background-color: #5a52d5;
+            }
+            .error-icon {
+              font-size: 64px;
+              color: #e74c3c;
+              margin-bottom: 20px;
+            }
+            .button-container {
+              margin-top: 20px;
+            }
+            .note {
+              margin-top: 20px;
+              font-size: 14px;
+              color: #777;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="error-icon">⚠</div>
+            <h1>Verification Error</h1>
+            <p>An error occurred during the verification process.</p>
+            <div class="error">${error.message}</div>
+            
+            <div class="button-container">
+              <p>If you're using the app on this device, try one of these links:</p>
+              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
+              <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
+            </div>
+            
+            <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
+          </div>
+        </body>
+      </html>
+    `);
   }
 });
 
@@ -708,9 +913,20 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       return res.status(404).json({ message: 'User not found or already verified' });
     }
     
-    // Get frontend URL from environment
-    const frontendUrl = process.env.FRONTEND_URL || 'https://slugger-app-group6.onrender.com';
-    console.log('Using frontend URL for verification:', frontendUrl);
+    // Send verification email
+    const serverIPs = getServerIPs();
+    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
+    const port = process.env.PORT || 5001;
+    
+    // Use Render URL for deployed app in verification emails
+    const verificationBaseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://slugger-app-group6.onrender.com'
+      : `http://${primaryIP}:${port}`;
+    
+    console.log('=== Resend Email Link Details ===');
+    console.log('Using verification base URL:', verificationBaseUrl);
+    console.log('Full verification link:', `${verificationBaseUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
+    console.log('================================');
     
     const mailOptions = {
       from: process.env.MAIL_FROM,
@@ -722,7 +938,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${frontendUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}&redirect=app" 
+            <a href="${verificationBaseUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -730,15 +946,11 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           
           <p style="font-size: 14px; color: #666;">If the button doesn't work, copy and paste this link into your browser:</p>
           <p style="font-size: 14px; color: #666; word-break: break-all;">
-            ${frontendUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}&redirect=app
+            ${verificationBaseUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}
           </p>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
-            &copy; ${new Date().getFullYear()} Slugger Health. All rights reserved.
-          </div>
         </div>
       `
     };
@@ -1077,79 +1289,6 @@ app.post('/api/test/email', async (req, res) => {
   } catch (error) {
     console.error('Test email error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-// Add a direct manual verification endpoint that returns JSON instead of redirecting
-app.get('/api/auth/verify-manual', async (req, res) => {
-  try {
-    const { token, email } = req.query;
-    
-    if (!token || !email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Both email and verification token are required' 
-      });
-    }
-    
-    console.log(`Manual verification attempt for email: ${email} with token: ${token}`);
-    
-    let user;
-    let verificationSuccess = false;
-    
-    // Check if MongoDB is connected
-    if (mongoose.connection.readyState === 1) {
-      // Find user in MongoDB
-      user = await User.findOne({ 
-        email, 
-        verificationToken: token,
-        verificationTokenExpires: { $gt: new Date() }
-      });
-      
-      if (user) {
-        user.isVerified = true;
-        user.verificationToken = null;
-        user.verificationTokenExpires = null;
-        await user.save();
-        verificationSuccess = true;
-      }
-    } else {
-      // Fallback to in-memory storage
-      const userIndex = inMemoryUsers.findIndex(u => 
-        u.email === email && 
-        u.verificationToken === token && 
-        new Date(u.verificationTokenExpires) > new Date()
-      );
-      
-      if (userIndex !== -1) {
-        inMemoryUsers[userIndex].isVerified = true;
-        inMemoryUsers[userIndex].verificationToken = null;
-        inMemoryUsers[userIndex].verificationTokenExpires = null;
-        user = inMemoryUsers[userIndex];
-        verificationSuccess = true;
-      }
-    }
-    
-    if (verificationSuccess) {
-      console.log(`Manual verification successful for email: ${email}`);
-      return res.status(200).json({
-        success: true,
-        message: 'Email verified successfully! You can now log in.'
-      });
-    } else {
-      console.log(`Manual verification failed for email: ${email} - User not found or token expired`);
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired verification token. Please request a new verification email.'
-      });
-    }
-  } catch (error) {
-    console.error('Manual verification error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error during verification. Please try again later.',
-      error: error.message
-    });
   }
 });
 

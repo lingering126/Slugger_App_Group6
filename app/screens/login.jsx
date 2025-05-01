@@ -4,7 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
-import axios from 'axios';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
@@ -21,22 +20,48 @@ export default function LoginScreen() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [resendingEmail, setResendingEmail] = useState(false);
-  const [showVerification, setShowVerification] = useState(false);
-  const [verificationToken, setVerificationToken] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
   const params = useLocalSearchParams();
 
   // Check if user was redirected after verification
   useEffect(() => {
-    if (params.verified === 'true') {
-      Alert.alert(
-        'Email Verified',
-        'Your email has been verified successfully. You can now log in.',
-        [{ text: 'OK' }]
-      );
-    }
+    // Check URL parameters for deep linking
+    const checkDeepLinkParams = async () => {
+      try {
+        // Check AsyncStorage for one-time deep link parameter
+        const verifiedFromDeepLink = await AsyncStorage.getItem('verified_from_deeplink');
+        
+        if (verifiedFromDeepLink === 'true') {
+          // Clear the flag so it only shows once
+          await AsyncStorage.removeItem('verified_from_deeplink');
+          
+          // Show success message
+          Alert.alert(
+            'Email Verified Successfully',
+            'Your email has been verified. You can now log in with your credentials.',
+            [{ text: 'OK' }]
+          );
+          
+          setSuccessMessage('Email verified successfully! Please log in.');
+        }
+        // Also check normal params from navigation
+        else if (params.verified === 'true') {
+          Alert.alert(
+            'Email Verified Successfully',
+            'Your email has been verified. You can now log in with your credentials.',
+            [{ text: 'OK' }]
+          );
+          
+          // Show a persistent success message
+          setSuccessMessage('Email verified successfully! Please log in.');
+        }
+      } catch (error) {
+        console.error('Error checking deep link params:', error);
+      }
+    };
+    
+    checkDeepLinkParams();
   }, [params]);
 
   // Load saved credentials if available
@@ -142,25 +167,11 @@ export default function LoginScreen() {
         // Clear the timeout since we got a response
         clearTimeout(timeoutId);
         
+        // Start with assumption that bad credentials were entered
+        // This is a safe fallback for any authentication error
+        setError('Invalid email or password');
+        
         try {
-          // First check if the response is actually JSON by checking the Content-Type header
-          const contentType = response.headers.get('Content-Type');
-          if (!contentType || !contentType.includes('application/json')) {
-            console.error('Response is not JSON. Content-Type:', contentType);
-            const responseText = await response.text();
-            console.log('Raw response text:', responseText.substring(0, 200)); // Log first 200 chars
-            
-            if (responseText.includes('please verify your email')) {
-              setNeedsVerification(true);
-              setVerificationEmail(email);
-              setError('');
-              setLoading(false);
-              return;
-            } else {
-              throw new Error('Server returned non-JSON response');
-            }
-          }
-          
           data = await response.json();
           console.log('Login response:', {
             status: response.status,
@@ -171,13 +182,9 @@ export default function LoginScreen() {
             setNeedsVerification(true);
             setVerificationEmail(data.email || email);
             setError('');
-            setLoading(false);
-            return;
           } else if (!response.ok) {
-            // Only set error for failed login attempts
-            if (response.status === 400 || response.status === 401) {
-              setError('Invalid email or password');
-            } else {
+            // Keep "Invalid email or password" for 400/401 errors
+            if (response.status !== 400 && response.status !== 401) {
               setError(data.message || 'An error occurred during login. Please try again.');
             }
             setLoading(false);
@@ -201,13 +208,12 @@ export default function LoginScreen() {
           await AsyncStorage.setItem('userToken', data.token);
           await AsyncStorage.setItem('userId', data.user.id);
           
-          // Only store username if it exists
+          // Check if username exists before storing it
           if (data.user.username) {
             await AsyncStorage.setItem('username', data.user.username);
           }
           
           await AsyncStorage.setItem('user', JSON.stringify(data.user));
-
           
           console.log('User data stored in AsyncStorage');
           
@@ -235,31 +241,8 @@ export default function LoginScreen() {
           }
         } catch (parseError) {
           console.error('Error parsing response:', parseError);
-          
-          try {
-            // Try to get the raw text to see what's actually being returned
-            const responseText = await response.text();
-            console.log('Raw response text for error diagnosis:', responseText.substring(0, 200));
-            
-            // Check if it's an HTML error page with verification message
-            if (responseText.includes('verify your email')) {
-              setNeedsVerification(true);
-              setVerificationEmail(email);
-              setError('');
-              setLoading(false);
-              return;
-            }
-          } catch (textError) {
-            console.error('Error getting response text:', textError);
-          }
-          
           if (response.status === 400 || response.status === 401) {
             // Keep the default "Invalid email or password" for auth errors
-            setError('Invalid email or password');
-          } else if (response.status === 403) {
-            setNeedsVerification(true);
-            setVerificationEmail(email);
-            setError('');
           } else {
             setError('An error occurred during login. Please try again.');
           }
@@ -299,21 +282,6 @@ export default function LoginScreen() {
       
       // Use the working URL if available, otherwise try all URLs
       const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
-      console.log('Resending verification email to:', verificationEmail || email);
-      console.log('Using API URL:', apiUrl);
-      
-      // Create an abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-        console.log('Resend request timed out after 15 seconds');
-        Alert.alert(
-          'Error',
-          'Request timed out. Server might be unavailable.',
-          [{ text: 'OK' }]
-        );
-        setResendingEmail(false);
-      }, 15000);
       
       const response = await fetch(`${apiUrl}/auth/resend-verification`, {
         method: 'POST',
@@ -322,65 +290,23 @@ export default function LoginScreen() {
         },
         body: JSON.stringify({
           email: verificationEmail || email
-        }),
-        signal: controller.signal
+        })
       });
       
-      // Clear the timeout since we got a response
-      clearTimeout(timeoutId);
+      const data = await response.json();
       
-      try {
-        // Check if the response is actually JSON
-        const contentType = response.headers.get('Content-Type');
-        if (!contentType || !contentType.includes('application/json')) {
-          console.error('Response is not JSON. Content-Type:', contentType);
-          const responseText = await response.text();
-          console.log('Raw response text:', responseText.substring(0, 200));
-          
-          // If we got any kind of response, assume it worked
-          if (response.ok) {
-            Alert.alert(
-              'Verification Email Sent',
-              'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.\n\nIMPORTANT: If the link contains "http://10.210.216.34:5001", replace it with "https://slugger-app-group6.onrender.com"',
-              [{ text: 'OK' }]
-            );
-          } else {
-            throw new Error('Server returned non-JSON response');
-          }
-        } else {
-          const data = await response.json();
-          
-          if (response.ok) {
-            Alert.alert(
-              'Verification Email Sent',
-              'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.\n\nIMPORTANT: If the link contains "http://10.210.216.34:5001", replace it with "https://slugger-app-group6.onrender.com"',
-              [{ text: 'OK' }]
-            );
-          } else {
-            Alert.alert(
-              'Error',
-              data.message || 'Failed to resend verification email',
-              [{ text: 'OK' }]
-            );
-          }
-        }
-      } catch (parseError) {
-        console.error('Error parsing response:', parseError);
-        
-        if (response.ok) {
-          // If response was OK but we couldn't parse JSON, still consider it successful
-          Alert.alert(
-            'Verification Email Sent',
-            'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.\n\nIMPORTANT: If the link contains "http://10.210.216.34:5001", replace it with "https://slugger-app-group6.onrender.com"',
-            [{ text: 'OK' }]
-          );
-        } else {
-          Alert.alert(
-            'Error',
-            'Failed to resend verification email. Please try again later.',
-            [{ text: 'OK' }]
-          );
-        }
+      if (response.ok) {
+        Alert.alert(
+          'Verification Email Sent',
+          'Please check your inbox for the verification link.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          data.message || 'Failed to resend verification email',
+          [{ text: 'OK' }]
+        );
       }
     } catch (error) {
       console.error('Error resending verification email:', error);
@@ -428,53 +354,6 @@ export default function LoginScreen() {
     setRememberPassword(!rememberPassword);
   };
 
-  // Function to handle manual verification
-  const handleManualVerification = async () => {
-    if (!verificationEmail || !verificationToken) {
-      Alert.alert('Error', 'Please enter both email and verification token');
-      return;
-    }
-
-    try {
-      setVerifying(true);
-      
-      // Make a direct API call to verify the email
-      console.log(`Manually verifying: ${verificationEmail} with token: ${verificationToken}`);
-      const response = await axios.get(`${API_URL}/auth/verify-manual`, {
-        params: {
-          email: verificationEmail,
-          token: verificationToken
-        }
-      });
-      
-      console.log('Verification response:', response.data);
-      setVerificationResult({
-        success: true,
-        message: 'Email verified successfully! You can now log in.'
-      });
-      
-      // Clear the form
-      setVerificationEmail('');
-      setVerificationToken('');
-      
-    } catch (error) {
-      console.error('Manual verification failed:', error);
-      
-      let errorMessage = 'Verification failed. Please check your token and try again.';
-      
-      if (error.response) {
-        errorMessage = error.response.data.message || errorMessage;
-      }
-      
-      setVerificationResult({
-        success: false,
-        message: errorMessage
-      });
-    } finally {
-      setVerifying(false);
-    }
-  };
-
   // If user needs to verify email, show verification screen
   if (needsVerification) {
     return (
@@ -495,15 +374,6 @@ export default function LoginScreen() {
             
             <Text style={styles.verificationText}>
               Check your inbox and click the verification link to complete the signup process.
-            </Text>
-            
-            <Text style={styles.verificationText}>
-              <Text style={{fontWeight: 'bold'}}>Important:</Text> If clicking the link in your email doesn't work, the link might contain a local IP address. Please copy the link and manually edit it to use our deployed server URL:
-            </Text>
-            
-            <Text style={[styles.emailText, {fontSize: 14}]}>
-              Replace the "http://10.210.216.34:5001" part{'\n'}
-              with "https://slugger-app-group6.onrender.com"
             </Text>
             
             <TouchableOpacity 
@@ -555,6 +425,12 @@ export default function LoginScreen() {
               <Text style={styles.testButtonText}>Run Connection Test</Text>
             </TouchableOpacity>
           )}
+          
+          {successMessage ? (
+            <View style={styles.successContainer}>
+              <Text style={styles.successText}>{successMessage}</Text>
+            </View>
+          ) : null}
           
           {error && serverStatus !== 'offline' && (
             <Text style={styles.errorText}>{error}</Text>
@@ -623,63 +499,6 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          
-          {/* Manual Email Verification Section */}
-          <TouchableOpacity 
-            style={styles.verificationToggle}
-            onPress={() => setShowVerification(!showVerification)}
-          >
-            <Text style={styles.verificationToggleText}>
-              {showVerification ? 'Hide Email Verification' : 'Need to Verify Your Email?'}
-            </Text>
-          </TouchableOpacity>
-          
-          {showVerification && (
-            <View style={styles.verificationContainer}>
-              <Text style={styles.verificationTitle}>Email Verification</Text>
-              <Text style={styles.verificationText}>
-                Enter the verification details from your email to activate your account.
-              </Text>
-              
-              <TextInput
-                style={styles.input}
-                placeholder="Email Address"
-                value={verificationEmail}
-                onChangeText={setVerificationEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              
-              <TextInput
-                style={styles.input}
-                placeholder="Verification Token"
-                value={verificationToken}
-                onChangeText={setVerificationToken}
-                autoCapitalize="none"
-              />
-              
-              {verificationResult && (
-                <Text style={[
-                  styles.verificationResultText,
-                  verificationResult.success ? styles.verificationSuccess : styles.verificationError
-                ]}>
-                  {verificationResult.message}
-                </Text>
-              )}
-              
-              <TouchableOpacity 
-                style={[styles.button, verifying && styles.buttonDisabled]}
-                onPress={handleManualVerification}
-                disabled={verifying}
-              >
-                {verifying ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Verify Email</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -796,6 +615,19 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'center'
   },
+  successContainer: {
+    marginBottom: 15,
+    padding: 12,
+    backgroundColor: '#e6ffe6',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#4CD964',
+  },
+  successText: {
+    color: '#008800',
+    textAlign: 'center',
+    fontSize: 16,
+  },
   errorContainer: {
     marginBottom: 10,
     padding: 10,
@@ -853,45 +685,5 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
     textDecorationLine: 'underline',
-  },
-  verificationToggle: {
-    marginTop: 20,
-    paddingVertical: 10,
-  },
-  verificationToggleText: {
-    color: '#6A4BFF',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  verificationContainer: {
-    width: '100%',
-    backgroundColor: '#f8f8f8',
-    padding: 15,
-    borderRadius: 8,
-    marginVertical: 10,
-  },
-  verificationTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  verificationResultText: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginVertical: 10,
-    padding: 10,
-    borderRadius: 5,
-  },
-  verificationSuccess: {
-    backgroundColor: '#e6f7e6',
-    color: '#2e7d32',
-  },
-  verificationError: {
-    backgroundColor: '#ffebee',
-    color: '#c62828',
-  },
-  buttonDisabled: {
-    backgroundColor: '#B0B0B0',
-  },
+  }
 }); 
