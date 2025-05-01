@@ -100,7 +100,7 @@ router.post('/signup', async (req, res) => {
             <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+              <a href="${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app" 
                  style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
                 Verify Email
               </a>
@@ -108,7 +108,7 @@ router.post('/signup', async (req, res) => {
             
             <p style="font-size: 14px; color: #666;">If the button doesn't work, copy and paste this link into your browser:</p>
             <p style="font-size: 14px; color: #666; word-break: break-all;">
-              ${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}
+              ${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app
             </p>
             
             <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -388,7 +388,7 @@ router.get('/verify-email', async (req, res) => {
             <div class="success-icon">✓</div>
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your Slugger account.</p>
-            <a href="http://localhost:8081/" class="button">Go to Login</a>
+            <a href="${process.env.FRONTEND_URL}/screens/login" class="button">Go to Login</a>
           </div>
         </body>
       </html>
@@ -492,7 +492,7 @@ router.post('/resend-verification', async (req, res) => {
             <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+              <a href="${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app" 
                  style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
                 Verify Email
               </a>
@@ -500,7 +500,7 @@ router.post('/resend-verification', async (req, res) => {
             
             <p style="font-size: 14px; color: #666;">If the button doesn't work, copy and paste this link into your browser:</p>
             <p style="font-size: 14px; color: #666; word-break: break-all;">
-              ${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}
+              ${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}&redirect=app
             </p>
             
             <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>

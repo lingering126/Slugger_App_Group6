@@ -11,15 +11,35 @@ export default function VerifyEmail({ navigation }) {
   const [error, setError] = useState('');
   
   const route = useRoute();
-  const { token, email } = route.params;
+  const { token, email, status } = route.params;
   
   useEffect(() => {
+    // If the status is already provided (from the redirect), use it
+    if (status) {
+      console.log('Verification status from redirect:', status);
+      if (status === 'success') {
+        setVerified(true);
+        setLoading(false);
+        
+        // Automatically navigate to login after 3 seconds
+        setTimeout(() => {
+          navigation.navigate('Login', { verified: 'true' });
+        }, 3000);
+        return;
+      } else if (status === 'failed' || status === 'error') {
+        setError(route.params.message || 'Verification failed. The link may be invalid or expired.');
+        setLoading(false);
+        return;
+      }
+    }
+    
+    // If no status provided, verify directly
     const verifyEmail = async () => {
       try {
         console.log('Verifying email with token:', token);
         
         // Use the deployed URL, not the localhost URL
-        const deployedUrl = "https://slugger-app-group6.onrender.com/api";
+        const deployedUrl = API_URL;
         
         console.log('Using API URL for verification:', deployedUrl);
         
@@ -54,8 +74,13 @@ export default function VerifyEmail({ navigation }) {
       }
     };
     
-    verifyEmail();
-  }, [token, email, navigation]);
+    if (token && email) {
+      verifyEmail();
+    } else {
+      setLoading(false);
+      setError('Missing verification information. Please check your email link.');
+    }
+  }, [token, email, navigation, status, route.params]);
   
   return (
     <View style={styles.container}>

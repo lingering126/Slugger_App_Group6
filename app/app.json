@@ -17,17 +17,38 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cits5206.slugger"
+      "bundleIdentifier": "com.cits5206.slugger",
+      "associatedDomains": [
+        "applinks:slugger-app-group6.onrender.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.cits5206.slugger"
+      "package": "com.cits5206.slugger",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "slugger-app-group6.onrender.com",
+              "pathPrefix": "/api/auth/verify-email"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "scheme": "slugger"
   }
 } 
