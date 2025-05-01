@@ -81,12 +81,12 @@ const userService = {
           const userId = await AsyncStorage.getItem('userId');
           const username = await AsyncStorage.getItem('username');
           
-          if (userId && username) {
+          if (userId) {
             const basicUser = {
               id: userId,
               _id: userId, // Include both formats for compatibility
-              username: username,
-              name: username // Use username as name if no dedicated name is available
+              username: username || "User", // Provide a default if username is null
+              name: username || "User" // Use username as name if no dedicated name is available
             };
             
             // Save this basic profile for future use

@@ -4,6 +4,12 @@ import API_CONFIG from './api';
 // Automatically get development server IP address
 export const getServerIP = (): string | null => {
   try {
+    // Check if we're using the deployed server
+    if (API_CONFIG.API_URL.includes('slugger-app-group6.onrender.com')) {
+      console.log('Using deployed server at slugger-app-group6.onrender.com');
+      return 'slugger-app-group6.onrender.com';
+    }
+    
     // Get manifest information
     const { manifest2, manifest } = Constants;
     
@@ -30,17 +36,22 @@ export const getServerIP = (): string | null => {
 
 // Build complete server URL
 export const getServerUrl = (path: string = '/api'): string => {
-  return `${API_CONFIG.BASE_URL}${path}`;
+  // Always use the configured API_URL as the base
+  return API_CONFIG.API_URL + (path.startsWith('/') ? path : '/' + path);
 };
 
 // Build health check URL
 export const getHealthUrl = (): string => {
-  return `${API_CONFIG.BASE_URL}/health`;
+  // Use the base URL from API_CONFIG but trim the /api path if it exists
+  const baseUrl = API_CONFIG.API_URL.replace(/\/api$/, '');
+  return `${baseUrl}/health`;
 };
 
 // Build ping URL
 export const getPingUrl = (): string => {
-  return `${API_CONFIG.BASE_URL}/ping`;
+  // Use the base URL from API_CONFIG but trim the /api path if it exists
+  const baseUrl = API_CONFIG.API_URL.replace(/\/api$/, '');
+  return `${baseUrl}/ping`;
 };
 
 export default {

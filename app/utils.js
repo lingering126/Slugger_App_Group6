@@ -45,25 +45,43 @@ const recordSuccessfulConnection = (url) => {
   console.log(`Connection stats updated for ${url}: ${global.connectionStats[url]} successful connections`);
 };
 
-// Helper function to get the appropriate API URL based on the environment
-export const getApiUrl = () => {
-  // If we already found a working URL, return it
-  if (global.workingApiUrl) {
-    console.log('Using previously discovered working API URL:', global.workingApiUrl);
-    return [global.workingApiUrl];
-  }
+// Clear connection cache
+export const clearConnectionCache = () => {
+  global.workingApiUrl = null;
+};
 
-  // Check if we're running in a web browser environment
-  const isWebEnvironment = typeof document !== 'undefined';
+// Get all relevant API URLs to try
+export const getApiUrl = () => {
+  const urls = [];
   
-  // In web browser environment, prioritize localhost
-  if (isWebEnvironment) {
-    console.log('Detected web environment, using API config URL');
-    return [API_CONFIG.API_URL];
+  // Always include the configured URL from API_CONFIG
+  try {
+    const API_CONFIG = require('./config/api').default;
+    if (API_CONFIG.API_URL) {
+      urls.push(API_CONFIG.API_URL);
+    }
+  } catch (err) {
+    console.error('Failed to load API_CONFIG:', err);
   }
   
-  // Get the server URL from config
-  return [API_CONFIG.API_URL];
+  // If we already have a working URL, include it first
+  if (global.workingApiUrl && !urls.includes(global.workingApiUrl)) {
+    urls.unshift(global.workingApiUrl);
+  }
+  
+  // Add the deployed server URL if not already included
+  const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+  if (!urls.includes(deployedUrl)) {
+    urls.push(deployedUrl);
+  }
+  
+  // Add localhost URL if not already included
+  const localhostUrl = 'http://localhost:5001/api';
+  if (!urls.includes(localhostUrl)) {
+    urls.push(localhostUrl);
+  }
+  
+  return getPrioritizedUrls(urls);
 };
 
 // Simple ping function to test connectivity with minimal overhead
@@ -482,6 +500,41 @@ export const scanNetworkForServer = async () => {
       };
     }
     
+    // First try connecting to the deployed server
+    try {
+      console.log('Trying to connect to deployed server at slugger-app-group6.onrender.com...');
+      const deployedUrl = 'https://slugger-app-group6.onrender.com';
+      const pingUrl = `${deployedUrl}/ping`;
+      
+      const response = await fetch(pingUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Set a timeout of 5 seconds
+        timeout: 5000
+      });
+      
+      if (response.ok && await response.text() === 'PONG') {
+        console.log('Server found at deployed URL');
+        const apiUrl = `${deployedUrl}/api`;
+        
+        // Store as global server IP
+        global.serverIP = 'slugger-app-group6.onrender.com';
+        global.workingApiUrl = apiUrl;
+        recordSuccessfulConnection(apiUrl);
+        
+        return {
+          status: 'online',
+          message: 'Connected to deployed server',
+          ip: 'slugger-app-group6.onrender.com',
+          url: apiUrl
+        };
+      }
+    } catch (error) {
+      console.log('Failed to connect to deployed server:', error.message);
+    }
+    
     // Get the device's own network info
     const netInfo = await NetInfo.fetch();
     global.lastNetworkInfo = netInfo;
@@ -611,6 +664,27 @@ const Utils = {
       
       // Check if we're in a web environment
       const isWebEnvironment = typeof document !== 'undefined';
+      
+      // Try the deployed server first
+      try {
+        const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+        console.log('Trying to connect to deployed server:', deployedUrl);
+        const pingResult = await pingServer(deployedUrl);
+        
+        if (pingResult) {
+          console.log('Successfully connected to deployed server');
+          global.workingApiUrl = deployedUrl;
+          global.serverIP = 'slugger-app-group6.onrender.com';
+          recordSuccessfulConnection(deployedUrl);
+          return {
+            status: 'online',
+            message: 'Server is reachable via deployed URL',
+            url: deployedUrl
+          };
+        }
+      } catch (error) {
+        console.log('Failed to connect to deployed server:', error.message);
+      }
       
       // For web environment, prioritize localhost
       if (isWebEnvironment) {

@@ -193,6 +193,7 @@ router.post('/login', async (req, res) => {
         id: user._id,
         email: user.email,
         name: user.name,
+        username: user.username,
         bio: user.bio,
         longTermGoal: user.longTermGoal,
         avatarUrl: user.avatarUrl,

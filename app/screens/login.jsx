@@ -177,7 +177,12 @@ export default function LoginScreen() {
           // Store user data
           await AsyncStorage.setItem('userToken', data.token);
           await AsyncStorage.setItem('userId', data.user.id);
-          await AsyncStorage.setItem('username', data.user.username);
+          
+          // Only store username if it exists
+          if (data.user.username) {
+            await AsyncStorage.setItem('username', data.user.username);
+          }
+          
           await AsyncStorage.setItem('user', JSON.stringify(data.user));
 
           
