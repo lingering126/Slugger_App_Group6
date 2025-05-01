@@ -336,7 +336,7 @@ export default function LoginScreen() {
           if (response.ok) {
             Alert.alert(
               'Verification Email Sent',
-              'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.',
+              'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.\n\nIMPORTANT: If the link contains "http://10.210.216.34:5001", replace it with "https://slugger-app-group6.onrender.com"',
               [{ text: 'OK' }]
             );
           } else {
@@ -348,7 +348,7 @@ export default function LoginScreen() {
           if (response.ok) {
             Alert.alert(
               'Verification Email Sent',
-              'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.',
+              'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.\n\nIMPORTANT: If the link contains "http://10.210.216.34:5001", replace it with "https://slugger-app-group6.onrender.com"',
               [{ text: 'OK' }]
             );
           } else {
@@ -366,7 +366,7 @@ export default function LoginScreen() {
           // If response was OK but we couldn't parse JSON, still consider it successful
           Alert.alert(
             'Verification Email Sent',
-            'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.',
+            'Please check your inbox for the verification link.\n\nNote: If the link in the email doesn\'t work directly, copy and paste it into your browser.\n\nIMPORTANT: If the link contains "http://10.210.216.34:5001", replace it with "https://slugger-app-group6.onrender.com"',
             [{ text: 'OK' }]
           );
         } else {
@@ -443,6 +443,15 @@ export default function LoginScreen() {
             
             <Text style={styles.verificationText}>
               Check your inbox and click the verification link to complete the signup process.
+            </Text>
+            
+            <Text style={styles.verificationText}>
+              <Text style={{fontWeight: 'bold'}}>Important:</Text> If clicking the link in your email doesn't work, the link might contain a local IP address. Please copy the link and manually edit it to use our deployed server URL:
+            </Text>
+            
+            <Text style={[styles.emailText, {fontSize: 14}]}>
+              Replace the "http://10.210.216.34:5001" part{'\n'}
+              with "https://slugger-app-group6.onrender.com"
             </Text>
             
             <TouchableOpacity 

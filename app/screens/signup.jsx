@@ -221,6 +221,15 @@ export default function SignupScreen() {
             </Text>
             
             <Text style={styles.verificationText}>
+              <Text style={styles.bold}>Important:</Text> If clicking the link in your email doesn't work, the link might contain a local IP address. Please copy the link and manually edit it to use our deployed server URL:
+            </Text>
+            
+            <Text style={[styles.emailText, {fontSize: 14}]}>
+              Replace the "http://10.210.216.34:5001" part{'\n'}
+              with "https://slugger-app-group6.onrender.com"
+            </Text>
+            
+            <Text style={styles.verificationText}>
               Once verified, you'll be able to log in to your account.
             </Text>
             
@@ -491,5 +500,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  bold: {
+    fontWeight: 'bold',
   },
 }); 
