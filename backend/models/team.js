@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const UserTarget = require('./UserTarget');
+const UserTarget = require('./userTarget');
 
 // Function to generate a random six-digit ID
 function generateSixDigitId() {
