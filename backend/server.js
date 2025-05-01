@@ -603,11 +603,8 @@ app.get('/api/auth/verify-email', async (req, res) => {
       return res.status(400).json({ message: 'Invalid verification link' });
     }
     
-    // Get server IP addresses for building App links
-    const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost';
-    
     let user;
+    let verificationSuccess = false;
     
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
@@ -623,6 +620,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
         user.verificationToken = null;
         user.verificationTokenExpires = null;
         await user.save();
+        verificationSuccess = true;
       }
     } else {
       // Fallback to in-memory storage
@@ -637,182 +635,23 @@ app.get('/api/auth/verify-email', async (req, res) => {
         inMemoryUsers[userIndex].verificationToken = null;
         inMemoryUsers[userIndex].verificationTokenExpires = null;
         user = inMemoryUsers[userIndex];
+        verificationSuccess = true;
       }
     }
     
-    if (!user) {
-      return res.status(400).send(`
-        <html>
-          <head>
-            <title>Verification Failed</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-              h1 { color: #e74c3c; }
-              p { font-size: 18px; line-height: 1.6; color: #555; }
-              .button { 
-                display: inline-block; 
-                background-color: #6c63ff; 
-                color: white; 
-                padding: 12px 30px; 
-                text-decoration: none; 
-                border-radius: 4px; 
-                margin-top: 20px; 
-                font-size: 16px;
-                font-weight: bold;
-                transition: background-color 0.3s;
-                margin: 10px;
-              }
-              .button:hover {
-                background-color: #5a52d5;
-              }
-              .error-icon {
-                font-size: 64px;
-                color: #e74c3c;
-                margin-bottom: 20px;
-              }
-              .button-container {
-                margin-top: 20px;
-              }
-              .note {
-                margin-top: 20px;
-                font-size: 14px;
-                color: #777;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="error-icon">✗</div>
-              <h1>Verification Failed</h1>
-              <p>The verification link is invalid or has expired.</p>
-              <p>Please try logging in or request a new verification email.</p>
-              
-              <div class="button-container">
-                <p>If you're using the app on this device, try one of these links:</p>
-                <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-                <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
-              </div>
-              
-              <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
-            </div>
-          </body>
-        </html>
-      `);
-    }
+    const frontendUrl = process.env.FRONTEND_URL || 'https://slugger-app-group6.onrender.com';
     
-    // Send HTML response with success message and redirect button
-    res.status(200).send(`
-      <html>
-        <head>
-          <title>Email Verified</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { color: #2ecc71; }
-            p { font-size: 18px; line-height: 1.6; color: #555; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-              margin: 10px;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
-            .success-icon {
-              font-size: 64px;
-              color: #2ecc71;
-              margin-bottom: 20px;
-            }
-            .button-container {
-              margin-top: 20px;
-            }
-            .note {
-              margin-top: 20px;
-              font-size: 14px;
-              color: #777;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="success-icon">✓</div>
-            <h1>Email Verified Successfully!</h1>
-            <p>Your email has been verified. You can now log in to your account.</p>
-            <p>Please open the Slugger app on your device and log in with your credentials.</p>
-          </div>
-        </body>
-      </html>
-    `);
+    if (verificationSuccess) {
+      // Redirect to the app with success status
+      return res.redirect(`${frontendUrl}/screens/verify-email?token=${token}&email=${email}&status=success`);
+    } else {
+      // Redirect to the app with failure status
+      return res.redirect(`${frontendUrl}/screens/verify-email?token=${token}&email=${email}&status=failed`);
+    }
   } catch (error) {
     console.error('Verification error:', error);
-    res.status(500).send(`
-      <html>
-        <head>
-          <title>Verification Error</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { color: #e74c3c; }
-            p { font-size: 18px; line-height: 1.6; color: #555; }
-            .error { color: #e74c3c; font-family: monospace; margin: 20px 0; padding: 10px; background: #f8f8f8; border-radius: 4px; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-              margin: 10px;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
-            .error-icon {
-              font-size: 64px;
-              color: #e74c3c;
-              margin-bottom: 20px;
-            }
-            .button-container {
-              margin-top: 20px;
-            }
-            .note {
-              margin-top: 20px;
-              font-size: 14px;
-              color: #777;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="error-icon">⚠</div>
-            <h1>Verification Error</h1>
-            <p>An error occurred during the verification process.</p>
-            <div class="error">${error.message}</div>
-            
-            <div class="button-container">
-              <p>If you're using the app on this device, try one of these links:</p>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
-            </div>
-            
-            <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
-          </div>
-        </body>
-      </html>
-    `);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://slugger-app-group6.onrender.com';
+    return res.redirect(`${frontendUrl}/screens/verify-email?status=error&message=${encodeURIComponent(error.message)}`);
   }
 });
 

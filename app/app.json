@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Slugger",
+    "slug": "slugger-app-group6",
+    "scheme": "slugger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cits5206.slugger"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.cits5206.slugger"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+} 

@@ -100,18 +100,16 @@ router.post('/signup', async (req, res) => {
             <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="http://${primaryIP}:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+              <a href="${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
                  style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
                 Verify Email
               </a>
             </div>
             
-            <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
-            
-            <ul style="font-size: 14px; color: #666;">
-              ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-              <li><a href="http://localhost:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
-            </ul>
+            <p style="font-size: 14px; color: #666;">If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="font-size: 14px; color: #666; word-break: break-all;">
+              ${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}
+            </p>
             
             <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
             <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
@@ -494,18 +492,16 @@ router.post('/resend-verification', async (req, res) => {
             <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="http://${primaryIP}:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+              <a href="${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
                  style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
                 Verify Email
               </a>
             </div>
             
-            <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
-            
-            <ul style="font-size: 14px; color: #666;">
-              ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-              <li><a href="http://localhost:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
-            </ul>
+            <p style="font-size: 14px; color: #666;">If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="font-size: 14px; color: #666; word-break: break-all;">
+              ${process.env.FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}&email=${email}
+            </p>
             
             <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
             <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
