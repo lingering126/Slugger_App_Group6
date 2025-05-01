@@ -1080,6 +1080,79 @@ app.post('/api/test/email', async (req, res) => {
   }
 });
 
+// Add a direct manual verification endpoint that returns JSON instead of redirecting
+app.get('/api/auth/verify-manual', async (req, res) => {
+  try {
+    const { token, email } = req.query;
+    
+    if (!token || !email) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Both email and verification token are required' 
+      });
+    }
+    
+    console.log(`Manual verification attempt for email: ${email} with token: ${token}`);
+    
+    let user;
+    let verificationSuccess = false;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      // Find user in MongoDB
+      user = await User.findOne({ 
+        email, 
+        verificationToken: token,
+        verificationTokenExpires: { $gt: new Date() }
+      });
+      
+      if (user) {
+        user.isVerified = true;
+        user.verificationToken = null;
+        user.verificationTokenExpires = null;
+        await user.save();
+        verificationSuccess = true;
+      }
+    } else {
+      // Fallback to in-memory storage
+      const userIndex = inMemoryUsers.findIndex(u => 
+        u.email === email && 
+        u.verificationToken === token && 
+        new Date(u.verificationTokenExpires) > new Date()
+      );
+      
+      if (userIndex !== -1) {
+        inMemoryUsers[userIndex].isVerified = true;
+        inMemoryUsers[userIndex].verificationToken = null;
+        inMemoryUsers[userIndex].verificationTokenExpires = null;
+        user = inMemoryUsers[userIndex];
+        verificationSuccess = true;
+      }
+    }
+    
+    if (verificationSuccess) {
+      console.log(`Manual verification successful for email: ${email}`);
+      return res.status(200).json({
+        success: true,
+        message: 'Email verified successfully! You can now log in.'
+      });
+    } else {
+      console.log(`Manual verification failed for email: ${email} - User not found or token expired`);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification token. Please request a new verification email.'
+      });
+    }
+  } catch (error) {
+    console.error('Manual verification error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during verification. Please try again later.',
+      error: error.message
+    });
+  }
+});
+
 // Start server
 // Note: PORT is set to 5001 in the .env file, which overrides this default
 const PORT = process.env.PORT || 5001;

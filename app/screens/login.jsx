@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
+import axios from 'axios';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
@@ -20,6 +21,10 @@ export default function LoginScreen() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationToken, setVerificationToken] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
   const router = useRouter();
   const params = useLocalSearchParams();
 
@@ -423,6 +428,53 @@ export default function LoginScreen() {
     setRememberPassword(!rememberPassword);
   };
 
+  // Function to handle manual verification
+  const handleManualVerification = async () => {
+    if (!verificationEmail || !verificationToken) {
+      Alert.alert('Error', 'Please enter both email and verification token');
+      return;
+    }
+
+    try {
+      setVerifying(true);
+      
+      // Make a direct API call to verify the email
+      console.log(`Manually verifying: ${verificationEmail} with token: ${verificationToken}`);
+      const response = await axios.get(`${API_URL}/auth/verify-manual`, {
+        params: {
+          email: verificationEmail,
+          token: verificationToken
+        }
+      });
+      
+      console.log('Verification response:', response.data);
+      setVerificationResult({
+        success: true,
+        message: 'Email verified successfully! You can now log in.'
+      });
+      
+      // Clear the form
+      setVerificationEmail('');
+      setVerificationToken('');
+      
+    } catch (error) {
+      console.error('Manual verification failed:', error);
+      
+      let errorMessage = 'Verification failed. Please check your token and try again.';
+      
+      if (error.response) {
+        errorMessage = error.response.data.message || errorMessage;
+      }
+      
+      setVerificationResult({
+        success: false,
+        message: errorMessage
+      });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   // If user needs to verify email, show verification screen
   if (needsVerification) {
     return (
@@ -571,6 +623,63 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          
+          {/* Manual Email Verification Section */}
+          <TouchableOpacity 
+            style={styles.verificationToggle}
+            onPress={() => setShowVerification(!showVerification)}
+          >
+            <Text style={styles.verificationToggleText}>
+              {showVerification ? 'Hide Email Verification' : 'Need to Verify Your Email?'}
+            </Text>
+          </TouchableOpacity>
+          
+          {showVerification && (
+            <View style={styles.verificationContainer}>
+              <Text style={styles.verificationTitle}>Email Verification</Text>
+              <Text style={styles.verificationText}>
+                Enter the verification details from your email to activate your account.
+              </Text>
+              
+              <TextInput
+                style={styles.input}
+                placeholder="Email Address"
+                value={verificationEmail}
+                onChangeText={setVerificationEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              
+              <TextInput
+                style={styles.input}
+                placeholder="Verification Token"
+                value={verificationToken}
+                onChangeText={setVerificationToken}
+                autoCapitalize="none"
+              />
+              
+              {verificationResult && (
+                <Text style={[
+                  styles.verificationResultText,
+                  verificationResult.success ? styles.verificationSuccess : styles.verificationError
+                ]}>
+                  {verificationResult.message}
+                </Text>
+              )}
+              
+              <TouchableOpacity 
+                style={[styles.button, verifying && styles.buttonDisabled]}
+                onPress={handleManualVerification}
+                disabled={verifying}
+              >
+                {verifying ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Verify Email</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -744,5 +853,45 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
     textDecorationLine: 'underline',
-  }
+  },
+  verificationToggle: {
+    marginTop: 20,
+    paddingVertical: 10,
+  },
+  verificationToggleText: {
+    color: '#6A4BFF',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  verificationContainer: {
+    width: '100%',
+    backgroundColor: '#f8f8f8',
+    padding: 15,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
+  verificationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  verificationResultText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginVertical: 10,
+    padding: 10,
+    borderRadius: 5,
+  },
+  verificationSuccess: {
+    backgroundColor: '#e6f7e6',
+    color: '#2e7d32',
+  },
+  verificationError: {
+    backgroundColor: '#ffebee',
+    color: '#c62828',
+  },
+  buttonDisabled: {
+    backgroundColor: '#B0B0B0',
+  },
 }); 
