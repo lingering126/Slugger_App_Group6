@@ -54,7 +54,7 @@ const userService = {
         // Fallback to legacy endpoint if profile API fails
         console.warn('Profile API failed, falling back to user API');
         
-        const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+        const userResponse = await fetch(`${API_BASE_URL}/user/profile`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -105,6 +105,35 @@ const userService = {
     } catch (error) {
       console.error('Error fetching user profile:', error);
       throw error;
+    }
+  },
+  
+  // Get user by ID - Added missing method
+  async getUserById(userId) {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.warn('No authentication token found - user may need to login');
+        return null;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user: ${response.status}`);
+      }
+      
+      const userData = await response.json();
+      return userData;
+    } catch (error) {
+      console.error('Error fetching user by ID:', error);
+      return null;
     }
   },
   
@@ -326,7 +355,7 @@ const userService = {
   }
 };
 
-// Other services remain unchanged
+// Group service - Updated to use /teams endpoint
 const groupService = {
   // Get user's groups with fully populated member data
   async getUserGroups() {
@@ -340,8 +369,8 @@ const groupService = {
         return []; // Return empty array if not authenticated
       }
       
-      // Make API request to get user's groups
-      const response = await fetch(`${API_BASE_URL}/groups`, {
+      // Make API request to get user's groups (using /teams endpoint)
+      const response = await fetch(`${API_BASE_URL}/teams`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -456,7 +485,7 @@ const groupService = {
         return null;
       }
       
-      const response = await fetch(`${API_BASE_URL}/groups/${groupId}`, {
+      const response = await fetch(`${API_BASE_URL}/teams/${groupId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
