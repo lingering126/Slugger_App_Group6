@@ -392,11 +392,28 @@ router.get('/:teamId/activities', authMiddleware, async (req, res) => {
     
     console.log(`Found ${memberGlobalTargets.length} global targets`);
     
-    // Get activities for all members in this team
+    // Calculate current cycle based on team creation date
+    const teamCreationDate = new Date(team.createdAt);
+    const now = new Date();
+    const msSinceCreation = now.getTime() - teamCreationDate.getTime();
+    const daysSinceCreation = Math.floor(msSinceCreation / (1000 * 60 * 60 * 24));
+    const currentCycleNumber = Math.floor(daysSinceCreation / 7);
+    
+    const cycleStart = new Date(teamCreationDate);
+    cycleStart.setUTCDate(teamCreationDate.getUTCDate() + currentCycleNumber * 7);
+    
+    const cycleEnd = new Date(cycleStart);
+    cycleEnd.setUTCDate(cycleStart.getUTCDate() + 7);
+    
+    console.log(`Current cycle: ${currentCycleNumber}`);
+    console.log(`Cycle date range: ${cycleStart.toISOString()} to ${cycleEnd.toISOString()}`);
+    
+    // Get activities for all members in this team for the current cycle only
     const Activity = require('../models/Activity');
     const activities = await Activity.find({
       userId: { $in: memberIds },
       status: 'completed',
+      createdAt: { $gte: cycleStart, $lt: cycleEnd }, // Only include activities from current cycle
       // We're including activities with this teamId or with no teamId at all
       $or: [
         { teamId: teamId },
@@ -405,7 +422,16 @@ router.get('/:teamId/activities', authMiddleware, async (req, res) => {
       ]
     });
     
-    console.log(`Found ${activities.length} completed activities for team members (including activities without teamId)`);
+    console.log(`Found ${activities.length} completed activities for team members in the current cycle`);
+    
+    // Calculate when the current cycle ends
+    const cycleEndTime = cycleEnd.getTime();
+    const nowTime = now.getTime();
+    const msUntilCycleEnd = cycleEndTime - nowTime;
+    
+    // Use Math.floor instead of Math.ceil for consistent calculation
+    const daysUntilCycleEnd = Math.floor(msUntilCycleEnd / (1000 * 60 * 60 * 24));
+    const hoursUntilCycleEnd = Math.floor((msUntilCycleEnd % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     
     // Aggregate data by member
     const membersData = [];
@@ -445,12 +471,20 @@ router.get('/:teamId/activities', authMiddleware, async (req, res) => {
     console.log('- Total target:', totalTarget);
     console.log('- Total completed:', totalCompleted);
     console.log('- Members data:', membersData);
+    console.log('- Current cycle ends in:', `${daysUntilCycleEnd} days, ${hoursUntilCycleEnd} hours`);
     
     res.status(200).json({
       teamId,
       members: membersData,
       totalTarget,
-      totalCompleted
+      totalCompleted,
+      cycleInfo: {
+        currentCycle: currentCycleNumber,
+        cycleStart: cycleStart.toISOString(),
+        cycleEnd: cycleEnd.toISOString(),
+        daysRemaining: daysUntilCycleEnd,
+        hoursRemaining: hoursUntilCycleEnd
+      }
     });
   } catch (error) {
     console.error(`Error getting team activities: ${error.message}`);

@@ -588,6 +588,12 @@ export default function TeamsScreen() {
           
           console.log(`Team target: ${totalTarget}, Completed: ${totalCompleted}, Progress: ${progress}%`);
           
+          // Store cycle information from the API
+          if (data.cycleInfo) {
+            console.log('Cycle info received:', data.cycleInfo);
+            updatedTeam.cycleInfo = data.cycleInfo;
+          }
+          
           setUserTeam(updatedTeam);
           setTeamProgress(progress);
         }
@@ -951,33 +957,45 @@ export default function TeamsScreen() {
 
   // Function to calculate and format the end of the current 7-day cycle
   const calculateCycleEndDate = (team) => {
-    if (!team || !team.createdAt) return "Unknown";
+    if (team?.cycleInfo) {
+      // Use the cycleInfo from API response
+      const cycleEnd = new Date(team.cycleInfo.cycleEnd);
+      
+      // Calculate remaining time correctly
+      const now = new Date();
+      const msUntilCycleEnd = cycleEnd.getTime() - now.getTime();
+      
+      // Get full days (use Math.floor to avoid having extra days)
+      const daysUntilCycleEnd = Math.floor(msUntilCycleEnd / (1000 * 60 * 60 * 24));
+      
+      // Get remaining hours after full days are counted
+      const hoursUntilCycleEnd = Math.floor((msUntilCycleEnd % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      
+      return `${daysUntilCycleEnd}d ${hoursUntilCycleEnd}h left (${cycleEnd.toUTCString()})`;
+    }
     
-    // Parse the team creation date
-    const creationDate = new Date(team.createdAt);
+    // Fallback to calculating based on team creation date
+    if (!team || !team.createdAt) return 'Unknown';
     
-    // Set to UTC midnight of the creation date
-    const cycleStartDate = new Date(Date.UTC(
-      creationDate.getUTCFullYear(),
-      creationDate.getUTCMonth(),
-      creationDate.getUTCDate(),
-      0, 0, 0, 0
-    ));
-    
-    // Calculate days since creation
+    const teamCreationDate = new Date(team.createdAt);
     const now = new Date();
-    const msSinceCreation = now.getTime() - cycleStartDate.getTime();
+    const msSinceCreation = now.getTime() - teamCreationDate.getTime();
     const daysSinceCreation = Math.floor(msSinceCreation / (1000 * 60 * 60 * 24));
+    const currentCycleNumber = Math.floor(daysSinceCreation / 7);
     
-    // Calculate current cycle index (0-based)
-    const currentCycleIndex = Math.floor(daysSinceCreation / 7);
+    const cycleStartDate = new Date(teamCreationDate);
+    cycleStartDate.setUTCDate(teamCreationDate.getUTCDate() + currentCycleNumber * 7);
     
-    // Calculate the end date of the current cycle (start of next cycle)
     const cycleEndDate = new Date(cycleStartDate);
-    cycleEndDate.setUTCDate(cycleStartDate.getUTCDate() + (currentCycleIndex + 1) * 7);
+    cycleEndDate.setUTCDate(cycleStartDate.getUTCDate() + 7);
     
-    // Format the date
-    return cycleEndDate.toUTCString();
+    const msUntilCycleEnd = cycleEndDate.getTime() - now.getTime();
+    // Use Math.floor instead of Math.ceil for days to avoid overflow
+    const daysUntilCycleEnd = Math.floor(msUntilCycleEnd / (1000 * 60 * 60 * 24));
+    // Calculate remaining hours after full days
+    const hoursUntilCycleEnd = Math.floor((msUntilCycleEnd % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    return `${daysUntilCycleEnd}d ${hoursUntilCycleEnd}h left (${cycleEndDate.toUTCString()})`;
   };
 
   // Team members section with personal targets
@@ -1013,6 +1031,20 @@ export default function TeamsScreen() {
           ({calculateTeamTargets(userTeam).completed} completed)
         </Text>
       </View>
+      
+      {/* Current cycle information */}
+      <View style={styles.cycleInfoContainer}>
+        <Text style={styles.cycleLabel}>
+          Current 7-Day Cycle: {userTeam?.cycleInfo?.currentCycle || 0}
+        </Text>
+        <Text style={styles.cycleEndInfo}>
+          Cycle Ends: {calculateCycleEndDate(userTeam)}
+        </Text>
+      </View>
+      <Text style={styles.cycleNote}>
+        * Progress resets at the end of each 7-day cycle
+      </Text>
+      
       <View style={styles.progressBar}>
         <View style={[styles.progressFill, { width: `${teamProgress}%` }]} />
       </View>
@@ -2532,5 +2564,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4A90E2',
     fontWeight: '500',
+  },
+  cycleInfoContainer: {
+    marginVertical: 8,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+    padding: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4A90E2',
+  },
+  cycleLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 4,
+  },
+  cycleEndInfo: {
+    fontSize: 14,
+    color: '#2C3E50',
+  },
+  cycleNote: {
+    fontSize: 12,
+    color: '#7F8C8D',
+    fontStyle: 'italic',
+    marginBottom: 10,
   },
 });
