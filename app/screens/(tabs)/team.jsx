@@ -29,6 +29,7 @@ export default function TeamsScreen() {
   const [teamProgress, setTeamProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [currentUtcTime, setCurrentUtcTime] = useState('');
   const navigation = useNavigation();
 
   const targetData = [
@@ -56,6 +57,15 @@ export default function TeamsScreen() {
 
     return unsubscribe;
   }, [navigation]);
+
+  useEffect(() => {
+    const updateUtcTime = () => {
+      setCurrentUtcTime(new Date().toUTCString());
+    };
+    updateUtcTime();
+    const intervalId = setInterval(updateUtcTime, 1000); // Update every second
+    return () => clearInterval(intervalId); // Cleanup interval on component unmount
+  }, []);
 
   const loadUserData = async () => {
     try {
@@ -792,6 +802,7 @@ export default function TeamsScreen() {
         <View style={styles.teamHeaderContainer}>
           <View style={styles.teamHeader}>
             <Text style={styles.teamName}>{userTeam.name}</Text>
+            <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
             <TouchableOpacity 
               style={styles.editIconButton} 
               onPress={() => setIsEditingTeam(true)}
@@ -2097,5 +2108,10 @@ const styles = StyleSheet.create({
   multilineInput: {
     height: 100,
     textAlignVertical: "top",
-  }
+  },
+  utcTimeText: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginLeft: 8,
+  },
 });

@@ -209,6 +209,9 @@ export default function CreateGroupScreen() {
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <Text style={styles.title}>Create a New Team</Text>
           <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
+          <Text style={styles.infoText}>
+            Team cycle starts at UTC 00:00 on the day of creation and lasts for 7 days.
+          </Text>
 
           {/* Input for the group name */}
           <View style={styles.formGroup}>
@@ -264,13 +267,23 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-          {/* Weekly Limits section */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
+          {/* Dropdowns for weekly limits */}
+          <View style={styles.formGroup}>
+            <Text style={styles.sectionHeader}>Activity Limits</Text>
+            <Text style={styles.infoText}>
+              Daily limit: Users can only log 1 point per day for mental and physical activities (globally).
+            </Text>
+            <Text style={styles.infoText}>
+              Weekly limit: The following limits apply per team. When both mental and physical limits are reached, the weekly limits are unlocked.
+            </Text>
+          </View>
+
+          <View style={styles.row}>
+            <View style={styles.halfColumn}>
               <Text style={styles.label}>Weekly Mental Limit</Text>
               <Dropdown
                 style={styles.dropdown}
-                data={limitData} // Assuming limitData is appropriate for weekly limits too (0-7)
+                data={limitData}
                 labelField="label"
                 valueField="value"
                 placeholder="Select limit"
@@ -278,12 +291,12 @@ export default function CreateGroupScreen() {
                 onChange={(item) => setWeeklyLimitMental(item.value)}
               />
             </View>
-
-            <View style={styles.halfWidth}>
+            
+            <View style={styles.halfColumn}>
               <Text style={styles.label}>Weekly Physical Limit</Text>
               <Dropdown
                 style={styles.dropdown}
-                data={limitData} // Assuming limitData is appropriate for weekly limits too (0-7)
+                data={limitData}
                 labelField="label"
                 valueField="value"
                 placeholder="Select limit"
@@ -292,7 +305,6 @@ export default function CreateGroupScreen() {
               />
             </View>
           </View>
-          {/* Daily limits are now fixed at 1 globally and not set here. */}
 
           {/* Button to create the group */}
           <TouchableOpacity
@@ -340,10 +352,22 @@ const styles = StyleSheet.create({
     color: '#0E5E6F',
   },
   utcTimeText: {
-    fontSize: 12,
+    fontSize: 14,
+    color: '#777',
+    marginBottom: 10,
     textAlign: 'center',
+  },
+  infoText: {
+    fontSize: 14,
     color: '#555',
-    marginBottom: 15,
+    marginBottom: 10,
+    paddingHorizontal: 5,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 10,
+    marginBottom: 5,
   },
   formGroup: {
     marginBottom: 20,
@@ -401,11 +425,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 15,
   },
-  halfWidth: {
-    flex: 1,
-    marginHorizontal: 5,
+  halfColumn: {
+    width: '48%',
   },
   dropdown: {
     backgroundColor: '#FFFFFF',
