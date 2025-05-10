@@ -22,10 +22,20 @@ export default function CreateGroupScreen() {
   const [groupDescription, setGroupDescription] = useState(''); // Group description entered by the user
   const [targetName, setTargetName] = useState(''); // Selected target category
   const [personalTargetValue, setPersonalTargetValue] = useState(3); // Personal target value (1-7)
-  const [dailyLimitPhysical, setDailyLimitPhysical] = useState(7); // Daily physical limit
-  const [dailyLimitMental, setDailyLimitMental] = useState(7); // Daily mental limit
+  const [weeklyLimitPhysical, setWeeklyLimitPhysical] = useState(7); // Default weekly physical limit
+  const [weeklyLimitMental, setWeeklyLimitMental] = useState(7); // Default weekly mental limit
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
   const router = useRouter(); // Router for navigation
+  const [currentUtcTime, setCurrentUtcTime] = useState('');
+
+  useEffect(() => {
+    const updateUtcTime = () => {
+      setCurrentUtcTime(new Date().toUTCString());
+    };
+    updateUtcTime();
+    const intervalId = setInterval(updateUtcTime, 1000); // Update every second
+    return () => clearInterval(intervalId); // Cleanup interval on component unmount
+  }, []);
 
   // Define dropdown menu data
   const targetData = [
@@ -134,8 +144,8 @@ export default function CreateGroupScreen() {
           name: groupName,
           description: groupDescription,
           targetName,
-          dailyLimitPhysical,
-          dailyLimitMental,
+          weeklyLimitPhysical, // Changed from dailyLimitPhysical
+          weeklyLimitMental,   // Changed from dailyLimitMental
         }),
       });
 
@@ -147,7 +157,9 @@ export default function CreateGroupScreen() {
 
       // Check if the response is successful
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to create group');
+        // Try to get a more specific error message from backend
+        const errorMsg = data.error || data.message || 'Failed to create group (unknown server error)';
+        throw new Error(errorMsg);
       }
 
       // Store the newly created team data in AsyncStorage 
@@ -196,6 +208,7 @@ export default function CreateGroupScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <Text style={styles.title}>Create a New Team</Text>
+          <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
 
           {/* Input for the group name */}
           <View style={styles.formGroup}>
@@ -251,34 +264,35 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-          {/* Limits section */}
+          {/* Weekly Limits section */}
           <View style={[styles.formGroup, styles.row]}>
             <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Mental Limit</Text>
+              <Text style={styles.label}>Weekly Mental Limit</Text>
               <Dropdown
                 style={styles.dropdown}
-                data={limitData}
+                data={limitData} // Assuming limitData is appropriate for weekly limits too (0-7)
                 labelField="label"
                 valueField="value"
                 placeholder="Select limit"
-                value={dailyLimitMental}
-                onChange={(item) => setDailyLimitMental(item.value)}
+                value={weeklyLimitMental}
+                onChange={(item) => setWeeklyLimitMental(item.value)}
               />
             </View>
 
             <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Physical Limit</Text>
+              <Text style={styles.label}>Weekly Physical Limit</Text>
               <Dropdown
                 style={styles.dropdown}
-                data={limitData}
+                data={limitData} // Assuming limitData is appropriate for weekly limits too (0-7)
                 labelField="label"
                 valueField="value"
                 placeholder="Select limit"
-                value={dailyLimitPhysical}
-                onChange={(item) => setDailyLimitPhysical(item.value)}
+                value={weeklyLimitPhysical}
+                onChange={(item) => setWeeklyLimitPhysical(item.value)}
               />
             </View>
           </View>
+          {/* Daily limits are now fixed at 1 globally and not set here. */}
 
           {/* Button to create the group */}
           <TouchableOpacity
@@ -324,6 +338,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
     color: '#0E5E6F',
+  },
+  utcTimeText: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#555',
+    marginBottom: 15,
   },
   formGroup: {
     marginBottom: 20,

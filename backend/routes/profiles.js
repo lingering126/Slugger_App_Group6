@@ -11,7 +11,7 @@ const authMiddleware = require('../src/middleware/auth');
  */
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const userId = req.userData.userId;
+    const userId = req.user.id; // Corrected from req.userData.userId
     
     // Find profile by user ID, populate with username from user
     let profile = await Profile.findOne({ user: userId }).populate('user', 'email username');
@@ -77,7 +77,7 @@ router.get('/:userId', authMiddleware, async (req, res) => {
  */
 router.put('/', authMiddleware, async (req, res) => {
   try {
-    const userId = req.userData.userId;
+    const userId = req.user.id; // Corrected from req.userData.userId
     const { name, bio, longTermGoal, avatarUrl, activitySettings, status } = req.body;
     
     // Build profile object with submitted fields
@@ -109,7 +109,36 @@ router.put('/', authMiddleware, async (req, res) => {
       await profile.save();
       profile = await Profile.findOne({ user: userId }).populate('user', 'email username');
     }
+
+    // Also update the User model's name and username for consistency
+    if (name) {
+      try {
+        const userToUpdate = await User.findById(userId);
+        if (userToUpdate) {
+          console.log(`Found user ${userId} to update. Current name: ${userToUpdate.name}, username: ${userToUpdate.username}. New name from profile: ${name}`);
+          userToUpdate.name = name;
+          userToUpdate.username = name; // Sync username with the profile name
+          await userToUpdate.save();
+          console.log(`User model for ${userId} successfully updated. New name: ${userToUpdate.name}, username: ${userToUpdate.username}`);
+        } else {
+          console.warn(`User ${userId} not found in User collection during profile update.`);
+        }
+      } catch (userUpdateError) {
+        console.error(`Error updating User model for ${userId} during profile save:`, userUpdateError);
+        // This error IS critical for name consistency.
+        // If User model update fails, we should inform the client.
+        // Throw an error to be caught by the main catch block, or return a specific error response.
+        // For now, let's make it part of the main error handling.
+        throw new Error(`Profile saved, but failed to sync name to User record: ${userUpdateError.message}`);
+      }
+    }
     
+    // Re-fetch profile to ensure populated user reflects any changes if User model was updated
+    // This is important if the populated 'user' in the profile response is used immediately by client
+    if (profile) {
+        profile = await Profile.findById(profile._id).populate('user', 'email username name');
+    }
+
     res.json(profile);
   } catch (error) {
     console.error('Error updating profile:', error);
@@ -124,7 +153,7 @@ router.put('/', authMiddleware, async (req, res) => {
  */
 router.put('/activities', authMiddleware, async (req, res) => {
   try {
-    const userId = req.userData.userId;
+    const userId = req.user.id; // Corrected from req.userData.userId
     const activitySettings = req.body;
     
     if (!activitySettings) {

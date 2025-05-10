@@ -1,6 +1,8 @@
 const Activity = require('../../models/Activity');
 const User = require('../../src/models/user');
 const UserStats = require('../models/UserStats');
+const Team = require('../../models/team'); // Added Team model
+const mongoose = require('mongoose'); // Added mongoose for ObjectId validation
 
 // Get activity types list
 exports.getActivityTypes = async (req, res) => {
@@ -34,36 +36,128 @@ exports.getActivityTypes = async (req, res) => {
 exports.createActivity = async (req, res) => {
   try {
     console.log('\n=== Creating New Activity ===');
-    const { type, name, duration } = req.body;
+    const { type, name, duration, teamId } = req.body; // Added teamId
     const userId = req.user.id;
 
-    console.log('Request body:', { type, name, duration });
+    console.log('Request body:', { type, name, duration, teamId });
     console.log('User ID from auth:', userId);
 
     if (!userId) {
-      throw new Error('User ID is required but not found in request');
+      return res.status(400).json({ success: false, message: 'User ID is required.' });
+    }
+    if (!type || !name || !duration) {
+      return res.status(400).json({ success: false, message: 'Type, name, and duration are required.' });
     }
 
-    // Calculate points
-    console.log('\n=== Calculating Activity Points ===');
-    console.log('Activity type:', type);
-    console.log('Duration:', duration);
-    const points = Activity.calculatePoints(type, duration);
-    console.log('Points calculated:', points);
-    console.log('=== Points Calculation Complete ===\n');
+    // --- Daily Limit Check (Global) ---
+    if (type === 'Physical' || type === 'Mental') {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart);
+      todayEnd.setUTCDate(todayStart.getUTCDate() + 1);
+
+      console.log(`Daily Limit Check: userId='${userId}', type='${type}', todayStart='${todayStart.toISOString()}', todayEnd='${todayEnd.toISOString()}'`);
+
+      const dailyActivity = await Activity.findOne({
+        userId,
+        type,
+        createdAt: { $gte: todayStart, $lt: todayEnd }
+      });
+
+      if (dailyActivity) {
+        console.log('Daily limit reached. Found activity:', dailyActivity);
+        return res.status(403).json({ 
+          success: false, 
+          message: `You can only log 1 point for ${type.toLowerCase()} activities per day. (Date range checked: ${todayStart.toUTCString()} to ${todayEnd.toUTCString()})`
+        });
+      } else {
+        console.log('Daily limit not reached for this type and UTC day.');
+      }
+    }
+
+    // --- Weekly Limit Check (Per Team) ---
+    if ((type === 'Physical' || type === 'Mental') && teamId) {
+      if (!mongoose.Types.ObjectId.isValid(teamId)) {
+        return res.status(400).json({ success: false, message: 'Invalid team ID format.' });
+      }
+      const team = await Team.findById(teamId);
+      if (!team) {
+        return res.status(404).json({ success: false, message: 'Team not found.' });
+      }
+
+      // Calculate current week for the team
+      const teamCreationDate = new Date(team.createdAt); // Already UTC 00:00:00
+      const now = new Date();
+      const msSinceCreation = now.getTime() - teamCreationDate.getTime();
+      const daysSinceCreation = Math.floor(msSinceCreation / (1000 * 60 * 60 * 24));
+      const currentWeekNumber = Math.floor(daysSinceCreation / 7);
+      
+      const weekStart = new Date(teamCreationDate);
+      weekStart.setUTCDate(teamCreationDate.getUTCDate() + currentWeekNumber * 7);
+      
+      const weekEnd = new Date(weekStart);
+      weekEnd.setUTCDate(weekStart.getUTCDate() + 7);
+
+      // Query activities for the user in this team for the current week
+      const weeklyActivities = await Activity.find({
+        userId,
+        teamId,
+        type: { $in: ['Physical', 'Mental'] },
+        createdAt: { $gte: weekStart, $lt: weekEnd }
+      });
+
+      let physicalLoggedThisWeek = 0;
+      let mentalLoggedThisWeek = 0;
+      weeklyActivities.forEach(act => {
+        if (act.type === 'Physical') physicalLoggedThisWeek++;
+        if (act.type === 'Mental') mentalLoggedThisWeek++;
+      });
+
+      const isPhysicalWeeklyLimitReached = physicalLoggedThisWeek >= team.weeklyLimitPhysical;
+      const isMentalWeeklyLimitReached = mentalLoggedThisWeek >= team.weeklyLimitMental;
+      const weeklyLimitsUnlocked = isPhysicalWeeklyLimitReached && isMentalWeeklyLimitReached;
+
+      if (!weeklyLimitsUnlocked) {
+        if (type === 'Physical' && isPhysicalWeeklyLimitReached) {
+          return res.status(403).json({ 
+            success: false, 
+            message: 'Weekly physical activity limit reached for this team. Unlock by reaching the mental limit too.' 
+          });
+        }
+        if (type === 'Mental' && isMentalWeeklyLimitReached) {
+          return res.status(403).json({ 
+            success: false, 
+            message: 'Weekly mental activity limit reached for this team. Unlock by reaching the physical limit too.' 
+          });
+        }
+      }
+    } else if ((type === 'Physical' || type === 'Mental') && !teamId) {
+      // If physical or mental, teamId is expected for weekly checks.
+      // Depending on strictness, could return an error or allow logging without weekly check.
+      // For now, let's assume teamId is required for these types if weekly limits are to be enforced.
+      console.warn(`Activity of type ${type} logged without teamId. Weekly limits not checked.`);
+    }
+
+    // Calculate points (always 1 as per Activity model pre-save hook)
+    const points = 1; 
 
     // Create activity
-    const activity = new Activity({
+    const activityData = {
       userId,
       type,
       name,
       duration,
       points,
       status: 'completed' // Default set to completed
-    });
+    };
+    if (teamId && mongoose.Types.ObjectId.isValid(teamId)) { // Add teamId if provided and valid
+      activityData.teamId = teamId;
+    }
 
+
+    const activity = new Activity(activityData);
     await activity.save();
-
+    
     // Get or create user stats data
     let userStats = await UserStats.findOne({ userId });
     if (!userStats) {
@@ -284,4 +378,4 @@ exports.updateActivityStatus = async (req, res) => {
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
-}; 
+};

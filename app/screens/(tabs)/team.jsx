@@ -512,24 +512,26 @@ export default function TeamsScreen() {
   };
   
   const renderTeamCard = ({ item }) => {
-    // Check if user is a team member, simplified logic to accommodate different data structures
+    // Check if user is a team member.
+    // item.members are populated user objects from the backend.
+    // Each member object should have an _id (ObjectId) and/or id (string virtual).
+    // userId is the current logged-in user's ID string.
     const isTeamMember = item.members && Array.isArray(item.members) && item.members.some(member => {
-      // If member is an object and has user property
-      if (typeof member === 'object' && member.user) {
-        return member.user._id === userId || member.user.id === userId;
-      }
-      // If member is a string ID
-      if (typeof member === 'string') {
-        return member === userId;
-      }
-      // If member is an object but has no user property (possibly direct ID)
-      if (typeof member === 'object' && member._id) {
-        return member._id === userId;
+      if (member && userId) { // Ensure both member object and current userId are available
+        // Compare string versions of IDs to be safe
+        const memberIdString = member.id || (member._id ? member._id.toString() : null);
+        return memberIdString === userId;
       }
       return false;
     });
     
-    console.log(`Checking if user ${userId} is member of team ${item.name}: ${isTeamMember}`);
+    // It's helpful to keep this log for debugging if issues persist.
+    console.log(`Team: ${item.name}, Current UserID: ${userId}`);
+    item.members.forEach(m => {
+      const memberIdStr = m.id || (m._id ? m._id.toString() : 'NO_ID');
+      console.log(`  Comparing Member ID: ${memberIdStr} (name: ${m.username || m.name}) with UserID: ${userId}. Match: ${memberIdStr === userId}`);
+    });
+    console.log(`Result for ${item.name} - isTeamMember: ${isTeamMember}`);
     
     return (
       <View style={styles.teamCard}>
@@ -2097,4 +2099,3 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   }
 });
-
