@@ -95,7 +95,7 @@ router.get('/', async (req, res) => {
     const totalPoints = await Activity.getUserTotalPoints(userId);
     console.log('Total points:', totalPoints);
 
-    // 格式化活动数据，包括评论
+    // Format activity data, including comments
     const formattedActivities = activities.map(activity => {
       const formattedActivity = activity.toResponseFormat();
       formattedActivity.comments = activity.comments.map(comment => ({
@@ -290,4 +290,4 @@ router.post('/:id/comment', async (req, res) => {
   }
 });
 
-module.exports = router; 
+module.exports = router;

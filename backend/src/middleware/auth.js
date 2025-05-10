@@ -16,7 +16,12 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: 'User not found' });
     }
 
+    // Set both req.user and req.userData for compatibility
     req.user = user;
+    req.userData = { 
+      userId: user._id.toString() 
+    };
+    
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
@@ -24,4 +29,4 @@ const auth = async (req, res, next) => {
   }
 };
 
-module.exports = auth; 
+module.exports = auth;
