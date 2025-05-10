@@ -946,16 +946,26 @@ const HomeScreen = () => {
 
           console.log('[handleCategorySelect] User B - Parsed responseData:', JSON.stringify(responseData));
           
-          // THIS IS THE CRITICAL CHECK
+          // THIS IS THE CRITICAL CHECK - We need to verify activities are from current day
           if (responseData.success && responseData.data && responseData.data.activities && responseData.data.activities.length > 0) {
-            console.log('[handleCategorySelect] User B - Daily limit IS REACHED based on frontend check. Activities found:', responseData.data.activities.length);
-            const message = `You can only log 1 point for ${category.toLowerCase()} activities per day.`;
-            if (Platform.OS === 'web') {
-              alert(message);
+            // Verify activities are from current UTC day
+            const activitiesFromToday = responseData.data.activities.filter(activity => {
+              const activityDate = new Date(activity.createdAt);
+              return activityDate >= todayStart && activityDate < todayEnd;
+            });
+            
+            if (activitiesFromToday.length > 0) {
+              console.log('[handleCategorySelect] User B - Daily limit IS REACHED based on frontend check. Activities found in today\'s date range:', activitiesFromToday.length);
+              const message = `You can only log 1 point for ${category.toLowerCase()} activities per day.`;
+              if (Platform.OS === 'web') {
+                alert(message);
+              } else {
+                Alert.alert('Daily Limit Reached', message, [{ text: 'OK' }]);
+              }
+              return;
             } else {
-              Alert.alert('Daily Limit Reached', message, [{ text: 'OK' }]);
+              console.log('[handleCategorySelect] User B - No activities found in today\'s date range. Activities array exists but all from different days.');
             }
-            return; 
           } else {
             console.log('[handleCategorySelect] User B - Daily limit NOT reached based on frontend check. Activities array:', responseData.data?.activities);
           }

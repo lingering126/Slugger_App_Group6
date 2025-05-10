@@ -74,7 +74,35 @@ router.get('/', async (req, res) => {
 
     // 构建查询
     const query = { userId };
+    
+    // Add type filter if provided
+    if (req.query.type) {
+      query.type = req.query.type;
+    }
+    
+    // Add date range filter if provided
+    if (req.query.startDate || req.query.endDate) {
+      query.createdAt = {};
+      if (req.query.startDate) {
+        query.createdAt.$gte = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        query.createdAt.$lt = new Date(req.query.endDate);
+      }
+    }
+    
     console.log('MongoDB query:', query);
+    
+    // More detailed logging for date parameters
+    if (query.createdAt) {
+      console.log('Date filter details:');
+      if (query.createdAt.$gte) {
+        console.log('- Start date (UTC):', query.createdAt.$gte.toISOString());
+      }
+      if (query.createdAt.$lt) {
+        console.log('- End date (UTC):', query.createdAt.$lt.toISOString());
+      }
+    }
 
     // 执行查询
     const activities = await Activity.find(query)
