@@ -28,6 +28,27 @@ export default function CreateGroupScreen() {
   const router = useRouter(); // Router for navigation
   const [currentUtcTime, setCurrentUtcTime] = useState('');
 
+  // Function to calculate and display the cycle end date
+  const calculateCycleEndDate = () => {
+    // Get current date
+    const now = new Date();
+    
+    // Set to UTC midnight of the current date
+    const cycleStartDate = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    
+    // Calculate the end date (7 days later at UTC 00:00)
+    const cycleEndDate = new Date(cycleStartDate);
+    cycleEndDate.setUTCDate(cycleStartDate.getUTCDate() + 7);
+    
+    // Return formatted date
+    return cycleEndDate.toUTCString();
+  };
+
   useEffect(() => {
     const updateUtcTime = () => {
       setCurrentUtcTime(new Date().toUTCString());
@@ -110,29 +131,6 @@ export default function CreateGroupScreen() {
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       console.log('Using API URL:', apiUrl);
 
-      // First, update the user's personal target
-      try {
-        const userTargetResponse = await fetch(`${apiUrl}/user-target`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            targetValue: personalTargetValue
-          }),
-        });
-
-        if (!userTargetResponse.ok) {
-          console.warn('Failed to update personal target, but continuing with team creation');
-        } else {
-          console.log('Personal target updated successfully');
-        }
-      } catch (targetError) {
-        console.error('Error updating personal target:', targetError);
-        // Continue with team creation even if setting personal target fails
-      }
-
       // Send a POST request to create the group
       const response = await fetch(`${apiUrl}/teams`, {
         method: 'POST',
@@ -160,6 +158,29 @@ export default function CreateGroupScreen() {
         // Try to get a more specific error message from backend
         const errorMsg = data.error || data.message || 'Failed to create group (unknown server error)';
         throw new Error(errorMsg);
+      }
+
+      // Now we have the team data with ID, we can set the user's personal target for this team
+      const teamId = data._id;
+      try {
+        const userTeamTargetResponse = await fetch(`${apiUrl}/user-team-targets/${teamId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            targetValue: personalTargetValue
+          }),
+        });
+
+        if (!userTeamTargetResponse.ok) {
+          console.warn('Failed to set team-specific personal target');
+        } else {
+          console.log('Team-specific personal target set successfully:', personalTargetValue);
+        }
+      } catch (targetError) {
+        console.error('Error setting team-specific personal target:', targetError);
       }
 
       // Store the newly created team data in AsyncStorage 
@@ -209,6 +230,7 @@ export default function CreateGroupScreen() {
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <Text style={styles.title}>Create a New Team</Text>
           <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
+          <Text style={styles.utcTimeText}>Current 7-days cycle will end at: {calculateCycleEndDate()}</Text>
           <Text style={styles.infoText}>
             Team cycle starts at UTC 00:00 on the day of creation and lasts for 7 days.
           </Text>
@@ -253,17 +275,21 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-          {/* Dropdown for personal target value */}
+          {/* Personal target input */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Your Personal Target</Text>
-            <Dropdown
-              style={styles.dropdown}
-              data={personalTargetData}
-              labelField="label"
-              valueField="value"
-              placeholder="Select your personal target"
-              value={personalTargetValue}
-              onChange={(item) => setPersonalTargetValue(item.value)}
+            <TextInput
+              style={styles.input}
+              value={String(personalTargetValue)}
+              onChangeText={(text) => {
+                const numValue = parseInt(text) || 0;
+                if (numValue < 99) {
+                  setPersonalTargetValue(numValue);
+                }
+              }}
+              keyboardType="numeric"
+              placeholder="Enter your target (0-99)"
+              maxLength={2}
             />
           </View>
 
@@ -274,7 +300,7 @@ export default function CreateGroupScreen() {
               Daily limit: Users can only log 1 point per day for mental and physical activities (globally).
             </Text>
             <Text style={styles.infoText}>
-              Weekly limit: The following limits apply per team. When both mental and physical limits are reached, the weekly limits are unlocked.
+              Weekly limit: The following limits apply per team. When both mental and physical limits are reached, the weekly limits are removed and users can log additional activities (though daily limits still apply).
             </Text>
           </View>
 
@@ -286,7 +312,7 @@ export default function CreateGroupScreen() {
                 data={limitData}
                 labelField="label"
                 valueField="value"
-                placeholder="Select limit"
+                placeholder="Select a limit"
                 value={weeklyLimitMental}
                 onChange={(item) => setWeeklyLimitMental(item.value)}
               />
@@ -299,7 +325,7 @@ export default function CreateGroupScreen() {
                 data={limitData}
                 labelField="label"
                 valueField="value"
-                placeholder="Select limit"
+                placeholder="Select a limit"
                 value={weeklyLimitPhysical}
                 onChange={(item) => setWeeklyLimitPhysical(item.value)}
               />

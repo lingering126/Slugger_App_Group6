@@ -4,6 +4,21 @@ const UserStats = require('../models/UserStats');
 const Team = require('../../models/team'); // Added Team model
 const mongoose = require('mongoose'); // Added mongoose for ObjectId validation
 
+/**
+ * Activity Controller
+ * 
+ * IMPORTANT NOTE ABOUT ACTIVITIES AND TEAMS:
+ * 
+ * 1. Activities can be created with or without a teamId
+ * 2. When an activity is created with a specific teamId, it's used for team-specific features
+ *    like weekly limits.
+ * 3. When an activity is created without a teamId (from homepage), it will count toward progress
+ *    for ALL teams the user belongs to.
+ * 4. The team activities endpoint in /teams/:teamId/activities includes both:
+ *    - Activities with the specific teamId
+ *    - Activities without any teamId (applied to all teams)
+ */
+
 // Get activity types list
 exports.getActivityTypes = async (req, res) => {
   try {
@@ -124,6 +139,8 @@ exports.createActivity = async (req, res) => {
       const isMentalWeeklyLimitReached = mentalLoggedThisWeek >= team.weeklyLimitMental;
       const weeklyLimitsUnlocked = isPhysicalWeeklyLimitReached && isMentalWeeklyLimitReached;
 
+      // If weekly limits are unlocked (both physical and mental limits reached),
+      // allow additional activities beyond the limits
       if (!weeklyLimitsUnlocked) {
         if (type === 'Physical' && isPhysicalWeeklyLimitReached) {
           return res.status(403).json({ 
@@ -137,6 +154,8 @@ exports.createActivity = async (req, res) => {
             message: 'Weekly mental activity limit reached for this team. Unlock by reaching the physical limit too.' 
           });
         }
+      } else {
+        console.log('Weekly limits unlocked! User can log additional activities beyond the limits.');
       }
     } else if ((type === 'Physical' || type === 'Mental') && !teamId) {
       // If physical or mental, teamId is expected for weekly checks.
@@ -159,6 +178,9 @@ exports.createActivity = async (req, res) => {
     };
     if (teamId && mongoose.Types.ObjectId.isValid(teamId)) { 
       activityData.teamId = new mongoose.Types.ObjectId(teamId);
+      console.log(`Activity being created with specific teamId: ${teamId}`);
+    } else {
+      console.log('Activity being created without a teamId. It will count for all user teams.');
     }
 
 

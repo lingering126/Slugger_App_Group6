@@ -16,6 +16,7 @@ const statsRoutes = require('./homepage/routes/index');
 const teamRoutes = require('./routes/team');
 // Add this line to import the new profiles routes
 const profileRoutes = require('./routes/profiles');
+const userTeamTargetRoutes = require('./routes/userTeamTarget');
 
 
 // Function to get all server IP addresses
@@ -205,6 +206,7 @@ app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
 // Add this line to register the profiles routes
 app.use('/api/profiles', profileRoutes);
+app.use('/api/user-team-targets', userTeamTargetRoutes);
 
 // ADD THIS NEW ENDPOINT: GET user profile - Updated to include longTermGoal
 app.get('/api/user/profile', authMiddleware, async (req, res) => {

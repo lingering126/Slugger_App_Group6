@@ -898,10 +898,79 @@ const HomeScreen = () => {
   const [showContentModal, setShowContentModal] = useState(false);
   const [currentUtcTime, setCurrentUtcTime] = useState('');
   const [checkingCategoryLimit, setCheckingCategoryLimit] = useState(null);
+  const [weeklyLimitsUnlocked, setWeeklyLimitsUnlocked] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+
+  // Check if weekly limits are unlocked
+  const checkWeeklyLimits = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const userTeam = await AsyncStorage.getItem('userTeam');
+      
+      if (!token || !userTeam) return;
+      
+      const team = JSON.parse(userTeam);
+      
+      // Get today's date at UTC midnight
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      
+      // Calculate cycle start date based on team creation date
+      const creationDate = new Date(team.createdAt);
+      const cycleStartDate = new Date(Date.UTC(
+        creationDate.getUTCFullYear(),
+        creationDate.getUTCMonth(),
+        creationDate.getUTCDate(),
+        0, 0, 0, 0
+      ));
+      
+      // Calculate days since creation
+      const msSinceCreation = todayStart.getTime() - cycleStartDate.getTime();
+      const daysSinceCreation = Math.floor(msSinceCreation / (1000 * 60 * 60 * 24));
+      
+      // Calculate current cycle index (0-based)
+      const currentCycleIndex = Math.floor(daysSinceCreation / 7);
+      
+      // Calculate current cycle start date
+      const currentCycleStart = new Date(cycleStartDate);
+      currentCycleStart.setUTCDate(cycleStartDate.getUTCDate() + currentCycleIndex * 7);
+      
+      // Calculate current cycle end date
+      const currentCycleEnd = new Date(currentCycleStart);
+      currentCycleEnd.setUTCDate(currentCycleStart.getUTCDate() + 7);
+      
+      // Get activities for the current week cycle
+      const response = await fetch(
+        `${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIST}?startDate=${currentCycleStart.toISOString()}&endDate=${currentCycleEnd.toISOString()}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data && data.data.activities) {
+          // Count mental and physical activities
+          let mentalCount = 0;
+          let physicalCount = 0;
+          
+          data.data.activities.forEach(activity => {
+            if (activity.type === 'Mental') mentalCount++;
+            if (activity.type === 'Physical') physicalCount++;
+          });
+          
+          // Check if both limits are reached
+          const mentalLimitReached = mentalCount >= team.weeklyLimitMental;
+          const physicalLimitReached = physicalCount >= team.weeklyLimitPhysical;
+          
+          setWeeklyLimitsUnlocked(mentalLimitReached && physicalLimitReached);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking weekly limits:', error);
+    }
+  };
 
   useEffect(() => {
     const updateUtcTime = () => {
@@ -1038,6 +1107,8 @@ const HomeScreen = () => {
             return;
           }
           await Promise.all([fetchActivities(), fetchPosts(), fetchUserStats()]);
+          // Check weekly limits after data is loaded
+          checkWeeklyLimits();
         } catch (error) {
           console.error('Error loading data on focus:', error);
         } finally {
@@ -1217,6 +1288,16 @@ const HomeScreen = () => {
                 <Ionicons name="home" size={28} color="#3A8891" />
               </View>
             </View>
+
+            {/* Weekly Limits Unlocked Notification */}
+            {weeklyLimitsUnlocked && (
+              <View style={styles.notificationBanner}>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.notificationText}>
+                  Weekly limits unlocked! You can log additional activities.
+                </Text>
+              </View>
+            )}
 
             {/* Stats Section */}
             <View style={styles.statsSection}>
@@ -1919,6 +2000,22 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginTop: 20,
+  },
+  notificationBanner: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    marginBottom: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  notificationText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 14,
+    flex: 1,
+    fontWeight: '500',
   },
 });
 

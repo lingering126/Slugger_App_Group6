@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Team = require('../models/team');
 const authMiddleware = require('../middleware/auth');
+const UserTarget = require('../models/userTarget');
+const UserTeamTarget = require('../models/userTeamTarget');
 
 // Create a new team
 router.post('/', authMiddleware, async (req, res) => {
@@ -345,6 +347,114 @@ router.delete('/:teamId', authMiddleware, async (req, res) => {
     res.status(200).json({ message: 'Team deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete team', error: error.message });
+  }
+});
+
+// Get team activities and personal targets
+router.get('/:teamId/activities', authMiddleware, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.user.id;
+    
+    console.log(`Getting team activities for team ${teamId} and user ${userId}`);
+    
+    // Find the team
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+    
+    // Check if user is a member
+    const isMember = team.members.some(member => member.toString() === userId.toString());
+    if (!isMember) {
+      return res.status(403).json({ message: 'Not authorized to view this team' });
+    }
+    
+    // Get all team members' user IDs
+    const memberIds = team.members;
+    console.log(`Team has ${memberIds.length} members`);
+    console.log('Member IDs:', memberIds);
+    
+    // Get personal targets for all members specifically for this team
+    const memberTeamTargets = await UserTeamTarget.find({ 
+      teamId: teamId
+    });
+    
+    console.log(`Found ${memberTeamTargets.length} team-specific targets`);
+    memberTeamTargets.forEach(target => {
+      console.log(`User ${target.userId.toString()}: Target ${target.targetValue}`);
+    });
+    
+    // Fall back to global targets if team-specific targets are not found
+    const memberGlobalTargets = await UserTarget.find({ 
+      userId: { $in: memberIds } 
+    });
+    
+    console.log(`Found ${memberGlobalTargets.length} global targets`);
+    
+    // Get activities for all members in this team
+    const Activity = require('../models/Activity');
+    const activities = await Activity.find({
+      userId: { $in: memberIds },
+      status: 'completed',
+      // We're including activities with this teamId or with no teamId at all
+      $or: [
+        { teamId: teamId },
+        { teamId: { $exists: false } },
+        { teamId: null }
+      ]
+    });
+    
+    console.log(`Found ${activities.length} completed activities for team members (including activities without teamId)`);
+    
+    // Aggregate data by member
+    const membersData = [];
+    for (const memberId of memberIds) {
+      const memberIdStr = memberId.toString();
+      console.log(`Processing member ${memberIdStr}`);
+      
+      // Try team-specific target first, fall back to global target
+      const teamTargetDoc = memberTeamTargets.find(t => t.userId.toString() === memberIdStr);
+      const globalTargetDoc = memberGlobalTargets.find(t => t.userId.toString() === memberIdStr);
+      
+      // Use team target if found, otherwise fall back to global target or default to 3
+      const personalTarget = teamTargetDoc ? teamTargetDoc.targetValue : 
+                             (globalTargetDoc ? globalTargetDoc.targetValue : 3);
+      
+      console.log(`Member ${memberIdStr} personal target: ${personalTarget} (${teamTargetDoc ? 'team-specific' : (globalTargetDoc ? 'global' : 'default')})`);
+      
+      // Count completed activities
+      const memberActivities = activities.filter(a => a.userId.toString() === memberIdStr);
+      
+      membersData.push({
+        userId: memberIdStr,
+        personalTarget,
+        completedActivities: memberActivities.length
+      });
+    }
+    
+    // Calculate totals
+    const totalTarget = membersData.reduce((sum, member) => sum + member.personalTarget, 0);
+    const totalCompleted = membersData.reduce((sum, member) => sum + member.completedActivities, 0);
+    
+    // Update team target value in database
+    team.targetValue = totalTarget;
+    await team.save();
+    
+    console.log('Returning team activities data:');
+    console.log('- Total target:', totalTarget);
+    console.log('- Total completed:', totalCompleted);
+    console.log('- Members data:', membersData);
+    
+    res.status(200).json({
+      teamId,
+      members: membersData,
+      totalTarget,
+      totalCompleted
+    });
+  } catch (error) {
+    console.error(`Error getting team activities: ${error.message}`);
+    res.status(500).json({ message: 'Failed to get team activities', error: error.message });
   }
 });
 
