@@ -19,6 +19,8 @@ export default function TeamsScreen() {
     targetName: '',
     weeklyLimitPhysical: 7,
     weeklyLimitMental: 7
+    weeklyLimitPhysical: 7,
+    weeklyLimitMental: 7
   });
   const [modalVisible, setModalVisible] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
@@ -90,6 +92,7 @@ export default function TeamsScreen() {
         const parsedUser = JSON.parse(userData);
         setUserId(parsedUser.id);
         await loadTeams(false); // Don't load from storage by default
+        await loadTeams(false); // Don't load from storage by default
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -97,8 +100,10 @@ export default function TeamsScreen() {
   };
 
   const loadTeams = async (loadFromStorage = false) => {
+  const loadTeams = async (loadFromStorage = false) => {
     try {
       setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         console.log('No token found');
@@ -123,13 +128,35 @@ export default function TeamsScreen() {
       console.log('Loading teams...');
       const teamsData = await teamService.getAllTeams();
       console.log('Teams data:', teamsData);
+      // Only load from storage if explicitly asked to
+      if (loadFromStorage) {
+        // Check for saved userTeam data in AsyncStorage
+        const savedUserTeam = await AsyncStorage.getItem('userTeam');
+        if (savedUserTeam) {
+          try {
+            const parsedTeam = JSON.parse(savedUserTeam);
+            console.log('Found saved user team in AsyncStorage:', parsedTeam);
+            setUserTeam(parsedTeam);
+          } catch (error) {
+            console.error('Error parsing saved team data:', error);
+          }
+        }
+      }
 
+      console.log('Loading teams...');
+      const teamsData = await teamService.getAllTeams();
+      console.log('Teams data:', teamsData);
+
+      if (!Array.isArray(teamsData)) {
+        console.error('Teams data is not an array:', teamsData);
       if (!Array.isArray(teamsData)) {
         console.error('Teams data is not an array:', teamsData);
         setTeams([]);
         return;
       }
 
+      // Display all teams, not just those with members
+      setTeams(teamsData);
       // Display all teams, not just those with members
       setTeams(teamsData);
 
@@ -140,6 +167,7 @@ export default function TeamsScreen() {
         console.log('Current user ID:', parsedUser.id);
         
         const userTeam = teamsData.find(team => {
+        const userTeam = teamsData.find(team => {
           console.log('Checking team:', team._id);
           console.log('Team members:', team.members);
           return team.members && team.members.some(member => {
@@ -149,6 +177,11 @@ export default function TeamsScreen() {
         });
         
         console.log('Found user team:', userTeam);
+        if (userTeam && loadFromStorage) {
+          setUserTeam(userTeam);
+          // Save the team data to AsyncStorage for persistence
+          await AsyncStorage.setItem('userTeam', JSON.stringify(userTeam));
+        }
         if (userTeam && loadFromStorage) {
           setUserTeam(userTeam);
           // Save the team data to AsyncStorage for persistence
@@ -196,13 +229,36 @@ export default function TeamsScreen() {
         }
       } catch (storageError) {
         console.error('Error saving team data to AsyncStorage:', storageError);
+      
+      const teamData = {
+        name: newTeam.name,
+        description: newTeam.description,
+        targetName: newTeam.targetName,
+        weeklyLimitPhysical: parseInt(newTeam.weeklyLimitPhysical),
+        weeklyLimitMental: parseInt(newTeam.weeklyLimitMental)
+      };
+      
+      const createdTeam = await teamService.createTeam(teamData);
+      
+      // Store the newly created team data in AsyncStorage
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          await AsyncStorage.setItem('userTeam', JSON.stringify(createdTeam));
+          console.log('Saved team data to AsyncStorage:', createdTeam);
+        }
+      } catch (storageError) {
+        console.error('Error saving team data to AsyncStorage:', storageError);
       }
+      
       
       setModalVisible(false);
       setNewTeam({
         name: '',
         description: '',
         targetName: '',
+        weeklyLimitPhysical: 7,
+        weeklyLimitMental: 7
         weeklyLimitPhysical: 7,
         weeklyLimitMental: 7
       });
@@ -345,7 +401,15 @@ export default function TeamsScreen() {
   
   // Separate function to handle "Back" button in team list
   const handleBackToTeamList = async () => {
+  const handleBackToTeamList = async () => {
     console.log('Returning to team list without leaving');
+    // Clear stored team data from AsyncStorage
+    try {
+      await AsyncStorage.removeItem('userTeam');
+      console.log('Cleared team data from AsyncStorage');
+    } catch (error) {
+      console.error('Error clearing team data from AsyncStorage:', error);
+    }
     // Clear stored team data from AsyncStorage
     try {
       await AsyncStorage.removeItem('userTeam');
@@ -727,6 +791,7 @@ export default function TeamsScreen() {
           </View>
           <View style={styles.teamIdBadge}>
             <Text style={styles.teamIdBadgeText}>ID: {item.teamId || item.groupId || 'N/A'}</Text>
+            <Text style={styles.teamIdBadgeText}>ID: {item.teamId || item.groupId || 'N/A'}</Text>
           </View>
         </View>
         <View style={styles.teamCardBody}>
@@ -831,6 +896,7 @@ export default function TeamsScreen() {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -878,6 +944,7 @@ export default function TeamsScreen() {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -916,6 +983,7 @@ export default function TeamsScreen() {
   const handleSaveTargets = async () => {
     try {
       setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
@@ -1258,12 +1326,16 @@ export default function TeamsScreen() {
             <View style={styles.teamIdInner}>
               <Text style={styles.teamIdLabel}>Team ID:</Text>
               <Text style={styles.teamId}>{userTeam.teamId || userTeam.groupId || 'N/A'}</Text>
+              <Text style={styles.teamId}>{userTeam.teamId || userTeam.groupId || 'N/A'}</Text>
             </View>
             <TouchableOpacity 
               style={styles.copyButton}
               onPress={async () => {
                 try {
                   // Use the newly installed expo-clipboard package
+                  const teamId = userTeam.teamId || userTeam.groupId;
+                  if (teamId) {
+                    await Clipboard.setStringAsync(teamId.toString());
                   const teamId = userTeam.teamId || userTeam.groupId;
                   if (teamId) {
                     await Clipboard.setStringAsync(teamId.toString());
@@ -1579,6 +1651,7 @@ export default function TeamsScreen() {
           <View style={[styles.formGroup, styles.row]}>
             <View style={styles.halfWidth}>
               <Text style={styles.label}>Weekly Mental Limit</Text>
+              <Text style={styles.label}>Weekly Mental Limit</Text>
               <Dropdown
                 style={styles.dropdown}
                 placeholderStyle={styles.placeholderStyle}
@@ -1598,13 +1671,17 @@ export default function TeamsScreen() {
                 valueField="value"
                 placeholder="Select limit"
                 value={newTeam.weeklyLimitMental}
+                value={newTeam.weeklyLimitMental}
                 onChange={item => {
+                  setNewTeam({...newTeam, weeklyLimitMental: item.value});
                   setNewTeam({...newTeam, weeklyLimitMental: item.value});
                 }}
               />
             </View>
+            </View>
 
             <View style={styles.halfWidth}>
+              <Text style={styles.label}>Weekly Physical Limit</Text>
               <Text style={styles.label}>Weekly Physical Limit</Text>
               <Dropdown
                 style={styles.dropdown}
@@ -1625,7 +1702,9 @@ export default function TeamsScreen() {
                 valueField="value"
                 placeholder="Select limit"
                 value={newTeam.weeklyLimitPhysical}
+                value={newTeam.weeklyLimitPhysical}
                 onChange={item => {
+                  setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
                   setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
                 }}
               />

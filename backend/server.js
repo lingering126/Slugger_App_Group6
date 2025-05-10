@@ -11,6 +11,8 @@ const User = require('./src/models/user');
 const postsRouter = require('./homepage/routes/posts');
 const { router: authRoutes } = require('./routes/auth');
 const authMiddleware = require('./middleware/auth');
+const { router: authRoutes } = require('./routes/auth');
+const authMiddleware = require('./middleware/auth');
 const activityRoutes = require('./routes/activities');
 const statsRoutes = require('./homepage/routes/index');
 const teamRoutes = require('./routes/team');
@@ -118,7 +120,19 @@ transporter.verify()
   });
 
 // CORS configuration - 合并了第二个文件中的更完整配置
+// CORS configuration - 合并了第二个文件中的更完整配置
 const corsOptions = {
+  origin: '*', // Allow all origins in development
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// 增加JSON大小限制，从第二个文件合并过来
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   origin: '*', // Allow all origins in development
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
@@ -136,6 +150,8 @@ app.use(cors(corsOptions));
 
 // Add OPTIONS handling for preflight requests
 app.options('*', cors(corsOptions));
+// Add OPTIONS handling for preflight requests
+app.options('*', cors(corsOptions));
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI, {
@@ -148,10 +164,12 @@ mongoose.connect(process.env.MONGODB_URI, {
   console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
 })
 .catch(err => {
+.catch(err => {
   console.error('MongoDB connection error:', err);
   console.error('Error code:', err.code);
   console.error('Error name:', err.name);
   console.error('Full error:', err);
+  // Continue with in-memory storage as fallback
   // Continue with in-memory storage as fallback
   console.log('Falling back to in-memory storage');
 });
@@ -574,12 +592,22 @@ app.post('/api/auth/login', async (req, res) => {
     console.log('Login successful for:', email);
     
     // Updated to include longTermGoal
+    // Updated to include longTermGoal
     res.status(200).json({
       token,
       user: {
         id: user.id || user._id,
         email: user.email,
         name: user.name,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        longTermGoal: user.longTermGoal || '', // Added longTermGoal
+        activitySettings: user.activitySettings || {  // Added activitySettings
+          physicalActivities: [],
+          mentalActivities: [],
+          bonusActivities: []
+        },
+        status: user.status || 'Active'
         avatarUrl: user.avatarUrl,
         bio: user.bio,
         longTermGoal: user.longTermGoal || '', // Added longTermGoal
@@ -938,6 +966,104 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
   } catch (error) {
     console.error('Resend verification error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Updated PUT endpoint to include longTermGoal
+app.put('/api/user/profile', authMiddleware, async (req, res) => {
+  try {
+    // Get the user ID from the JWT token
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+    
+    console.log(`Updating profile for user ID: ${userId}`);
+    console.log('Update data:', JSON.stringify({
+      ...req.body,
+      avatarUrl: req.body.avatarUrl ? '[AVATAR DATA PRESENT]' : null
+    }));
+    
+    // Update user in database
+    if (mongoose.connection.readyState === 1) {
+      // MongoDB update
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { 
+          $set: {
+            name: req.body.name,
+            bio: req.body.bio,
+            longTermGoal: req.body.longTermGoal, // Added longTermGoal
+            avatarUrl: req.body.avatarUrl,
+            activitySettings: req.body.activitySettings, // Added activitySettings
+            status: req.body.status,
+            updatedAt: new Date()
+          } 
+        },
+        { new: true } // Return the updated document
+      );
+      
+      if (!updatedUser) {
+        console.log(`User not found with ID: ${userId}`);
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // Return updated user data (excluding password)
+      const userResponse = {
+        id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        bio: updatedUser.bio,
+        longTermGoal: updatedUser.longTermGoal, // Added longTermGoal
+        avatarUrl: updatedUser.avatarUrl,
+        activitySettings: updatedUser.activitySettings, // Added activitySettings
+        status: updatedUser.status,
+        createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt
+      };
+      
+      console.log(`Successfully updated profile for user: ${updatedUser.name}`);
+      return res.status(200).json(userResponse);
+    } else {
+      // In-memory update (for development)
+      const userIndex = inMemoryUsers.findIndex(u => u.id === userId);
+      
+      if (userIndex === -1) {
+        console.log(`User not found in memory with ID: ${userId}`);
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // Update user
+      inMemoryUsers[userIndex] = {
+        ...inMemoryUsers[userIndex],
+        name: req.body.name,
+        bio: req.body.bio,
+        longTermGoal: req.body.longTermGoal, // Added longTermGoal
+        avatarUrl: req.body.avatarUrl,
+        activitySettings: req.body.activitySettings, // Added activitySettings
+        status: req.body.status,
+        updatedAt: new Date()
+      };
+      
+      // Return updated user (excluding password)
+      const userResponse = {
+        id: inMemoryUsers[userIndex].id,
+        name: inMemoryUsers[userIndex].name,
+        email: inMemoryUsers[userIndex].email,
+        bio: inMemoryUsers[userIndex].bio,
+        longTermGoal: inMemoryUsers[userIndex].longTermGoal, // Added longTermGoal
+        avatarUrl: inMemoryUsers[userIndex].avatarUrl,
+        activitySettings: inMemoryUsers[userIndex].activitySettings, // Added activitySettings
+        status: inMemoryUsers[userIndex].status,
+        createdAt: inMemoryUsers[userIndex].createdAt,
+        updatedAt: inMemoryUsers[userIndex].updatedAt
+      };
+      
+      console.log(`Successfully updated in-memory profile for: ${inMemoryUsers[userIndex].email}`);
+      return res.status(200).json(userResponse);
+    }
+  } catch (error) {
+    console.error('Profile update error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
