@@ -36,6 +36,8 @@ export default function TeamsScreen() {
   const [personalTargetModal, setPersonalTargetModal] = useState(false);
   const [personalTargetValue, setPersonalTargetValue] = useState(3);
   const [teamToJoin, setTeamToJoin] = useState(null);
+  const [updateTargetModal, setUpdateTargetModal] = useState(false);
+  const [newPersonalTarget, setNewPersonalTarget] = useState(0);
 
   const targetData = [
     { label: 'Select a category', value: '' },
@@ -1063,12 +1065,26 @@ export default function TeamsScreen() {
       </View>
       
       {!editingTargets ? (
-        <View style={styles.targetCard}>
-          <Text style={styles.targetName}>{userTeam.targetName}</Text>
-          <View style={styles.targetValues}>
-            <Text style={styles.targetValue}>Weekly Mental Limit: {userTeam.weeklyLimitMental || 7}</Text>
-            <Text style={styles.targetValue}>Weekly Physical Limit: {userTeam.weeklyLimitPhysical || 7}</Text>
-            <Text style={styles.targetValue}>Total Personal Targets: {calculateTeamTargets(userTeam).total}</Text>
+        <View>
+          <View style={styles.targetCard}>
+            <Text style={styles.targetName}>{userTeam.targetName}</Text>
+            <View style={styles.targetValues}>
+              <Text style={styles.targetValue}>Weekly Mental Limit: {userTeam.weeklyLimitMental || 7}</Text>
+              <Text style={styles.targetValue}>Weekly Physical Limit: {userTeam.weeklyLimitPhysical || 7}</Text>
+              <Text style={styles.targetValue}>Total Personal Targets: {calculateTeamTargets(userTeam).total}</Text>
+            </View>
+          </View>
+          
+          {/* Add explanation for weekly limits */}
+          <View style={styles.limitsExplanationContainer}>
+            <Text style={styles.limitsExplanationTitle}>What are weekly limits?</Text>
+            <Text style={styles.limitsExplanationText}>
+              Weekly limits determine how many activities of each type (mental/physical) you can log per 7-day cycle. 
+              Once you reach both mental and physical limits, you unlock the ability to log additional activities beyond these limits.
+            </Text>
+            <Text style={styles.limitsExplanationExample}>
+              Example: With limits of 6 mental and 6 physical, you must complete 6 of each type before unlocking unlimited logging for the remainder of the cycle.
+            </Text>
           </View>
         </View>
       ) : (
@@ -1273,6 +1289,32 @@ export default function TeamsScreen() {
           </View>
         </View>
       </View>
+
+      {/* Personal Target Update Section - Only visible on first day of cycle */}
+      {isFirstDayOfCycle(userTeam) && (
+        <View style={styles.personalTargetUpdateContainer}>
+          <View style={styles.personalTargetUpdateHeader}>
+            <Text style={styles.personalTargetUpdateTitle}>Your Personal Target</Text>
+            <Text style={styles.personalTargetValue}>
+              Current: {userTeam.members?.find(m => m.id === userId)?.personalTarget || personalTargetValue} points
+            </Text>
+          </View>
+          <Text style={styles.personalTargetUpdateInfo}>
+            You can adjust your personal target on the first day of each 7-day cycle.
+          </Text>
+          <TouchableOpacity 
+            style={styles.updateTargetButton}
+            onPress={() => {
+              // Initialize with current personal target
+              const currentTarget = userTeam.members?.find(m => m.id === userId)?.personalTarget || personalTargetValue;
+              setNewPersonalTarget(currentTarget);
+              setUpdateTargetModal(true);
+            }}
+          >
+            <Text style={styles.updateTargetButtonText}>Update Personal Target</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {renderTeamProgress()}
       {renderTeamMembers()}
@@ -1842,6 +1884,124 @@ export default function TeamsScreen() {
     </Modal>
   );
 
+  // Add a new function to check if today is the first day of the cycle
+  const isFirstDayOfCycle = (team) => {
+    if (!team || !team.cycleInfo) return false;
+    
+    const cycleStart = new Date(team.cycleInfo.cycleStart);
+    const now = new Date();
+    
+    // Check if today's date matches the cycle start date
+    return (
+      now.getUTCFullYear() === cycleStart.getUTCFullYear() &&
+      now.getUTCMonth() === cycleStart.getUTCMonth() &&
+      now.getUTCDate() === cycleStart.getUTCDate()
+    );
+  };
+
+  // Handle updating personal target
+  const handleUpdatePersonalTarget = async () => {
+    if (!userTeam || !userTeam._id) return;
+    
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+      
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      // Update the personal target for this team
+      const response = await fetch(`${apiUrl}/user-team-targets/${userTeam._id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          targetValue: parseInt(newPersonalTarget) // Ensure it's an integer
+        })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update personal target');
+      }
+      
+      // Update the UI
+      Alert.alert('Success', 'Your personal target has been updated for this cycle');
+      setUpdateTargetModal(false);
+      
+      // Reload team activities to update the UI
+      loadTeamMemberActivities();
+      
+    } catch (error) {
+      console.error('Error updating personal target:', error);
+      Alert.alert('Error', error.message || 'Failed to update personal target');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add a new modal for updating personal target
+  const renderUpdatePersonalTargetModal = () => (
+    <Modal
+      visible={updateTargetModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setUpdateTargetModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Update Personal Target</Text>
+          <Text style={styles.modalDescription}>
+            Set your personal activity target for this 7-day cycle. 
+            This represents how many activities you aim to complete during this cycle.
+          </Text>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Your Personal Target</Text>
+            <TextInput
+              style={styles.input}
+              value={String(newPersonalTarget)}
+              onChangeText={(text) => {
+                const numValue = parseInt(text) || 0;
+                if (numValue < 99) {
+                  setNewPersonalTarget(numValue);
+                }
+              }}
+              keyboardType="numeric"
+              placeholder="Enter your target (0-99)"
+              maxLength={2}
+            />
+          </View>
+          
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => setUpdateTargetModal(false)}
+            >
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.saveButton]}
+              onPress={handleUpdatePersonalTarget}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       {userTeam ? (
@@ -1854,6 +2014,7 @@ export default function TeamsScreen() {
 
       {renderCreateTeamModal()}
       {renderPersonalTargetModal()}
+      {renderUpdatePersonalTargetModal()}
     </View>
   );
 }
@@ -2588,5 +2749,74 @@ const styles = StyleSheet.create({
     color: '#7F8C8D',
     fontStyle: 'italic',
     marginBottom: 10,
+  },
+  limitsExplanationContainer: {
+    marginTop: 15,
+    backgroundColor: '#f8f9ff',
+    padding: 15,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#7f8be4',
+  },
+  limitsExplanationTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 8,
+  },
+  limitsExplanationText: {
+    fontSize: 14,
+    color: '#34495e',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  limitsExplanationExample: {
+    fontSize: 13,
+    color: '#7f8be4',
+    fontStyle: 'italic',
+  },
+  personalTargetUpdateContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  personalTargetUpdateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  personalTargetUpdateTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  personalTargetValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#4A90E2',
+  },
+  personalTargetUpdateInfo: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  updateTargetButton: {
+    backgroundColor: '#4A90E2',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  updateTargetButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
