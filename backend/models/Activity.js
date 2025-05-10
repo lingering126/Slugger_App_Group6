@@ -23,6 +23,11 @@ const activitySchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'User ID is required']
   },
+  teamId: { // To associate activity with a specific team for weekly limits
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team',
+    required: false // Optional, as bonus activities might not be team-specific or for users not in a team
+  },
   type: {
     type: String,
     required: [true, 'Activity type is required'],
@@ -262,4 +267,4 @@ activitySchema.methods.getCommentsData = async function() {
 
 const Activity = mongoose.model('Activity', activitySchema);
 
-module.exports = Activity; 
+module.exports = Activity;

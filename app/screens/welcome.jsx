@@ -37,7 +37,7 @@ const slides = [
   {
     id: '3',
     title: 'Daily Consistency',
-    text: 'To encourage consistency, you can log up to 4 activities per category per day. (So don\'t be a weekend warrior, keep active everyday!)',
+    text: 'To encourage consistency, you can log up to 1 physical/mental activity per day.\n You can only log additional activities to help your team after reaching your weekly target. (So don’t be a weekend warrior—stay active every day!)',
     icon: 'calendar-check',
     iconType: 'fa5'
   },

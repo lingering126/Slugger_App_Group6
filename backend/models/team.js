@@ -55,9 +55,13 @@ const teamSchema = new mongoose.Schema({
     ref: 'User'
   }],
   createdAt: {
-    type: Date, // Creation timestamp
-    default: Date.now
-  }
+    type: Date, // Stores the UTC 00:00:00.000 of the creation day
+    required: true,
+    default: function() {
+      const now = new Date();
+      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    }
+  },
 });
 
 // Generate a unique teamId before saving
@@ -73,30 +77,28 @@ teamSchema.pre('validate', async function(next) {
   next();
 });
 
-// Update team targetValue before saving by summing all members' personal target values
+// Pre-save hook for Team model
 teamSchema.pre('save', async function(next) {
+  // createdAt is now handled by schema default.
   try {
-    // Only recalculate if members array has changed or this is a new document
+    // Update team targetValue if members array has changed or this is a new document
     if (this.isNew || this.isModified('members')) {
-      // Get personal target values for all team members
       const userTargets = await UserTarget.find({
         userId: { $in: this.members }
       });
       
-      // Calculate the sum of all personal target values
       let totalValue = 0;
       if (userTargets && userTargets.length > 0) {
         totalValue = userTargets.reduce((sum, target) => sum + (target.targetValue || 1), 0);
       } else {
-        // If no explicit targets are found, use default value for each member
-        totalValue = this.members.length; // Default targetValue is 1 per member
+        // If no explicit targets are found, use default value (1) for each member
+        totalValue = this.members.length; 
       }
-      
       this.targetValue = totalValue;
     }
     next();
   } catch (error) {
-    console.error('Error calculating team targetValue:', error);
+    console.error('Error in team pre-save hook:', error);
     next(error);
   }
 });

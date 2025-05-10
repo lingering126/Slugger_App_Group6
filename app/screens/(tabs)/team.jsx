@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { Dropdown } from 'react-native-element-dropdown';
+import { useRouter } from 'expo-router';
 
 export default function TeamsScreen() {
   const [teams, setTeams] = useState([]);
@@ -16,6 +17,8 @@ export default function TeamsScreen() {
     name: '',
     description: '',
     targetName: '',
+    weeklyLimitPhysical: 7,
+    weeklyLimitMental: 7
     weeklyLimitPhysical: 7,
     weeklyLimitMental: 7
   });
@@ -29,7 +32,14 @@ export default function TeamsScreen() {
   const [teamProgress, setTeamProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [currentUtcTime, setCurrentUtcTime] = useState('');
   const navigation = useNavigation();
+  const router = useRouter();
+  const [personalTargetModal, setPersonalTargetModal] = useState(false);
+  const [personalTargetValue, setPersonalTargetValue] = useState(3);
+  const [teamToJoin, setTeamToJoin] = useState(null);
+  const [updateTargetModal, setUpdateTargetModal] = useState(false);
+  const [newPersonalTarget, setNewPersonalTarget] = useState(0);
 
   const targetData = [
     { label: 'Select a category', value: '' },
@@ -52,10 +62,28 @@ export default function TeamsScreen() {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadTeams();
+      if (userTeam) {
+        loadTeamMemberActivities();
+      }
     });
 
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, userTeam]);
+
+  useEffect(() => {
+    const updateUtcTime = () => {
+      setCurrentUtcTime(new Date().toUTCString());
+    };
+    updateUtcTime();
+    const intervalId = setInterval(updateUtcTime, 1000); // Update every second
+    return () => clearInterval(intervalId); // Cleanup interval on component unmount
+  }, []);
+
+  useEffect(() => {
+    if (userTeam) {
+      loadTeamMemberActivities();
+    }
+  }, [userTeam?._id]);
 
   const loadUserData = async () => {
     try {
@@ -64,6 +92,7 @@ export default function TeamsScreen() {
         const parsedUser = JSON.parse(userData);
         setUserId(parsedUser.id);
         await loadTeams(false); // Don't load from storage by default
+        await loadTeams(false); // Don't load from storage by default
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -71,8 +100,10 @@ export default function TeamsScreen() {
   };
 
   const loadTeams = async (loadFromStorage = false) => {
+  const loadTeams = async (loadFromStorage = false) => {
     try {
       setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         console.log('No token found');
@@ -97,13 +128,35 @@ export default function TeamsScreen() {
       console.log('Loading teams...');
       const teamsData = await teamService.getAllTeams();
       console.log('Teams data:', teamsData);
+      // Only load from storage if explicitly asked to
+      if (loadFromStorage) {
+        // Check for saved userTeam data in AsyncStorage
+        const savedUserTeam = await AsyncStorage.getItem('userTeam');
+        if (savedUserTeam) {
+          try {
+            const parsedTeam = JSON.parse(savedUserTeam);
+            console.log('Found saved user team in AsyncStorage:', parsedTeam);
+            setUserTeam(parsedTeam);
+          } catch (error) {
+            console.error('Error parsing saved team data:', error);
+          }
+        }
+      }
 
+      console.log('Loading teams...');
+      const teamsData = await teamService.getAllTeams();
+      console.log('Teams data:', teamsData);
+
+      if (!Array.isArray(teamsData)) {
+        console.error('Teams data is not an array:', teamsData);
       if (!Array.isArray(teamsData)) {
         console.error('Teams data is not an array:', teamsData);
         setTeams([]);
         return;
       }
 
+      // Display all teams, not just those with members
+      setTeams(teamsData);
       // Display all teams, not just those with members
       setTeams(teamsData);
 
@@ -114,6 +167,7 @@ export default function TeamsScreen() {
         console.log('Current user ID:', parsedUser.id);
         
         const userTeam = teamsData.find(team => {
+        const userTeam = teamsData.find(team => {
           console.log('Checking team:', team._id);
           console.log('Team members:', team.members);
           return team.members && team.members.some(member => {
@@ -123,6 +177,11 @@ export default function TeamsScreen() {
         });
         
         console.log('Found user team:', userTeam);
+        if (userTeam && loadFromStorage) {
+          setUserTeam(userTeam);
+          // Save the team data to AsyncStorage for persistence
+          await AsyncStorage.setItem('userTeam', JSON.stringify(userTeam));
+        }
         if (userTeam && loadFromStorage) {
           setUserTeam(userTeam);
           // Save the team data to AsyncStorage for persistence
@@ -170,13 +229,36 @@ export default function TeamsScreen() {
         }
       } catch (storageError) {
         console.error('Error saving team data to AsyncStorage:', storageError);
+      
+      const teamData = {
+        name: newTeam.name,
+        description: newTeam.description,
+        targetName: newTeam.targetName,
+        weeklyLimitPhysical: parseInt(newTeam.weeklyLimitPhysical),
+        weeklyLimitMental: parseInt(newTeam.weeklyLimitMental)
+      };
+      
+      const createdTeam = await teamService.createTeam(teamData);
+      
+      // Store the newly created team data in AsyncStorage
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          await AsyncStorage.setItem('userTeam', JSON.stringify(createdTeam));
+          console.log('Saved team data to AsyncStorage:', createdTeam);
+        }
+      } catch (storageError) {
+        console.error('Error saving team data to AsyncStorage:', storageError);
       }
+      
       
       setModalVisible(false);
       setNewTeam({
         name: '',
         description: '',
         targetName: '',
+        weeklyLimitPhysical: 7,
+        weeklyLimitMental: 7
         weeklyLimitPhysical: 7,
         weeklyLimitMental: 7
       });
@@ -199,22 +281,6 @@ export default function TeamsScreen() {
 
     try {
       setLoading(true);
-      await teamService.joinTeamById(teamIdToJoin);
-      
-      Alert.alert('Success', 'Joined team successfully');
-      setTeamIdToJoin('');
-      await loadTeams();
-    } catch (error) {
-      console.error('Error joining team by ID:', error);
-      Alert.alert('Error', error.message || 'Failed to join team');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleJoinTeam = async (teamId) => {
-    try {
-      setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
@@ -222,129 +288,128 @@ export default function TeamsScreen() {
       }
 
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-      console.log('Joining team:', teamId);
+      console.log('Finding team with ID:', teamIdToJoin);
       
-      // Change endpoint from /groups/join to /teams/join to match the backend route
-      const response = await fetch(`${apiUrl}/teams/join`, {
-        method: 'POST',
+      // First get the team by ID
+      const response = await fetch(`${apiUrl}/teams/all`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          teamId: teamId  // Use teamId explicitly to avoid confusion
-        })
-      });
-
-      console.log('Join response status:', response.status);
-      const data = await response.json();
-      console.log('Join response data:', data);
-
-      if (response.status === 400 && data.message === 'Already a member') {
-        // If already a member, just update the state
-        const team = teams.find(t => t._id === teamId);
-        if (team) {
-          setUserTeam(team);
-          Alert.alert('Info', 'You are already a member of this team');
-          return;
         }
-      }
-
+      });
+      
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to join team');
+        throw new Error('Failed to fetch teams');
       }
-
-      // Update user team status
-      const team = teams.find(t => t._id === teamId);
-      if (team) {
-        // Initialize edit state
-        setIsEditingTeam(false);
-        setEditedTeam({
-          name: team.name || '',
-          description: team.description || ''
-        });
-        setUserTeam(team);
+      
+      const teamsData = await response.json();
+      const team = teamsData.find(t => t.teamId === teamIdToJoin || t.groupId === teamIdToJoin);
+      
+      if (!team) {
+        throw new Error('Team not found with the provided ID');
       }
-
-      Alert.alert('Success', 'Successfully joined the team');
-      await loadTeams(); // Reload team list
+      
+      // Show personal target modal instead of joining immediately
+      setTeamToJoin(team);
+      setPersonalTargetValue(3); // Default value
+      setPersonalTargetModal(true);
+      setLoading(false);
+      
     } catch (error) {
-      console.error('Error joining team:', error);
+      console.error('Error joining team by ID:', error);
       Alert.alert('Error', error.message || 'Failed to join team');
-    } finally {
       setLoading(false);
     }
   };
 
+  const handleJoinTeam = async (teamId) => {
+    try {
+      const team = teams.find(t => t._id === teamId);
+      if (!team) {
+        Alert.alert('Error', 'Team not found');
+        return;
+      }
+      
+      // Show personal target input modal
+      setTeamToJoin(team);
+      setPersonalTargetValue(3); // Default value
+      setPersonalTargetModal(true);
+      
+    } catch (error) {
+      console.error('Error preparing to join team:', error);
+      Alert.alert('Error', error.message || 'Failed to prepare team join');
+    }
+  };
+
   // Enhanced leave team functionality to ensure state refresh after leaving
-  const handleLeaveTeam = () => {
+  const handleLeaveTeam = async () => {
     if (!userTeam) {
       console.log('No team to leave');
       return;
     }
     
-    console.log('Preparing to leave team:', userTeam._id);
-    
-    // Save team ID for later use
-    const teamIdToLeave = userTeam._id;
-    
-    // Immediately clear user team state and return to team list
-    setUserTeam(null);
-    
-    // Immediately reload team list
-    loadTeams();
-    
-    // Set a timer to delay refresh of team list to ensure state update
-    setTimeout(() => {
-      console.log('Refreshing team list after delay');
-      loadTeams();
-    }, 1000);
-    
-    // Delay refresh again to ensure backend data is updated
-    setTimeout(() => {
-      console.log('Final refresh of team list');
-      loadTeams();
-    }, 2000);
-    
-    // Attempt to call API to leave team in the background
     try {
-      // Get token
-      AsyncStorage.getItem('userToken').then(token => {
-        if (!token) return;
-        
-        const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${apiUrl}/groups/leave`);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-        
-        xhr.onload = function() {
-          console.log('Leave team API response status:', xhr.status);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            console.log('Successfully left team, refreshing team list');
-            // Refresh team list after successful API call
-            loadTeams();
-          } else {
-            console.error('Error leaving team:', xhr.responseText);
-          }
-        };
-        
-        xhr.onerror = function() {
-          console.error('Network error when leaving team');
-        };
-        
-        xhr.send(JSON.stringify({ groupId: teamIdToLeave }));
-      }).catch(err => {
-        console.error('Error getting token:', err);
+      setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+      
+      console.log('Preparing to leave team:', userTeam._id);
+      
+      // Save team ID for later use
+      const teamIdToLeave = userTeam._id;
+      
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      // Call the leave team API endpoint
+      const response = await fetch(`${apiUrl}/teams/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          teamId: teamIdToLeave
+        })
       });
+      
+      if (response.ok) {
+        console.log('Successfully left team');
+        
+        // Clear user team state and team data from AsyncStorage
+        setUserTeam(null);
+        await AsyncStorage.removeItem('userTeam');
+        
+        // Reload the team list
+        await loadTeams();
+        
+        Alert.alert('Success', 'You left the team successfully');
+      } else {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to leave team');
+      }
     } catch (error) {
-      console.error('Error in leave team process:', error);
+      console.error('Error leaving team:', error);
+      Alert.alert('Error', error.message || 'Failed to leave team');
+    } finally {
+      setLoading(false);
     }
   };
   
   // Separate function to handle "Back" button in team list
   const handleBackToTeamList = async () => {
+  const handleBackToTeamList = async () => {
     console.log('Returning to team list without leaving');
+    // Clear stored team data from AsyncStorage
+    try {
+      await AsyncStorage.removeItem('userTeam');
+      console.log('Cleared team data from AsyncStorage');
+    } catch (error) {
+      console.error('Error clearing team data from AsyncStorage:', error);
+    }
     // Clear stored team data from AsyncStorage
     try {
       await AsyncStorage.removeItem('userTeam');
@@ -492,13 +557,190 @@ export default function TeamsScreen() {
     }
   };
 
-  const calculateTeamProgress = (team) => {
-    if (!team.goals.length) return;
-    const totalProgress = team.goals.reduce((sum, goal) => {
-      return sum + (parseInt(goal.current) / parseInt(goal.target)) * 100;
-    }, 0);
-    setTeamProgress(Math.round(totalProgress / team.goals.length));
+  // Load team member activities and update progress
+  const loadTeamMemberActivities = async () => {
+    if (!userTeam || !userTeam._id) return;
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Loading team activities for team:', userTeam._id);
+      
+      // Get the current user ID
+      const userData = await AsyncStorage.getItem('user');
+      let userId = null;
+      if (userData) {
+        const user = JSON.parse(userData);
+        userId = user.id;
+        console.log('Current user ID:', userId);
+      }
+      
+      // Fetch team activities
+      const response = await fetch(`${apiUrl}/teams/${userTeam._id}/activities`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Team activities loaded:', data);
+        
+        // Update userTeam with the activity data
+        const updatedTeam = {...userTeam};
+        
+        // Calculate the total target and completed activities
+        let totalTarget = 0;
+        let totalCompleted = 0;
+        
+        if (data.members && Array.isArray(data.members)) {
+          console.log('Members data received:', data.members.length);
+          
+          // Update member activity counts
+          updatedTeam.members = updatedTeam.members.map(member => {
+            // Get the member ID in a reliable way
+            const memberId = member._id || member.id || 
+                            (member.user && (member.user._id || member.user.id));
+            
+            console.log(`Updating member ${memberId}`);
+            
+            // Find the matching member data
+            const memberData = data.members.find(m => 
+              m.userId === memberId || 
+              m.userId === member._id || 
+              m.userId === member.id ||
+              (member.user && (m.userId === member.user._id || m.userId === member.user.id))
+            );
+            
+            if (memberData) {
+              console.log(`Found member data for ${memberId}:`, memberData);
+              totalTarget += memberData.personalTarget || 0;
+              totalCompleted += memberData.completedActivities || 0;
+              
+              return {
+                ...member,
+                personalTarget: memberData.personalTarget || 0,
+                completedActivities: memberData.completedActivities || 0
+              };
+            } else {
+              console.log(`No member data found for ${memberId}`);
+              return member;
+            }
+          });
+          
+          console.log('Updated members:', updatedTeam.members);
+          
+          // Check if the current user has a personal target in the received data
+          if (userId) {
+            const currentUserData = data.members.find(m => 
+              m.userId === userId || 
+              m.userId.toString() === userId.toString()
+            );
+            
+            if (currentUserData) {
+              console.log('Current user personal target:', currentUserData.personalTarget);
+              // Update the state for the modal
+              setPersonalTargetValue(currentUserData.personalTarget);
+            }
+          }
+          
+          // Update the team target and progress
+          updatedTeam.calculatedTargetValue = totalTarget;
+          const progress = totalTarget > 0 ? Math.round((totalCompleted / totalTarget) * 100) : 0;
+          
+          console.log(`Team target: ${totalTarget}, Completed: ${totalCompleted}, Progress: ${progress}%`);
+          
+          // Store cycle information from the API
+          if (data.cycleInfo) {
+            console.log('Cycle info received:', data.cycleInfo);
+            updatedTeam.cycleInfo = data.cycleInfo;
+          }
+          
+          setUserTeam(updatedTeam);
+          setTeamProgress(progress);
+        }
+      } else {
+        console.error('Failed to load team activities');
+        // Try fallback to fetch team target
+        await fetchTeamTarget();
+      }
+    } catch (error) {
+      console.error('Error loading team activities:', error);
+      // Try fallback to fetch team target
+      await fetchTeamTarget();
+    }
   };
+  
+  // Fallback function to fetch just the team target
+  const fetchTeamTarget = async () => {
+    if (!userTeam || !userTeam._id) return;
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      const response = await fetch(`${apiUrl}/teams/${userTeam._id}/target?recalculate=true`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Team target loaded:', data);
+        
+        const updatedTeam = {...userTeam, 
+          targetValue: data.targetValue,
+          calculatedTargetValue: data.targetValue
+        };
+        
+        setUserTeam(updatedTeam);
+      }
+    } catch (error) {
+      console.error('Error fetching team target:', error);
+    }
+  };
+
+  // Calculate total personal targets and progress - Updated to use direct value from API
+  const calculateTeamTargets = (team) => {
+    if (!team) return { total: 0, completed: 0, progress: 0 };
+    
+    // Use the calculated value from API if available
+    if (team.calculatedTargetValue !== undefined) {
+      const completed = team.members?.reduce((sum, member) => sum + (member.completedActivities || 0), 0) || 0;
+      const progress = team.calculatedTargetValue > 0 
+        ? Math.round((completed / team.calculatedTargetValue) * 100) 
+        : 0;
+      
+      return { 
+        total: team.calculatedTargetValue, 
+        completed, 
+        progress 
+      };
+    }
+    
+    // Fallback to target value in team document
+    const targetValue = team.targetValue || 0;
+    const completed = team.members?.reduce((sum, member) => sum + (member.completedActivities || 0), 0) || 0;
+    const progress = targetValue > 0 ? Math.round((completed / targetValue) * 100) : 0;
+    
+    return { total: targetValue, completed, progress };
+  };
+
+  useEffect(() => {
+    if (userTeam) {
+      const teamTargets = calculateTeamTargets(userTeam);
+      setTeamProgress(teamTargets.progress);
+    }
+  }, [userTeam]);
 
   // Enter team instead of joining (already a member)
   const handleEnterTeam = (team) => {
@@ -509,27 +751,34 @@ export default function TeamsScreen() {
       description: team.description || ''
     });
     setUserTeam(team);
+    
+    // Load team member activities when entering a team
+    setTimeout(() => {
+      loadTeamMemberActivities();
+    }, 500);
   };
   
   const renderTeamCard = ({ item }) => {
-    // Check if user is a team member, simplified logic to accommodate different data structures
+    // Check if user is a team member.
+    // item.members are populated user objects from the backend.
+    // Each member object should have an _id (ObjectId) and/or id (string virtual).
+    // userId is the current logged-in user's ID string.
     const isTeamMember = item.members && Array.isArray(item.members) && item.members.some(member => {
-      // If member is an object and has user property
-      if (typeof member === 'object' && member.user) {
-        return member.user._id === userId || member.user.id === userId;
-      }
-      // If member is a string ID
-      if (typeof member === 'string') {
-        return member === userId;
-      }
-      // If member is an object but has no user property (possibly direct ID)
-      if (typeof member === 'object' && member._id) {
-        return member._id === userId;
+      if (member && userId) { // Ensure both member object and current userId are available
+        // Compare string versions of IDs to be safe
+        const memberIdString = member.id || (member._id ? member._id.toString() : null);
+        return memberIdString === userId;
       }
       return false;
     });
     
-    console.log(`Checking if user ${userId} is member of team ${item.name}: ${isTeamMember}`);
+    // It's helpful to keep this log for debugging if issues persist.
+    console.log(`Team: ${item.name}, Current UserID: ${userId}`);
+    item.members.forEach(m => {
+      const memberIdStr = m.id || (m._id ? m._id.toString() : 'NO_ID');
+      console.log(`  Comparing Member ID: ${memberIdStr} (name: ${m.username || m.name}) with UserID: ${userId}. Match: ${memberIdStr === userId}`);
+    });
+    console.log(`Result for ${item.name} - isTeamMember: ${isTeamMember}`);
     
     return (
       <View style={styles.teamCard}>
@@ -541,6 +790,7 @@ export default function TeamsScreen() {
             <Text style={styles.teamName}>{item.name}</Text>
           </View>
           <View style={styles.teamIdBadge}>
+            <Text style={styles.teamIdBadgeText}>ID: {item.teamId || item.groupId || 'N/A'}</Text>
             <Text style={styles.teamIdBadgeText}>ID: {item.teamId || item.groupId || 'N/A'}</Text>
           </View>
         </View>
@@ -646,6 +896,7 @@ export default function TeamsScreen() {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -693,6 +944,7 @@ export default function TeamsScreen() {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
+      const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
         return;
@@ -731,6 +983,7 @@ export default function TeamsScreen() {
   const handleSaveTargets = async () => {
     try {
       setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         Alert.alert('Error', 'Please log in first');
@@ -772,8 +1025,236 @@ export default function TeamsScreen() {
     }
   };
 
-  // Use the previously defined handleBackToTeamList function
+  // Function to calculate and format the end of the current 7-day cycle
+  const calculateCycleEndDate = (team) => {
+    if (team?.cycleInfo) {
+      // Use the cycleInfo from API response
+      const cycleEnd = new Date(team.cycleInfo.cycleEnd);
+      
+      // Calculate remaining time correctly
+      const now = new Date();
+      const msUntilCycleEnd = cycleEnd.getTime() - now.getTime();
+      
+      // Get full days (use Math.floor to avoid having extra days)
+      const daysUntilCycleEnd = Math.floor(msUntilCycleEnd / (1000 * 60 * 60 * 24));
+      
+      // Get remaining hours after full days are counted
+      const hoursUntilCycleEnd = Math.floor((msUntilCycleEnd % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      
+      return `${daysUntilCycleEnd}d ${hoursUntilCycleEnd}h left (${cycleEnd.toUTCString()})`;
+    }
+    
+    // Fallback to calculating based on team creation date
+    if (!team || !team.createdAt) return 'Unknown';
+    
+    const teamCreationDate = new Date(team.createdAt);
+    const now = new Date();
+    const msSinceCreation = now.getTime() - teamCreationDate.getTime();
+    const daysSinceCreation = Math.floor(msSinceCreation / (1000 * 60 * 60 * 24));
+    const currentCycleNumber = Math.floor(daysSinceCreation / 7);
+    
+    const cycleStartDate = new Date(teamCreationDate);
+    cycleStartDate.setUTCDate(teamCreationDate.getUTCDate() + currentCycleNumber * 7);
+    
+    const cycleEndDate = new Date(cycleStartDate);
+    cycleEndDate.setUTCDate(cycleStartDate.getUTCDate() + 7);
+    
+    const msUntilCycleEnd = cycleEndDate.getTime() - now.getTime();
+    // Use Math.floor instead of Math.ceil for days to avoid overflow
+    const daysUntilCycleEnd = Math.floor(msUntilCycleEnd / (1000 * 60 * 60 * 24));
+    // Calculate remaining hours after full days
+    const hoursUntilCycleEnd = Math.floor((msUntilCycleEnd % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    return `${daysUntilCycleEnd}d ${hoursUntilCycleEnd}h left (${cycleEndDate.toUTCString()})`;
+  };
 
+  // Team members section with personal targets
+  const renderTeamMembers = () => (
+    <View style={styles.membersContainer}>
+      <Text style={styles.sectionTitle}>Team Members ({userTeam.members?.length || 0})</Text>
+      {userTeam.members?.map((member, index) => (
+        <View key={index} style={styles.memberCard}>
+          <Ionicons name="person-circle" size={40} color="#4A90E2" />
+          <View style={styles.memberInfo}>
+            <Text style={styles.memberName}>
+              {member.name || // Directly access name property
+               (member.email ? member.email.split('@')[0] : // If email exists but no name
+                (member.user?.name || // Compatible with old data structure
+                 (member.user?.email ? member.user.email.split('@')[0] : // Compatible with old data structure
+                  'Anonymous')))}
+            </Text>
+            <Text style={styles.memberRole}>{member.role || 'Member'}</Text>
+            <Text style={styles.memberTarget}>Personal Target: {member.personalTarget || 3}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+
+  // Team progress section showing sum of personal targets
+  const renderTeamProgress = () => (
+    <View style={styles.progressContainer}>
+      <Text style={styles.sectionTitle}>Team Progress</Text>
+      <View style={styles.teamTargetInfo}>
+        <Text style={styles.teamTargetText}>
+          Team Target: {calculateTeamTargets(userTeam).total} points 
+          ({calculateTeamTargets(userTeam).completed} completed)
+        </Text>
+      </View>
+      
+      {/* Current cycle information */}
+      <View style={styles.cycleInfoContainer}>
+        <Text style={styles.cycleLabel}>
+          Current 7-Day Cycle: {userTeam?.cycleInfo?.currentCycle || 0}
+        </Text>
+        <Text style={styles.cycleEndInfo}>
+          Cycle Ends: {calculateCycleEndDate(userTeam)}
+        </Text>
+      </View>
+      <Text style={styles.cycleNote}>
+        * Progress resets at the end of each 7-day cycle
+      </Text>
+      
+      <View style={styles.progressBar}>
+        <View style={[styles.progressFill, { width: `${teamProgress}%` }]} />
+      </View>
+      <Text style={styles.progressText}>{teamProgress}% Complete</Text>
+    </View>
+  );
+
+  // Team targets section showing weekly limits
+  const renderTeamTargets = () => (
+    <View style={styles.targetsContainer}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Team Target Settings</Text>
+        <TouchableOpacity onPress={handleEditTargets}>
+          <Ionicons name="create-outline" size={24} color="#4A90E2" />
+        </TouchableOpacity>
+      </View>
+      
+      {!editingTargets ? (
+        <View>
+          <View style={styles.targetCard}>
+            <Text style={styles.targetName}>{userTeam.targetName}</Text>
+            <View style={styles.targetValues}>
+              <Text style={styles.targetValue}>Weekly Mental Limit: {userTeam.weeklyLimitMental || 7}</Text>
+              <Text style={styles.targetValue}>Weekly Physical Limit: {userTeam.weeklyLimitPhysical || 7}</Text>
+              <Text style={styles.targetValue}>Total Personal Targets: {calculateTeamTargets(userTeam).total}</Text>
+            </View>
+          </View>
+          
+          {/* Add explanation for weekly limits */}
+          <View style={styles.limitsExplanationContainer}>
+            <Text style={styles.limitsExplanationTitle}>What are weekly limits?</Text>
+            <Text style={styles.limitsExplanationText}>
+              Weekly limits determine how many activities of each type (mental/physical) you can log per 7-day cycle. 
+              Once you reach both mental and physical limits, you unlock the ability to log additional activities beyond these limits.
+            </Text>
+            <Text style={styles.limitsExplanationExample}>
+              Example: With limits of 6 mental and 6 physical, you must complete 6 of each type before unlocking unlimited logging for the remainder of the cycle.
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.editTargetsContainer}>
+          <Text style={styles.editSectionTitle}>Edit Team Targets</Text>
+          <View style={styles.editTargetField}>
+            <Text style={styles.editTargetLabel}>Target Name:</Text>
+            <Dropdown
+              style={styles.dropdown}
+              placeholderStyle={styles.placeholderStyle}
+              selectedTextStyle={styles.selectedTextStyle}
+              data={targetData}
+              maxHeight={300}
+              labelField="label"
+              valueField="value"
+              placeholder="Select a category"
+              value={editedTeamInfo.targetName}
+              onChange={item => {
+                setEditedTeamInfo({...editedTeamInfo, targetName: item.value});
+              }}
+            />
+          </View>
+          <View style={[styles.formGroup, styles.row]}>
+            <View style={styles.halfWidth}>
+              <Text style={styles.label}>Weekly Mental Limit</Text>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.placeholderStyle}
+                selectedTextStyle={styles.selectedTextStyle}
+                data={[
+                  { label: '0', value: 0 },
+                  { label: '1', value: 1 },
+                  { label: '2', value: 2 },
+                  { label: '3', value: 3 },
+                  { label: '4', value: 4 },
+                  { label: '5', value: 5 },
+                  { label: '6', value: 6 },
+                  { label: '7', value: 7 },
+                ]}
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Select limit"
+                value={newTeam.weeklyLimitMental}
+                onChange={item => {
+                  setNewTeam({...newTeam, weeklyLimitMental: item.value});
+                }}
+              />
+            </View>
+
+            <View style={styles.halfWidth}>
+              <Text style={styles.label}>Weekly Physical Limit</Text>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.placeholderStyle}
+                selectedTextStyle={styles.selectedTextStyle}
+                data={[
+                  { label: '0', value: 0 },
+                  { label: '1', value: 1 },
+                  { label: '2', value: 2 },
+                  { label: '3', value: 3 },
+                  { label: '4', value: 4 },
+                  { label: '5', value: 5 },
+                  { label: '6', value: 6 },
+                  { label: '7', value: 7 },
+                ]}
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Select limit"
+                value={newTeam.weeklyLimitPhysical}
+                onChange={item => {
+                  setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
+                }}
+              />
+            </View>
+          </View>
+          <View style={styles.editActions}>
+            <TouchableOpacity 
+              style={[styles.editButton, styles.cancelButton]}
+              onPress={() => setEditingTargets(false)}
+            >
+              <Text style={styles.editButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.editButton, styles.saveButton]}
+              onPress={handleSaveTargets}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.editButtonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
+  // Fix renderTeamDashboard to use new component functions and remove goals section
   const renderTeamDashboard = () => (
     <ScrollView style={styles.teamDashboard}>
       <View style={styles.headerActions}>
@@ -790,6 +1271,7 @@ export default function TeamsScreen() {
         <View style={styles.teamHeaderContainer}>
           <View style={styles.teamHeader}>
             <Text style={styles.teamName}>{userTeam.name}</Text>
+            <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
             <TouchableOpacity 
               style={styles.editIconButton} 
               onPress={() => setIsEditingTeam(true)}
@@ -844,12 +1326,16 @@ export default function TeamsScreen() {
             <View style={styles.teamIdInner}>
               <Text style={styles.teamIdLabel}>Team ID:</Text>
               <Text style={styles.teamId}>{userTeam.teamId || userTeam.groupId || 'N/A'}</Text>
+              <Text style={styles.teamId}>{userTeam.teamId || userTeam.groupId || 'N/A'}</Text>
             </View>
             <TouchableOpacity 
               style={styles.copyButton}
               onPress={async () => {
                 try {
                   // Use the newly installed expo-clipboard package
+                  const teamId = userTeam.teamId || userTeam.groupId;
+                  if (teamId) {
+                    await Clipboard.setStringAsync(teamId.toString());
                   const teamId = userTeam.teamId || userTeam.groupId;
                   if (teamId) {
                     await Clipboard.setStringAsync(teamId.toString());
@@ -867,150 +1353,44 @@ export default function TeamsScreen() {
               <Text style={styles.copyText}>Copy</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
-
-      <View style={styles.progressContainer}>
-        <Text style={styles.sectionTitle}>Team Progress</Text>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${teamProgress}%` }]} />
-        </View>
-        <Text style={styles.progressText}>{teamProgress}% Complete</Text>
-      </View>
-
-      <View style={styles.membersContainer}>
-        <Text style={styles.sectionTitle}>Team Members ({userTeam.members?.length || 0})</Text>
-        {userTeam.members?.map((member, index) => (
-          <View key={index} style={styles.memberCard}>
-            <Ionicons name="person-circle" size={40} color="#4A90E2" />
-            <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>
-                {member.name || // Directly access name property
-                 (member.email ? member.email.split('@')[0] : // If email exists but no name
-                  (member.user?.name || // Compatible with old data structure
-                   (member.user?.email ? member.user.email.split('@')[0] : // Compatible with old data structure
-                    'Anonymous')))}
-              </Text>
-              <Text style={styles.memberRole}>{member.role || 'Member'}</Text>
-            </View>
+          
+          {/* Team cycle information */}
+          <View style={styles.cycleDateContainer}>
+            <Text style={styles.cycleDateLabel}>Current cycle ends:</Text>
+            <Text style={styles.cycleDateValue}>{calculateCycleEndDate(userTeam)}</Text>
           </View>
-        ))}
+        </View>
       </View>
 
-      {/* Team targets section */}
-      <View style={styles.targetsContainer}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Team Targets</Text>
-          <TouchableOpacity onPress={handleEditTargets}>
-            <Ionicons name="create-outline" size={24} color="#4A90E2" />
+      {/* Personal Target Update Section - Only visible on first day of cycle */}
+      {isFirstDayOfCycle(userTeam) && (
+        <View style={styles.personalTargetUpdateContainer}>
+          <View style={styles.personalTargetUpdateHeader}>
+            <Text style={styles.personalTargetUpdateTitle}>Your Personal Target</Text>
+            <Text style={styles.personalTargetValue}>
+              Current: {userTeam.members?.find(m => m.id === userId)?.personalTarget || personalTargetValue} points
+            </Text>
+          </View>
+          <Text style={styles.personalTargetUpdateInfo}>
+            You can adjust your personal target on the first day of each 7-day cycle.
+          </Text>
+          <TouchableOpacity 
+            style={styles.updateTargetButton}
+            onPress={() => {
+              // Initialize with current personal target
+              const currentTarget = userTeam.members?.find(m => m.id === userId)?.personalTarget || personalTargetValue;
+              setNewPersonalTarget(currentTarget);
+              setUpdateTargetModal(true);
+            }}
+          >
+            <Text style={styles.updateTargetButtonText}>Update Personal Target</Text>
           </TouchableOpacity>
         </View>
-        
-        {!editingTargets ? (
-          <View style={styles.targetCard}>
-            <Text style={styles.targetName}>{userTeam.targetName}</Text>
-            <View style={styles.targetValues}>
-              <Text style={styles.targetValue}>Mental: {userTeam.targetMentalValue}</Text>
-              <Text style={styles.targetValue}>Physical: {userTeam.targetPhysicalValue}</Text>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.editTargetsContainer}>
-            <Text style={styles.editSectionTitle}>Edit Team Targets</Text>
-            <View style={styles.editTargetField}>
-              <Text style={styles.editTargetLabel}>Target Name:</Text>
-              <Dropdown
-                style={styles.dropdown}
-                placeholderStyle={styles.placeholderStyle}
-                selectedTextStyle={styles.selectedTextStyle}
-                data={targetData}
-                maxHeight={300}
-                labelField="label"
-                valueField="value"
-                placeholder="Select a category"
-                value={editedTeamInfo.targetName}
-                onChange={item => {
-                  setEditedTeamInfo({...editedTeamInfo, targetName: item.value});
-                }}
-              />
-            </View>
-            <View style={[styles.formGroup, styles.row]}>
-              <View style={styles.halfWidth}>
-                <Text style={styles.label}>Weekly Mental Limit</Text>
-                <Dropdown
-                  style={styles.dropdown}
-                  placeholderStyle={styles.placeholderStyle}
-                  selectedTextStyle={styles.selectedTextStyle}
-                  data={[
-                    { label: '0', value: 0 },
-                    { label: '1', value: 1 },
-                    { label: '2', value: 2 },
-                    { label: '3', value: 3 },
-                    { label: '4', value: 4 },
-                    { label: '5', value: 5 },
-                    { label: '6', value: 6 },
-                    { label: '7', value: 7 },
-                  ]}
-                  maxHeight={300}
-                  labelField="label"
-                  valueField="value"
-                  placeholder="Select limit"
-                  value={newTeam.weeklyLimitMental}
-                  onChange={item => {
-                    setNewTeam({...newTeam, weeklyLimitMental: item.value});
-                  }}
-                />
-              </View>
+      )}
 
-              <View style={styles.halfWidth}>
-                <Text style={styles.label}>Weekly Physical Limit</Text>
-                <Dropdown
-                  style={styles.dropdown}
-                  placeholderStyle={styles.placeholderStyle}
-                  selectedTextStyle={styles.selectedTextStyle}
-                  data={[
-                    { label: '0', value: 0 },
-                    { label: '1', value: 1 },
-                    { label: '2', value: 2 },
-                    { label: '3', value: 3 },
-                    { label: '4', value: 4 },
-                    { label: '5', value: 5 },
-                    { label: '6', value: 6 },
-                    { label: '7', value: 7 },
-                  ]}
-                  maxHeight={300}
-                  labelField="label"
-                  valueField="value"
-                  placeholder="Select limit"
-                  value={newTeam.weeklyLimitPhysical}
-                  onChange={item => {
-                    setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
-                  }}
-                />
-              </View>
-            </View>
-            <View style={styles.editActions}>
-              <TouchableOpacity 
-                style={[styles.editButton, styles.cancelButton]}
-                onPress={() => setEditingTargets(false)}
-              >
-                <Text style={styles.editButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.editButton, styles.saveButton]}
-                onPress={handleSaveTargets}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.editButtonText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </View>
+      {renderTeamProgress()}
+      {renderTeamMembers()}
+      {renderTeamTargets()}
 
       <View style={styles.teamActions}>
         <TouchableOpacity 
@@ -1271,6 +1651,7 @@ export default function TeamsScreen() {
           <View style={[styles.formGroup, styles.row]}>
             <View style={styles.halfWidth}>
               <Text style={styles.label}>Weekly Mental Limit</Text>
+              <Text style={styles.label}>Weekly Mental Limit</Text>
               <Dropdown
                 style={styles.dropdown}
                 placeholderStyle={styles.placeholderStyle}
@@ -1290,13 +1671,17 @@ export default function TeamsScreen() {
                 valueField="value"
                 placeholder="Select limit"
                 value={newTeam.weeklyLimitMental}
+                value={newTeam.weeklyLimitMental}
                 onChange={item => {
+                  setNewTeam({...newTeam, weeklyLimitMental: item.value});
                   setNewTeam({...newTeam, weeklyLimitMental: item.value});
                 }}
               />
             </View>
+            </View>
 
             <View style={styles.halfWidth}>
+              <Text style={styles.label}>Weekly Physical Limit</Text>
               <Text style={styles.label}>Weekly Physical Limit</Text>
               <Dropdown
                 style={styles.dropdown}
@@ -1317,7 +1702,9 @@ export default function TeamsScreen() {
                 valueField="value"
                 placeholder="Select limit"
                 value={newTeam.weeklyLimitPhysical}
+                value={newTeam.weeklyLimitPhysical}
                 onChange={item => {
+                  setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
                   setNewTeam({...newTeam, weeklyLimitPhysical: item.value});
                 }}
               />
@@ -1354,7 +1741,10 @@ export default function TeamsScreen() {
         <Text style={styles.header}>Teams</Text>
         <TouchableOpacity 
           style={styles.createButton}
-          onPress={() => setModalVisible(true)}
+          onPress={() => {
+            console.log('Create button pressed');
+            router.push('/screens/create-group');
+          }}
         >
           <Ionicons name="add-circle" size={20} color="#fff" />
           <Text style={styles.createButtonText}>Create</Text>
@@ -1410,22 +1800,300 @@ export default function TeamsScreen() {
     </View>
   );
 
+  // Handle setting personal target and joining team
+  const handleSetPersonalTargetAndJoin = async () => {
+    if (!teamToJoin) return;
+    
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+      
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      console.log('Joining team with personal target:', personalTargetValue);
+      
+      // First join the team
+      const joinResponse = await fetch(`${apiUrl}/teams/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          teamId: teamToJoin._id
+        })
+      });
+      
+      const joinData = await joinResponse.json();
+      
+      if (!joinResponse.ok && joinData.message !== 'Already a member') {
+        throw new Error(joinData.message || 'Failed to join team');
+      }
+      
+      console.log('Successfully joined team, setting personal target:', personalTargetValue);
+      
+      // Now set the personal target for this team
+      const targetResponse = await fetch(`${apiUrl}/user-team-targets/${teamToJoin._id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          targetValue: parseInt(personalTargetValue) // Ensure it's an integer
+        })
+      });
+      
+      const targetData = await targetResponse.json();
+      console.log('Target response data:', targetData);
+      
+      if (!targetResponse.ok) {
+        console.error('Failed to set personal target, but joined team');
+      }
+      
+      // Create a new team object with updated personal target info
+      const updatedTeam = {...teamToJoin};
+      
+      // Make sure we apply the personal target to the right user
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        const userId = user.id;
+        
+        // Update the personal target for this user in the members array
+        if (updatedTeam.members) {
+          updatedTeam.members = updatedTeam.members.map(member => {
+            const memberId = member._id || member.id || (member.user && (member.user._id || member.user.id));
+            if (memberId === userId) {
+              return {
+                ...member,
+                personalTarget: parseInt(personalTargetValue)
+              };
+            }
+            return member;
+          });
+        }
+      }
+      
+      // Update local state
+      setUserTeam(updatedTeam);
+      setPersonalTargetModal(false);
+      setTeamToJoin(null);
+      
+      Alert.alert('Success', 'Successfully joined the team with your personal target');
+      
+      // Reload the team data to get fresh information
+      loadTeams();
+      
+      // Load team activities to update the progress
+      setTimeout(() => {
+        loadTeamMemberActivities();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error setting personal target and joining team:', error);
+      Alert.alert('Error', error.message || 'Failed to join team');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add a personal target modal renderer
+  const renderPersonalTargetModal = () => (
+    <Modal
+      visible={personalTargetModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => {
+        setPersonalTargetModal(false);
+        setTeamToJoin(null);
+      }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Set Your Personal Target</Text>
+          <Text style={styles.modalDescription}>
+            How many activities do you want to complete for this team? This will contribute to the team's overall target.
+          </Text>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Your Personal Target</Text>
+            <TextInput
+              style={styles.input}
+              value={String(personalTargetValue)}
+              onChangeText={(text) => {
+                const numValue = parseInt(text) || 0;
+                if (numValue < 99) {
+                  setPersonalTargetValue(numValue);
+                }
+              }}
+              keyboardType="numeric"
+              placeholder="Enter your target (0-99)"
+              maxLength={2}
+            />
+          </View>
+          
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => {
+                setPersonalTargetModal(false);
+                setTeamToJoin(null);
+              }}
+            >
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.saveButton]}
+              onPress={handleSetPersonalTargetAndJoin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Join Team</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Add a new function to check if today is the first day of the cycle
+  const isFirstDayOfCycle = (team) => {
+    if (!team || !team.cycleInfo) return false;
+    
+    const cycleStart = new Date(team.cycleInfo.cycleStart);
+    const now = new Date();
+    
+    // Check if today's date matches the cycle start date
+    return (
+      now.getUTCFullYear() === cycleStart.getUTCFullYear() &&
+      now.getUTCMonth() === cycleStart.getUTCMonth() &&
+      now.getUTCDate() === cycleStart.getUTCDate()
+    );
+  };
+
+  // Handle updating personal target
+  const handleUpdatePersonalTarget = async () => {
+    if (!userTeam || !userTeam._id) return;
+    
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+      
+      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      
+      // Update the personal target for this team
+      const response = await fetch(`${apiUrl}/user-team-targets/${userTeam._id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          targetValue: parseInt(newPersonalTarget) // Ensure it's an integer
+        })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update personal target');
+      }
+      
+      // Update the UI
+      Alert.alert('Success', 'Your personal target has been updated for this cycle');
+      setUpdateTargetModal(false);
+      
+      // Reload team activities to update the UI
+      loadTeamMemberActivities();
+      
+    } catch (error) {
+      console.error('Error updating personal target:', error);
+      Alert.alert('Error', error.message || 'Failed to update personal target');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add a new modal for updating personal target
+  const renderUpdatePersonalTargetModal = () => (
+    <Modal
+      visible={updateTargetModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setUpdateTargetModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Update Personal Target</Text>
+          <Text style={styles.modalDescription}>
+            Set your personal activity target for this 7-day cycle. 
+            This represents how many activities you aim to complete during this cycle.
+          </Text>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Your Personal Target</Text>
+            <TextInput
+              style={styles.input}
+              value={String(newPersonalTarget)}
+              onChangeText={(text) => {
+                const numValue = parseInt(text) || 0;
+                if (numValue < 99) {
+                  setNewPersonalTarget(numValue);
+                }
+              }}
+              keyboardType="numeric"
+              placeholder="Enter your target (0-99)"
+              maxLength={2}
+            />
+          </View>
+          
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => setUpdateTargetModal(false)}
+            >
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.saveButton]}
+              onPress={handleUpdatePersonalTarget}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       {userTeam ? (
         <ScrollView style={styles.scrollView}>
           {renderTeamDashboard()}
-          {renderGoals()}
-          {renderForfeits()}
         </ScrollView>
       ) : (
         renderTeamList()
       )}
 
       {renderCreateTeamModal()}
-
-      {renderGoalModal()}
-      {renderForfeitModal()}
+      {renderPersonalTargetModal()}
+      {renderUpdatePersonalTargetModal()}
     </View>
   );
 }
@@ -2095,6 +2763,139 @@ const styles = StyleSheet.create({
   multilineInput: {
     height: 100,
     textAlignVertical: "top",
-  }
+  },
+  utcTimeText: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginLeft: 8,
+  },
+  cycleDateContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  cycleDateLabel: {
+    fontSize: 14,
+    color: '#7F8C8D',
+  },
+  cycleDateValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  teamTargetInfo: {
+    marginBottom: 10,
+    backgroundColor: '#F8F9FA',
+    padding: 10,
+    borderRadius: 8,
+  },
+  teamTargetText: {
+    fontSize: 14,
+    color: '#2C3E50',
+    fontWeight: '500',
+  },
+  modalDescription: {
+    fontSize: 16,
+    color: '#7F8C8D',
+    marginBottom: 16,
+  },
+  memberTarget: {
+    fontSize: 14,
+    color: '#4A90E2',
+    fontWeight: '500',
+  },
+  cycleInfoContainer: {
+    marginVertical: 8,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+    padding: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4A90E2',
+  },
+  cycleLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 4,
+  },
+  cycleEndInfo: {
+    fontSize: 14,
+    color: '#2C3E50',
+  },
+  cycleNote: {
+    fontSize: 12,
+    color: '#7F8C8D',
+    fontStyle: 'italic',
+    marginBottom: 10,
+  },
+  limitsExplanationContainer: {
+    marginTop: 15,
+    backgroundColor: '#f8f9ff',
+    padding: 15,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#7f8be4',
+  },
+  limitsExplanationTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 8,
+  },
+  limitsExplanationText: {
+    fontSize: 14,
+    color: '#34495e',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  limitsExplanationExample: {
+    fontSize: 13,
+    color: '#7f8be4',
+    fontStyle: 'italic',
+  },
+  personalTargetUpdateContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  personalTargetUpdateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  personalTargetUpdateTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  personalTargetValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#4A90E2',
+  },
+  personalTargetUpdateInfo: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  updateTargetButton: {
+    backgroundColor: '#4A90E2',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  updateTargetButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
-

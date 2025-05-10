@@ -28,8 +28,18 @@ const userService = {
           const profileData = await response.json();
           
           // Combine user and profile data
+          // Ensure 'id' is the string ID from the populated 'user' object or the user ID itself.
+          let userIdStr = null;
+          if (profileData.user) {
+            if (typeof profileData.user === 'string') {
+              userIdStr = profileData.user; // Should be the ID string
+            } else if (typeof profileData.user === 'object') {
+              // If user is populated, it's an object. Prefer .id (virtual) or ._id.
+              userIdStr = profileData.user.id || (profileData.user._id ? profileData.user._id.toString() : null);
+            }
+          }
           const userData = {
-            id: profileData.user,
+            id: userIdStr,
             name: profileData.name,
             email: profileData.user?.email || '',
             username: profileData.user?.username || '',
@@ -157,37 +167,39 @@ const userService = {
           await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
           return updatedUser;
         } else {
-          console.warn(`Failed to update profile: ${response.status}`);
+          // If the primary /api/profiles endpoint fails, parse the error and throw it.
+          const errorData = await response.json().catch(() => ({ message: `Failed to update profile. Status: ${response.status}` }));
+          console.error('Failed to update profile via /api/profiles:', errorData);
+          throw new Error(errorData.message || `Server error: ${response.status}`);
         }
-      } catch (profileError) {
-        console.warn('Profile API error:', profileError.message);
+      } catch (profileUpdateAttemptError) {
+        // This catch handles errors from the fetch call itself (network error) 
+        // or from parsing the JSON if the primary call failed.
+        console.error('Error during primary profile update attempt (/api/profiles):', profileUpdateAttemptError);
+        // Instead of falling back, we re-throw to ensure EditProfile.jsx handles it.
+        // If fallback logic is desired for specific network errors, it can be added here.
+        throw profileUpdateAttemptError; 
       }
-      
-      // Fallback to legacy user API
-      console.log('Falling back to user API endpoint');
-      const response = await fetch(`${API_BASE_URL}/user/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(userData)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to update profile: ${response.status}`);
-      }
-      
-      const updatedUser = await response.json();
-      
-      // Update local storage with server response
-      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
-      
-      return updatedUser;
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      
-      // Fallback: If server is unavailable, update local storage only
+      // Fallback logic removed to ensure errors from primary endpoint are handled.
+      // If legacy API fallback is strictly needed, it would require more nuanced error checking.
+    } catch (error) { // This is the outermost catch for userService.updateUserProfile
+      console.error('Overall error in updateUserProfile:', error);
+      // The original fallback to local storage update for network errors can remain if desired,
+      // but it won't be reached if the API call (even if failed with 500) completes.
+      // For clarity, let's ensure any error from API attempts is thrown.
+      // The local storage fallback below is more for offline-first, which is complex.
+      // For now, let's remove the local storage fallback to simplify and ensure server errors are surfaced.
+      // console.warn('Falling back to local storage update');
+      // try {
+      //   const userJson = await AsyncStorage.getItem('user');
+      //   const currentUser = userJson ? JSON.parse(userJson) : {};
+      //   const updatedUserData = { ...currentUser, ...userData, updatedAt: new Date().toISOString() };
+      //   await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
+      //   return updatedUserData;
+      // } catch (fallbackError) {
+      //   console.error('Fallback error:', fallbackError);
+      // }
+      throw error; // Re-throw the error to be handled by the calling component
       console.warn('Falling back to local storage update');
       try {
         // Get current user data first
@@ -341,7 +353,8 @@ const groupService = {
       }
       
       // Make API request to get user's groups
-      const response = await fetch(`${API_BASE_URL}/groups`, {
+      // Corrected endpoint from /groups to /teams
+      const response = await fetch(`${API_BASE_URL}/teams`, { 
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -356,86 +369,21 @@ const groupService = {
       
       // Get current user for updating member data
       const currentUserJson = await AsyncStorage.getItem('user');
-      const currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
-      
-      // Process groups to handle populated vs unpopulated members
-      const processedGroups = await Promise.all(groups.map(async (group) => {
-        // Check if members is an array of IDs or objects
-        const populatedMembers = await Promise.all((group.members || []).map(async (member) => {
-          // If member is just an ID string or ObjectId reference
-          if (typeof member === 'string' || (member && !member.name && (member._id || member.id))) {
-            const memberId = typeof member === 'string' ? member : (member._id || member.id);
-            
-            // If this is the current user, use current user data
-            if (currentUser && (memberId === currentUser._id || memberId === currentUser.id)) {
-              // Return user with a consistent id field
-              return {
-                id: currentUser._id || currentUser.id, // Choose one consistent id field
-                name: currentUser.name,
-                email: currentUser.email,
-                bio: currentUser.bio,
-                avatarUrl: currentUser.avatarUrl,
-                // Include other needed fields but avoid duplicate IDs
-              };
-            }
-            
-            // Otherwise fetch user data from API
-            try {
-              const userData = await userService.getUserById(memberId);
-              if (userData) {
-                // Return user with consistent ID field
-                return {
-                  id: userData._id || userData.id, // Choose one consistent id field
-                  name: userData.name,
-                  email: userData.email,
-                  bio: userData.bio || '',
-                  avatarUrl: userData.avatarUrl,
-                  // Include other needed fields
-                };
-              } else {
-                // Return minimal user info with only id field
-                return { 
-                  id: memberId,  // Use only one ID field
-                  name: `Member ${memberId.substring(0, 4)}` 
-                };
-              }
-            } catch (err) {
-              console.error(`Error fetching member ${memberId}:`, err);
-              // Return minimal user info with only id field
-              return { 
-                id: memberId,  // Use only one ID field
-                name: `Member ${memberId.substring(0, 4)}` 
-              };
-            }
-          }
-          
-          // If it's already a user object but it's the current user, update with latest data
-          if (currentUser && (member._id === currentUser._id || member.id === currentUser.id)) {
-            // Merge, but ensure only one ID field
+      // Backend now populates members with 'email username name'.
+      // The complex client-side processing can be simplified.
+      // We just need to ensure each member object has a consistent 'id' field (string).
+      const processedGroups = groups.map(group => {
+        const processedMembers = (group.members || []).map(member => {
+          if (member && typeof member === 'object') {
             return {
-              id: currentUser._id || currentUser.id, // Choose one consistent id field
-              name: currentUser.name,
-              email: currentUser.email,
-              bio: currentUser.bio || '',
-              avatarUrl: currentUser.avatarUrl,
-              // Include other needed fields
               ...member,
-              _id: undefined // Remove the _id field to prevent duplication
+              id: member.id || (member._id ? member._id.toString() : undefined)
             };
           }
-          
-          // Otherwise return as is, but ensure only one ID field
-          if (member._id && member.id) {
-            // If both fields exist, keep only one
-            const { _id, ...rest } = member;
-            return rest; // Return object without _id
-          }
-          return member;
-        }));
-        
-        return { ...group, members: populatedMembers };
-      }));
-      
+          return member; // Should not happen if backend populates correctly
+        });
+        return { ...group, members: processedMembers };
+      });
       return processedGroups;
     } catch (error) {
       console.error('Error fetching user groups with populated members:', error);
@@ -470,79 +418,21 @@ const groupService = {
       // Get group data
       const group = await response.json();
       
-      // Process members similar to getUserGroups method
-      const currentUserJson = await AsyncStorage.getItem('user');
-      const currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
-      
-      const populatedMembers = await Promise.all((group.members || []).map(async (member) => {
-        if (typeof member === 'string' || (member && !member.name && (member._id || member.id))) {
-          const memberId = typeof member === 'string' ? member : (member._id || member.id);
-          
-          if (currentUser && (memberId === currentUser._id || memberId === currentUser.id)) {
-            // Return user with a consistent id field
-            return {
-              id: currentUser._id || currentUser.id, // Choose one consistent id field
-              name: currentUser.name,
-              email: currentUser.email,
-              bio: currentUser.bio || '',
-              avatarUrl: currentUser.avatarUrl,
-              // Include other needed fields
-            };
-          }
-          
-          try {
-            const userData = await userService.getUserById(memberId);
-            if (userData) {
-              // Return user with consistent ID field
-              return {
-                id: userData._id || userData.id, // Choose one consistent id field
-                name: userData.name,
-                email: userData.email,
-                bio: userData.bio || '',
-                avatarUrl: userData.avatarUrl,
-                // Include other needed fields
-              };
-            } else {
-              // Return minimal user info with only id field
-              return { 
-                id: memberId,  // Use only one ID field
-                name: `Member ${memberId.substring(0, 4)}` 
-              };
-            }
-          } catch (err) {
-            console.error(`Error fetching member ${memberId}:`, err);
-            // Return minimal user info with only id field
-            return { 
-              id: memberId,  // Use only one ID field
-              name: `Member ${memberId.substring(0, 4)}` 
-            };
-          }
-        }
-        
-        if (currentUser && (member._id === currentUser._id || member.id === currentUser.id)) {
-          // Merge, but ensure only one ID field
+      // If team details are fetched, members should already be populated by the backend.
+      // The complex client-side member processing might be redundant if backend populates correctly.
+      // For now, keeping the existing client-side processing logic, but it's a candidate for review.
+      // Backend route GET /api/teams/:teamId now populates members.
+      // Simplify client-side processing.
+      const processedMembers = (group.members || []).map(member => {
+        if (member && typeof member === 'object') {
           return {
-            id: currentUser._id || currentUser.id, // Choose one consistent id field
-            name: currentUser.name,
-            email: currentUser.email,
-            bio: currentUser.bio || '',
-            avatarUrl: currentUser.avatarUrl,
-            // Include other needed fields
             ...member,
-            _id: undefined // Remove the _id field to prevent duplication
+            id: member.id || (member._id ? member._id.toString() : undefined)
           };
         }
-        
-        // Otherwise return as is, but ensure only one ID field
-        if (member._id && member.id) {
-          // If both fields exist, keep only one
-          const { _id, ...rest } = member;
-          return rest; // Return object without _id
-        }
         return member;
-      }));
-      
-      return { ...group, members: populatedMembers };
+      });
+      return { ...group, members: processedMembers };
     } catch (error) {
       console.error(`Error fetching group ${groupId}:`, error);
       return null;
