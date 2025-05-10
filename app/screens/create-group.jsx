@@ -29,7 +29,7 @@ export default function CreateGroupScreen() {
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
   const router = useRouter(); // Router for navigation
 
-  // 定义下拉菜单数据
+  // Define the dropdown menu data
   const targetData = [
     { label: 'Select a category', value: '' },
     { label: 'Target 1', value: 'Target 1' },
