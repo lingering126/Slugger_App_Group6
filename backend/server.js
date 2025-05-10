@@ -11,8 +11,6 @@ const User = require('./src/models/user');
 const postsRouter = require('./homepage/routes/posts');
 const { router: authRoutes } = require('./routes/auth');
 const authMiddleware = require('./middleware/auth');
-const { router: authRoutes } = require('./routes/auth');
-const authMiddleware = require('./middleware/auth');
 const activityRoutes = require('./routes/activities');
 const statsRoutes = require('./homepage/routes/index');
 const teamRoutes = require('./routes/team');
@@ -120,19 +118,7 @@ transporter.verify()
   });
 
 // CORS configuration - 合并了第二个文件中的更完整配置
-// CORS configuration - 合并了第二个文件中的更完整配置
 const corsOptions = {
-  origin: '*', // Allow all origins in development
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
-
-// 增加JSON大小限制，从第二个文件合并过来
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   origin: '*', // Allow all origins in development
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
@@ -150,8 +136,6 @@ app.use(cors(corsOptions));
 
 // Add OPTIONS handling for preflight requests
 app.options('*', cors(corsOptions));
-// Add OPTIONS handling for preflight requests
-app.options('*', cors(corsOptions));
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI, {
@@ -164,12 +148,10 @@ mongoose.connect(process.env.MONGODB_URI, {
   console.log('Database connection string:', process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
 })
 .catch(err => {
-.catch(err => {
   console.error('MongoDB connection error:', err);
   console.error('Error code:', err.code);
   console.error('Error name:', err.name);
   console.error('Full error:', err);
-  // Continue with in-memory storage as fallback
   // Continue with in-memory storage as fallback
   console.log('Falling back to in-memory storage');
 });
@@ -592,22 +574,12 @@ app.post('/api/auth/login', async (req, res) => {
     console.log('Login successful for:', email);
     
     // Updated to include longTermGoal
-    // Updated to include longTermGoal
     res.status(200).json({
       token,
       user: {
         id: user.id || user._id,
         email: user.email,
         name: user.name,
-        avatarUrl: user.avatarUrl,
-        bio: user.bio,
-        longTermGoal: user.longTermGoal || '', // Added longTermGoal
-        activitySettings: user.activitySettings || {  // Added activitySettings
-          physicalActivities: [],
-          mentalActivities: [],
-          bonusActivities: []
-        },
-        status: user.status || 'Active'
         avatarUrl: user.avatarUrl,
         bio: user.bio,
         longTermGoal: user.longTermGoal || '', // Added longTermGoal

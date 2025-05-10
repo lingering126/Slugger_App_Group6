@@ -93,15 +93,6 @@ export default function CreateGroupScreen() {
     { label: '6', value: 6 },
     { label: '7', value: 7 },
   ];
-  const personalTargetData = [
-    { label: '1', value: 1 },
-    { label: '2', value: 2 },
-    { label: '3', value: 3 },
-    { label: '4', value: 4 },
-    { label: '5', value: 5 },
-    { label: '6', value: 6 },
-    { label: '7', value: 7 },
-  ];
 
   // Function to handle the creation of a new group
   const handleCreateGroup = async () => {
@@ -132,9 +123,6 @@ export default function CreateGroupScreen() {
       const token = await AsyncStorage.getItem('userToken');
       console.log('Token retrieved:', token ? 'Token exists' : 'No token found');
       
-      const token = await AsyncStorage.getItem('userToken');
-      console.log('Token retrieved:', token ? 'Token exists' : 'No token found');
-      
       if (!token) {
         throw new Error('No authentication token found');
       }
@@ -145,12 +133,10 @@ export default function CreateGroupScreen() {
 
       // Send a POST request to create the group
       const response = await fetch(`${apiUrl}/teams`, {
-      const response = await fetch(`${apiUrl}/teams`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: groupName,
@@ -164,12 +150,7 @@ export default function CreateGroupScreen() {
       // Log response status for debugging
       console.log('API response status:', response.status);
       
-
-      // Log response status for debugging
-      console.log('API response status:', response.status);
-      
       const data = await response.json();
-      console.log('API response data:', data);
       console.log('API response data:', data);
 
       // Check if the response is successful
@@ -221,15 +202,11 @@ export default function CreateGroupScreen() {
       if (Platform.OS === 'web') {
         alert(`Team "${groupName}" created successfully!`);
         router.replace('/screens/(tabs)/team'); // Navigate directly to team screen
-        alert(`Team "${groupName}" created successfully!`);
-        router.replace('/screens/(tabs)/team'); // Navigate directly to team screen
       } else {
-        Alert.alert('Success', `Team "${groupName}" created successfully!`, [
         Alert.alert('Success', `Team "${groupName}" created successfully!`, [
           {
             text: 'OK',
-            onPress: () => router.replace('/screens/(tabs)/team'),
-            onPress: () => router.replace('/screens/(tabs)/team'),
+            onPress: () => router.replace('/screens/(tabs)/team')
           },
         ]);
       }
