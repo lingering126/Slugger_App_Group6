@@ -28,6 +28,10 @@ const activitySchema = new mongoose.Schema({
     ref: 'Team',
     required: false // Optional, as bonus activities might not be team-specific or for users not in a team
   },
+  teamsId: [{ // Array of all teams the user was part of when creating this activity
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team'
+  }],
   type: {
     type: String,
     required: [true, 'Activity type is required'],
@@ -184,6 +188,8 @@ activitySchema.methods.toResponseFormat = function() {
     points: this.points,
     status: this.status,
     userId: this.userId,
+    teamId: this.teamId,
+    teamsId: this.teamsId,
     icon: this.icon,
     likes: this.likes,
     comments: this.comments.map(comment => ({

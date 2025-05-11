@@ -1,76 +1,179 @@
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ScrollView, SafeAreaView, ImageBackground } from "react-native";
-import { useState } from "react";
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ScrollView, SafeAreaView, ImageBackground, ActivityIndicator } from "react-native";
+import { useState, useEffect } from "react";
 import { LineChart } from "react-native-chart-kit";
 import StatBox from "../components/StatBox";
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import teamService from "../../services/teamService";
+import { Dropdown } from 'react-native-element-dropdown';
+import axios from 'axios';
+import { API_URL } from '../../config';
 
-const avatars = {
-  john: "https://randomuser.me/api/portraits/men/1.jpg",
-  jim: "https://randomuser.me/api/portraits/men/2.jpg",
-  you: "https://randomuser.me/api/portraits/women/1.jpg",
-  alice: "https://randomuser.me/api/portraits/women/2.jpg",
-  cleo: "https://randomuser.me/api/portraits/women/3.jpg",
-  sam: "https://randomuser.me/api/portraits/men/3.jpg",
-  jade: "https://randomuser.me/api/portraits/women/4.jpg",
-};
-
-const mockData = {
-  "6H": [75, 78, 80, 82, 85, 88], // 6 hours data
-  "12H": [65, 75, 72, 86, 77, 82, 74, 75, 72, 80, 82, 78], // 12 hours data
-  "24H": [0, 20, 40, 50, 88, 90, 87, 85, 92, 95, 93, 90, 88, 85, 87, 90, 92, 95, 93, 90, 88, 85, 87, 90], // 24 hours data
-  "1W": [65, 68, 70, 72, 75, 78, 80], // 1 week data
-  "1Y": [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 92, 88], // 1 year data
+// Helper to get auth token for axios
+const getAuthAxios = async () => {
+  const token = await AsyncStorage.getItem('userToken');
+  const instance = axios.create({
+    baseURL: API_URL,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: token ? `Bearer ${token}` : ''
+    }
+  });
+  return instance;
 };
 
 export default function AnalyticsScreen() {
-  const [timeRange, setTimeRange] = useState("12H");
+  const [timeRange, setTimeRange] = useState("24H");
   const [tooltipData, setTooltipData] = useState(null);
 
-  const generateChartData = () => {
-    let labels, data, fullLabels;
-    switch (timeRange) {
-      case "6H":
-        labels = ["6h", "5h", "4h", "3h", "2h", "1h"];
-        fullLabels = ["6 hours ago", "5 hours ago", "4 hours ago", "3 hours ago", "2 hours ago", "1 hour ago"];
-        data = mockData["6H"];
-        break;
-      case "12H":
-        labels = ["12h", "11h", "10h", "9h", "8h", "7h", "6h", "5h", "4h", "3h", "2h", "1h"];
-        fullLabels = ["12 hours ago", "11 hours ago", "10 hours ago", "9 hours ago", "8 hours ago", "7 hours ago", "6 hours ago", "5 hours ago", "4 hours ago", "3 hours ago", "2 hours ago", "1 hour ago"];
-        data = mockData["12H"];
-        break;
-      case "24H":
-        labels = ["24", "22", "20", "18", "16", "14", "12", "10", "8", "6", "4", "2", ];
-        fullLabels = ["24 hours ago", "23 hours ago", "22 hours ago", "21 hours ago", "20 hours ago", "19 hours ago", "18 hours ago", "17 hours ago", "16 hours ago", "15 hours ago", "14 hours ago", "13 hours ago", "12 hours ago", "11 hours ago", "10 hours ago", "9 hours ago", "8 hours ago", "7 hours ago", "6 hours ago", "5 hours ago", "4 hours ago", "3 hours ago", "2 hours ago", "1 hour ago", "Now"];
-        data = mockData["24H"];
-        break;
-      case "1W":
-        labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-        fullLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-        data = mockData["1W"];
-        break;
-      case "1Y":
-        labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        fullLabels = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        data = mockData["1Y"];
-        break;
-      default:
-        labels = ["12h", "11h", "10h", "9h", "8h", "7h", "6h", "5h", "4h", "3h", "2h", "1h"];
-        fullLabels = ["12 hours ago", "11 hours ago", "10 hours ago", "9 hours ago", "8 hours ago", "7 hours ago", "6 hours ago", "5 hours ago", "4 hours ago", "3 hours ago", "2 hours ago", "1 hour ago"];
-        data = mockData["12H"];
-    }
+  // new states
+  const [teams, setTeams] = useState([]);
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [overview, setOverview] = useState(null);
+  const [chartState, setChartState] = useState({ labels: [], fullLabels: [], data: [] });
+  const [isPersonal, setIsPersonal] = useState(false); // toggle
+  const [userId, setUserId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [memberProgress, setMemberProgress] = useState([]);
+  const [personalOverview, setPersonalOverview] = useState(null);
 
+  // Load user & teams on mount
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const userObj = JSON.parse(userJson);
+          setUserId(userObj.id || userObj._id);
+        }
+
+        const userTeams = await teamService.getUserTeams();
+        setTeams(userTeams);
+        if (userTeams && userTeams.length) {
+          // default last team
+          const lastTeam = userTeams[userTeams.length - 1];
+          setSelectedTeam(lastTeam);
+        }
+      } catch (err) {
+        console.error('Error initializing analytics screen', err);
+      }
+    };
+    init();
+  }, []);
+
+  // Fetch analytics whenever team, range, or personal toggle changes
+  useEffect(() => {
+    if (!selectedTeam) return;
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const api = await getAuthAxios();
+        
+        // Overview - According to the selected mode, get different data
+        const overviewRes = await api.get(`/analytics/overview/${selectedTeam._id}`);
+        setOverview(overviewRes.data);
+        
+        // If it's personal mode, also get personal overview data
+        if (isPersonal && userId) {
+          try {
+            const personalOverviewRes = await api.get(`/analytics/user-overview/${selectedTeam._id}/${userId}`);
+            setPersonalOverview(personalOverviewRes.data);
+          } catch (err) {
+            console.error('Error fetching personal overview:', err.message);
+          }
+        }
+
+        // Timeline
+        let timelineUrl = isPersonal
+          ? `/analytics/user-timeline/${selectedTeam._id}/${userId}?range=${timeRange}`
+          : `/analytics/timeline/${selectedTeam._id}?range=${timeRange}`;
+        const timelineRes = await api.get(timelineUrl);
+        const timelineData = timelineRes.data.data;
+        
+        console.log(`${timeRange} Pattern Data:`, JSON.stringify(timelineData.data).substring(0, 100) + '...');
+        
+        // timelineData has { labels, fullLabels, data }
+        setChartState({
+          labels: timelineData.labels || [],
+          fullLabels: timelineData.fullLabels || [],
+          data: timelineData.data || [] // Keep original data, no pre-processing
+        });
+        
+        // Get member progress
+        const memberProgressRes = await api.get(`/analytics/member-progress/${selectedTeam._id}`);
+        const memberProgressData = memberProgressRes.data || [];
+        
+        // Sort member progress by score (descending)
+        const sortedMemberProgress = [...memberProgressData].sort((a, b) => b.score - a.score);
+        
+        // Add ranking identifier to members (handle same score situation)
+        let currentRank = 1;
+        let prevScore = -1;
+        const rankedMembers = sortedMemberProgress.map((member, index) => {
+          // If the score is different from the previous one, update the current rank to the actual index+1
+          if (member.score !== prevScore) {
+            currentRank = index + 1;
+          }
+          prevScore = member.score;
+          
+          // Only users with a score greater than 0 have a rank
+          const rank = member.score > 0 ? currentRank : 0;
+          
+          return {
+            ...member,
+            rank
+          };
+        });
+        
+        setMemberProgress(rankedMembers);
+      } catch (err) {
+        console.error('Error fetching analytics', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [selectedTeam, timeRange, isPersonal]);
+
+  // Chart config generation based on chartState
+  const generateChartData = () => {
+    // Process label display for 24H unit, display one every hour
+    let displayLabels = chartState.labels;
+    if (timeRange === '24H' && chartState.labels.length > 12) {
+      displayLabels = chartState.labels.map((label, index) => {
+        // Display one every 2 indexes, others show empty strings
+        return index % 2 === 0 ? label : '';
+      });
+    }
+    
+    // Extract chart data
+    let dataValues = [];
+    if (Array.isArray(chartState.data)) {
+      if (timeRange === '1Y') {
+        // 1Y mode, data is an array of objects, each object has a value property
+        dataValues = chartState.data.map(item => 
+          typeof item === 'object' && item.value !== undefined 
+            ? Math.round(item.value) 
+            : 0
+        );
+      } else {
+        // Other modes, data is an array of numbers
+        dataValues = chartState.data.map(val => Math.round(val));
+      }
+    }
+    
     return {
-      labels,
+      labels: displayLabels,
       datasets: [
         {
-          data,
+          data: dataValues,
           color: (opacity = 1) => `rgba(58, 136, 145, ${opacity})`,
           strokeWidth: 2,
         },
       ],
-      fullLabels,
+      fullLabels: chartState.fullLabels,
+      rawData: chartState.data, // Pass original data to the chart
     };
   };
 
@@ -78,34 +181,37 @@ export default function AnalyticsScreen() {
 
   const handleDataPointClick = (data) => {
     const index = data.index;
-    const value = data.value;
-    const label = chartData.fullLabels[index];
+    if (!chartData.fullLabels[index]) return;
     
-    setTooltipData({
-      value,
-      label,
-      x: data.x,
-      y: data.y,
-      index: data.index,
-      dataPointX: data.x,
-      dataPointY: data.y,
+    let value = data.value;
+    let label = chartData.fullLabels[index];
+    let additionalInfo = null;
+    
+    // Get completion data for 1Y mode
+    if (timeRange === '1Y' && Array.isArray(chartData.rawData) && chartData.rawData[index]) {
+      const rawPoint = chartData.rawData[index]; // Get directly from original data
+      if (rawPoint.cycleCount !== undefined && rawPoint.fullyCompletedCycleCount !== undefined) {
+        additionalInfo = {
+          cycleCount: rawPoint.cycleCount,
+          fullyCompletedCycleCount: rawPoint.fullyCompletedCycleCount
+        };
+        console.log(`Clicked ${label}, completion data:`, additionalInfo);
+      }
+    }
+    
+    setTooltipData({ 
+      value, 
+      label, 
+      x: data.x, 
+      y: data.y, 
+      index,
+      additionalInfo 
     });
     
-    // Auto hide tooltip after 5 seconds
-    setTimeout(() => {
-      setTooltipData(null);
-    }, 5000);
+    setTimeout(() => setTooltipData(null), 3500);
   };
 
-  // 调整计算函数以更精确
-  const getVerticalLineHeight = (yPosition) => {
-    // Chart effective height is about 180px, with 20px space at the bottom for labels
-    const chartHeight = 180;
-    const topOffset = 8; // Some space above the data point
-    
-    // Calculate the distance from data point to chart bottom edge
-    return chartHeight - (yPosition - topOffset);
-  };
+  const rangeOptions = ["24H", "1W", "1M", "1Y"];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -125,10 +231,66 @@ export default function AnalyticsScreen() {
               <Ionicons name="analytics" size={43} color="#3A8891" />
             </View>
 
-            <StatBox />
+            {/* Team Selector */}
+            <View style={styles.teamSelectorContainer}>
+              <Text style={styles.teamSelectorLabel}>Current Team</Text>
+              <View style={styles.teamSelectorCardContainer}>
+                <Dropdown
+                  style={styles.teamSelectorDropdown}
+                  placeholderStyle={styles.teamSelectorPlaceholder}
+                  selectedTextStyle={styles.teamSelectorSelectedText}
+                  containerStyle={styles.teamSelectorContainerStyle}
+                  itemContainerStyle={styles.teamSelectorItemContainer}
+                  itemTextStyle={styles.teamSelectorItemText}
+                  activeColor="rgba(58, 136, 145, 0.1)"
+                  showsVerticalScrollIndicator={false}
+                  data={teams.map(t => ({ label: t.name, value: t._id }))}
+                  labelField="label"
+                  valueField="value"
+                  placeholder={teams.length ? 'Select Team' : 'No Team'}
+                  value={selectedTeam?._id}
+                  onChange={item => {
+                    const teamObj = teams.find(t => t._id === item.value);
+                    setSelectedTeam(teamObj);
+                  }}
+                  renderLeftIcon={() => (
+                    <Ionicons name="people" style={styles.teamSelectorIcon} size={20} color="#3A8891" />
+                  )}
+                />
+              </View>
+            </View>
 
-            {/* Avatars Section */}
-            <View style={styles.avatarSection}>
+            {/* Stat Box */}
+            {isPersonal ? (
+              // Personal mode - Display personal overview
+              personalOverview ? (
+                <StatBox
+                  total={personalOverview.totalScore}
+                  groupTarget={personalOverview.individualTarget}
+                  percentOfTarget={personalOverview.percentageOfTarget}
+                  percentOfTimeGone={personalOverview.percentageOfTimeGone}
+                  isPersonal={true}
+                />
+              ) : (
+                <StatBox />
+              )
+            ) : (
+              // Team mode - Display team overview
+              overview ? (
+                <StatBox
+                  total={overview.totalScore}
+                  groupTarget={overview.groupTarget}
+                  percentOfTarget={overview.percentageOfTarget}
+                  percentOfTimeGone={overview.percentageOfTimeGone}
+                  isPersonal={false}
+                />
+              ) : (
+                <StatBox />
+              )
+            )}
+
+              {/* Avatars Section */}
+              <View style={styles.avatarSection}>
               {/* Top Border */}
               <View style={styles.topBorder}>
                 <LinearGradient
@@ -173,150 +335,184 @@ export default function AnalyticsScreen() {
                 />
               </View>
               
-              <View style={styles.avatarRowsContainer}>
-                <View style={styles.avatarRow}>
-                  <View style={styles.avatarContainer}>
-                    <Image source={{ uri: avatars.john }} style={styles.avatar} />
-                    <Text style={styles.avatarName}>John</Text>
-                    <Text style={styles.avatarScore}>7</Text>
-                  </View>
-                  <View style={styles.avatarContainer}>
-                    <Image source={{ uri: avatars.jim }} style={styles.avatar} />
-                    <Text style={styles.avatarName}>Jim</Text>
-                    <Text style={styles.avatarScore}>9</Text>
-                  </View>
-                  <View style={styles.avatarContainer}>
-                    <Image source={{ uri: avatars.you }} style={styles.avatar} />
-                    <Text style={styles.avatarName}>You</Text>
-                    <Text style={styles.avatarScore}>5</Text>
+              {loading && memberProgress.length === 0 ? (
+                <ActivityIndicator color="#3A8891" size="large" style={{ padding: 20 }} />
+              ) : (
+                <View style={styles.avatarRowsContainer}>
+                  <View style={[styles.avatarRow, { flexWrap: 'wrap', justifyContent: 'center' }]}>
+                    {memberProgress.map((member, index) => (
+                      <View key={member.userId || index} style={styles.avatarContainer}>
+                        <View style={styles.avatarWrapper}>
+                          {member.avatarUrl ? (
+                            <Image 
+                              source={{ uri: member.avatarUrl }} 
+                              style={[
+                                styles.avatar,
+                                member.rank > 0 && member.rank <= 3 && styles.topRankAvatar,
+                                member.rank === 1 && styles.firstRankAvatar,
+                                member.rank === 2 && styles.secondRankAvatar,
+                                member.rank === 3 && styles.thirdRankAvatar
+                              ]}
+                              onError={() => console.log('Avatar image error for', member.displayName)}
+                            />
+                          ) : (
+                            <View style={[
+                              styles.avatar,
+                              styles.avatarPlaceholder,
+                              member.rank > 0 && member.rank <= 3 && styles.topRankAvatar,
+                              member.rank === 1 && styles.firstRankAvatar,
+                              member.rank === 2 && styles.secondRankAvatar,
+                              member.rank === 3 && styles.thirdRankAvatar
+                            ]}>
+                              <Text style={styles.avatarText}>
+                                {member.displayName ? member.displayName.substring(0, 2).toUpperCase() : "??"}
+                              </Text>
+                            </View>
+                          )}
+                          
+                          {/* Medal icon */}
+                          {member.rank === 1 && member.score > 0 && (
+                            <View style={styles.medalBadge}>
+                              <Ionicons name="medal" size={16} color="#FFD700" />
+                            </View>
+                          )}
+                          {member.rank === 2 && member.score > 0 && (
+                            <View style={styles.medalBadge}>
+                              <Ionicons name="medal" size={16} color="#C0C0C0" />
+                            </View>
+                          )}
+                          {member.rank === 3 && member.score > 0 && (
+                            <View style={styles.medalBadge}>
+                              <Ionicons name="medal" size={16} color="#CD7F32" />
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.avatarName}>{member.displayName || 'Member'}</Text>
+                        <Text style={[
+                          styles.avatarScore,
+                          member.rank === 1 && styles.firstRankScore,
+                          member.rank === 2 && styles.secondRankScore,
+                          member.rank === 3 && styles.thirdRankScore
+                        ]}>{member.score || 0}</Text>
+                      </View>
+                    ))}
+                    {memberProgress.length === 0 && (
+                      <Text style={{ padding: 10, color: '#666' }}>No members data</Text>
+                    )}
                   </View>
                 </View>
-                <View style={styles.avatarRow}>
-                  <View style={styles.avatarContainer}>
-                    <Image source={{ uri: avatars.alice }} style={styles.avatar} />
-                    <Text style={styles.avatarName}>Alice</Text>
-                    <Text style={styles.avatarScore}>6</Text>
+              )}
+            </View>
+
+            {/* Toggle Team / Personal */}
+            <View style={styles.toggleContainer}>
+              <Text style={styles.toggleLabel}>Chart Type:</Text>
+              <View style={styles.toggleSwitchContainer}>
+                <Text style={[styles.toggleOptionText, !isPersonal && styles.toggleActiveText]}>Team</Text>
+                <TouchableOpacity 
+                  style={styles.toggleSwitch}
+                  onPress={() => setIsPersonal(!isPersonal)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[
+                    styles.toggleTrack,
+                  ]}>
+                    <View style={[
+                      styles.toggleThumb,
+                      isPersonal && styles.toggleThumbActive
+                    ]} />
                   </View>
-                  <View style={styles.avatarContainer}>
-                    <Image source={{ uri: avatars.cleo }} style={styles.avatar} />
-                    <Text style={styles.avatarName}>Cleo</Text>
-                    <Text style={styles.avatarScore}>9</Text>
-                  </View>
-                  <View style={styles.avatarContainer}>
-                    <Image source={{ uri: avatars.sam }} style={styles.avatar} />
-                    <Text style={styles.avatarName}>Sam</Text>
-                    <Text style={styles.avatarScore}>4</Text>
-                  </View>
-                  <View style={styles.avatarContainer}>
-                    <Image source={{ uri: avatars.jade }} style={styles.avatar} />
-                    <Text style={styles.avatarName}>Jade</Text>
-                    <Text style={styles.avatarScore}>5</Text>
-                  </View>
-                </View>
+                </TouchableOpacity>
+                <Text style={[styles.toggleOptionText, isPersonal && styles.toggleActiveText]}>Personal</Text>
               </View>
             </View>
 
             {/* Graph Section */}
             <View style={styles.graphSection}>
-              <View style={styles.chartContainer}>
-                <LineChart
-                  data={chartData}
-                  width={Dimensions.get("window").width - 72}
-                  height={220}
-                  yAxisLabel=""
-                  yAxisSuffix="%"
-                  withInnerLines={false}
-                  withOuterLines={true}
-                  withVerticalLines={false}
-                  withHorizontalLines={true}
-                  bezier={false}
-                  onDataPointClick={handleDataPointClick}
-                  chartConfig={{
-                    backgroundColor: "#FFF",
-                    backgroundGradientFrom: "#FFF",
-                    backgroundGradientTo: "#FFF",
-                    decimalPlaces: 0,
-                    color: (opacity = 1) => `rgba(106, 90, 205, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(153, 153, 153, ${opacity})`,
-                    style: {
-                      borderRadius: 15,
-                    },
-                    propsForDots: {
-                      r: "4",
-                      strokeWidth: "2",
-                      stroke: "#3A8891",
-                    },
-                    propsForBackgroundLines: {
-                      strokeDasharray: "4, 4",
-                      strokeWidth: 1,
-                      stroke: "#E0E4E8",
-                    },
-                    fillShadowGradient: "#6A5ACD",
-                    fillShadowGradientOpacity: 0.15,
-                    // Disable default tooltip
-                    tooltipDecorator: () => null,
-                  }}
-                  style={{
-                    marginVertical: 8,
-                    borderRadius: 15,
-                  }}
-                  decorator={() => null}
-                />
-                
-                {/* Add vertical dashed line */}
-                {tooltipData && (
-                  <View style={styles.tooltipContainer}>
-                    {/* Vertical dashed line */}
-                    <View 
-                      style={[
-                        styles.verticalDashedLine, 
-                        {
-                          left: tooltipData.x,
-                          top: tooltipData.y + 4,
-                          height: getVerticalLineHeight(tooltipData.y),
-                        }
-                      ]}
-                    />
-                    
-                    {/* Tooltip */}
-                    <View 
-                      style={[
-                        styles.tooltip, 
-                        {
-                          left: tooltipData.x - 50,
-                          top: tooltipData.y - 60,
-                        }
-                      ]}
-                    >
+              {loading ? (
+                <ActivityIndicator size="large" color="#3A8891" />
+              ) : (
+                <View style={styles.chartContainer}>
+                  <LineChart
+                    data={chartData}
+                    width={Dimensions.get("window").width - 72}
+                    height={220}
+                    yAxisLabel=""
+                    yAxisSuffix="%"
+                    withInnerLines={false}
+                    withOuterLines={true}
+                    withVerticalLines={false}
+                    withHorizontalLines={true}
+                    bezier={false}
+                    onDataPointClick={handleDataPointClick}
+                    chartConfig={{
+                      backgroundColor: "#FFF",
+                      backgroundGradientFrom: "#FFF",
+                      backgroundGradientTo: "#FFF",
+                      decimalPlaces: 0,
+                      color: (opacity = 1) => `rgba(106, 90, 205, ${opacity})`,
+                      labelColor: (opacity = 1) => `rgba(153, 153, 153, ${opacity})`,
+                      style: { borderRadius: 15 },
+                      propsForDots: { r: "4", strokeWidth: "2", stroke: "#3A8891" },
+                      propsForBackgroundLines: { strokeDasharray: "4, 4", strokeWidth: 1, stroke: "#E0E4E8" },
+                      fillShadowGradient: "#6A5ACD",
+                      fillShadowGradientOpacity: 0.15,
+                      tooltipDecorator: () => null,
+                    }}
+                    style={{ marginVertical: 8, borderRadius: 15 }}
+                    decorator={() => null}
+                  />
+
+                  {/* Tooltip Handling same as before, check here if there's any problem */}
+                  {tooltipData && (
+                    <View style={styles.tooltipContainer}>
+                      <View 
+                        style={[
+                          styles.verticalDashedLine,
+                          {
+                            left: tooltipData.x - 8,
+                            top: tooltipData.y + 11,
+                            height: 180 - tooltipData.y
+                          }
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.tooltip,
+                          {
+                            left: timeRange === '1Y' ? tooltipData.x - 52 : tooltipData.x - 53,
+                            top: timeRange === '1Y' ? tooltipData.y - 90 : tooltipData.y - 57
+                          }
+                        ]}
+                      >
                       <View style={styles.tooltipContent}>
                         <Text style={styles.tooltipLabel}>{tooltipData.label}</Text>
                         <Text style={styles.tooltipValue}>{tooltipData.value}%</Text>
+                        {timeRange === '1Y' && tooltipData.additionalInfo && (
+                          <>
+                          <Text style={styles.tooltipCompletion}>Completed:</Text>
+                          <Text style={styles.tooltipCompletion}>
+                            {tooltipData.additionalInfo.fullyCompletedCycleCount}/{tooltipData.additionalInfo.cycleCount}
+                          </Text>
+                        </>
+                          )}
+                        </View>
+                        <View style={styles.tooltipArrow} />
                       </View>
-                      <View style={styles.tooltipArrow} />
                     </View>
-                  </View>
-                )}
-              </View>
+                  )}
+                </View>
+              )}
 
               {/* Time Range Buttons */}
               <View style={styles.timeRangeContainer}>
-                {["6H", "12H", "24H", "1W", "1Y"].map((range) => (
+                {rangeOptions.map(range => (
                   <TouchableOpacity
                     key={range}
-                    style={[
-                      styles.timeRangeButton,
-                      timeRange === range && styles.timeRangeButtonActive,
-                    ]}
+                    style={[styles.timeRangeButton, timeRange === range && styles.timeRangeButtonActive]}
                     onPress={() => setTimeRange(range)}
                   >
-                    <Text
-                      style={[
-                        styles.timeRangeText,
-                        timeRange === range && styles.timeRangeTextActive,
-                      ]}
-                    >
-                      {range}
-                    </Text>
+                    <Text style={[styles.timeRangeText, timeRange === range && styles.timeRangeTextActive]}>{range}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -329,6 +525,9 @@ export default function AnalyticsScreen() {
 }
 
 const styles = StyleSheet.create({
+  /* ==================== 
+   * Main container and background styles
+   * ==================== */
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
@@ -344,6 +543,10 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  
+  /* ==================== 
+   * Page title area
+   * ==================== */
   header: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -351,6 +554,10 @@ const styles = StyleSheet.create({
     paddingTop: 30,
     paddingBottom: 45,
   },
+  
+  /* ==================== 
+   * Member ranking area
+   * ==================== */
   avatarSection: {
     backgroundColor: "#FFF",
     borderRadius: 15,
@@ -426,6 +633,10 @@ const styles = StyleSheet.create({
     marginVertical: 5,
     width: 60,
   },
+  
+  /* ==================== 
+   * User avatar and medal styles
+   * ==================== */
   avatar: {
     width: 50,
     height: 50,
@@ -444,6 +655,137 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#6A5ACD",
   },
+  avatarPlaceholder: {
+    backgroundColor: '#0E5E6F',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  avatarWrapper: {
+    position: 'relative',
+  },
+  
+  /* ==================== 
+   * Ranking medal and special styles
+   * ==================== */
+  medalBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F4F8',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  topRankAvatar: {
+    borderWidth: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  firstRankAvatar: {
+    borderColor: '#FFD700',
+  },
+  secondRankAvatar: {
+    borderColor: '#C0C0C0',
+  },
+  thirdRankAvatar: {
+    borderColor: '#CD7F32',
+  },
+  firstRankScore: {
+    color: '#FFC107',
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  secondRankScore: {
+    color: '#6A5ACD',
+    fontWeight: '700',
+  },
+  thirdRankScore: {
+    color: '#6A5ACD',
+    fontWeight: '600',
+  },
+  
+  /* ==================== 
+   * Team selector styles
+   * ==================== */
+  teamSelectorContainer: {
+    marginVertical: 15,
+    paddingHorizontal: 20,
+  },
+  teamSelectorLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0E5E6F',
+    marginBottom: 8,
+    paddingLeft: 4,
+  },
+  teamSelectorCardContainer: {
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  teamSelectorDropdown: {
+    padding: 12,
+    borderRadius: 12,
+  },
+  teamSelectorPlaceholder: {
+    color: '#94A3B8',
+    fontSize: 16,
+  },
+  teamSelectorSelectedText: {
+    color: '#0E5E6F',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  teamSelectorIcon: {
+    marginRight: 10,
+  },
+  teamSelectorContainerStyle: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 0,
+    paddingVertical: 6,
+    marginTop: 5,
+  },
+  teamSelectorItemContainer: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F8',
+  },
+  teamSelectorItemText: {
+    fontSize: 16,
+    color: '#2C3E50',
+    fontWeight: '500',
+  },
+  
+  /* ==================== 
+   * Chart area styles
+   * ==================== */
   graphSection: {
     backgroundColor: "#FFF",
     borderRadius: 15,
@@ -465,6 +807,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  
+  /* ==================== 
+   * Time range selector styles
+   * ==================== */
   timeRangeContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -492,6 +838,10 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontWeight: "600",
   },
+  
+  /* ==================== 
+   * Tooltip styles
+   * ==================== */
   tooltipContainer: {
     position: 'absolute',
     top: 0,
@@ -520,7 +870,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#6A5ACD',
     borderRadius: 6,
     padding: 8,
-    minWidth: 80,
+    width: 90,
     alignItems: 'center',
   },
   tooltipLabel: {
@@ -533,6 +883,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  tooltipCompletion: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    marginTop: 2,
+  },
   tooltipArrow: {
     width: 0,
     height: 0,
@@ -542,5 +897,61 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
     borderTopColor: '#6A5ACD',
+  },
+  
+  /* ==================== 
+   * Team/personal switch styles
+   * ==================== */
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingRight: 10,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    color: '#64748B',
+    marginRight: 8,
+  },
+  toggleSwitchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toggleOptionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#94A3B8',
+    paddingHorizontal: 4,
+  },
+  toggleActiveText: {
+    color: '#345C6F',
+    fontWeight: '600',
+  },
+  toggleSwitch: {
+    marginHorizontal: 6,
+  },
+  toggleTrack: {
+    width: 40,
+    height: 24,
+    borderRadius: 16,
+    backgroundColor: '#0E5E6F',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
+    transform: [{ translateX: 0 }],
+  },
+  toggleThumbActive: {
+    transform: [{ translateX: 16 }],
   },
 });

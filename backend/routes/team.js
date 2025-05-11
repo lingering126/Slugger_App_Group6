@@ -4,6 +4,7 @@ const Team = require('../models/team');
 const authMiddleware = require('../middleware/auth');
 const UserTarget = require('../models/userTarget');
 const UserTeamTarget = require('../models/userTeamTarget');
+const { recordTeamTargetSnapshot } = require('./analytics');
 
 // Create a new team
 router.post('/', authMiddleware, async (req, res) => {
@@ -318,6 +319,9 @@ router.post('/leave', authMiddleware, async (req, res) => {
     team.members.splice(memberIndex, 1);
     await team.save();
     
+    // Record team target snapshot, because the member list has changed
+    await recordTeamTargetSnapshot(team._id);
+
     console.log(`User ${userId} successfully left team ${teamId}`);
     res.status(200).json({ message: 'Successfully left team' });
   } catch (error) {

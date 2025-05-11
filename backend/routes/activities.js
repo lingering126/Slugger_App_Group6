@@ -3,6 +3,7 @@ const router = express.Router();
 const Activity = require('../models/Activity');
 const mongoose = require('mongoose');
 const User = require('../src/models/user');
+const Team = require('../models/team');
 
 // Create a new activity
 router.post('/', async (req, res) => {
@@ -11,10 +12,15 @@ router.post('/', async (req, res) => {
     console.log('Request body:', req.body);
     console.log('User ID from auth:', req.user.id);
 
-    // Create activity with user ID from auth
+    // Find all teams the user is a member of
+    const userTeams = await Team.find({ members: req.user.id }).select('_id');
+    const userTeamIds = userTeams.map(t => t._id);
+
+    // Create activity with user ID from auth and associated team IDs
     const activity = new Activity({
       ...req.body,
-      userId: new mongoose.Types.ObjectId(req.user.id)
+      userId: new mongoose.Types.ObjectId(req.user.id),
+      teamsId: userTeamIds
     });
 
     // Save activity (points will be calculated in pre-save hook)

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const UserTeamTarget = require('../models/userTeamTarget');
 const authMiddleware = require('../middleware/auth');
+const { recordUserTargetSnapshot, recordTeamTargetSnapshot } = require('./analytics');
 
 // Get user's target for a specific team
 router.get('/:teamId', authMiddleware, async (req, res) => {
@@ -50,6 +51,10 @@ router.post('/:teamId', authMiddleware, async (req, res) => {
       });
       await userTeamTarget.save();
     }
+    
+    // 记录快照
+    await recordUserTargetSnapshot(userId, teamId, targetValue);
+    await recordTeamTargetSnapshot(teamId);
     
     res.status(200).json(userTeamTarget);
   } catch (error) {
