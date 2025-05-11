@@ -1,6 +1,5 @@
 // File: backend/routes/analytics.js
 const express = require('express');
-const mongoose = require('mongoose');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth'); // Adjust path if necessary
 const Team = require('../models/team');
@@ -8,7 +7,7 @@ const Activity = require('../models/Activity');
 const UserTeamTarget = require('../models/userTeamTarget');
 const TeamTargetSnapshot = require('../models/TeamTargetSnapshot');
 const UserTargetSnapshot = require('../models/UserTargetSnapshot');
-// const User = require('../src/models/user'); // Not directly needed for these queries if IDs are sufficient
+const Profile = require('../src/models/profile'); // Corrected import path for Profile model
 
 const { getCurrentCycleInfo, getCycleInfoForTime } = require('../utils/cycleUtils');
 
@@ -318,8 +317,8 @@ async function calculateYearlyTrendDataPoints(teamId, userId, teamCreatedAtDate,
 
             const isOngoingCycle = new Date(cycleInfo.cycleEndDate) > new Date(endTime);
             if (isOngoingCycle) {
-                // ✅ 如果是"当前周期"，我们也计算它的完成度
-                const nowAsEndTime = new Date(endTime); // 用现在当成周期结束时间计算当前完成度
+                // if it is the current cycle, we also calculate its completion
+                const nowAsEndTime = new Date(endTime); // use now as the end time to calculate the completion
                 const cycleCompletion = await calculateCycleCompletionPercentage(
                     teamId, userId, cycleInfo.cycleStartDate, nowAsEndTime, allTargetSnapshotsForYear, isUserTrend
                 );
@@ -530,6 +529,11 @@ router.get('/member-progress/:teamId', authMiddleware, async (req, res) => {
             createdAt: { $gte: cycleStartDate, $lte: cycleEndDate }
         }).select('userId points createdAt'); // Select points
 
+        // Fetch profiles for all members in the team
+        const memberIds = team.members.map(member => member._id);
+        const profiles = await Profile.find({ user: { $in: memberIds } }).select('user avatarUrl');
+        const profileMap = new Map(profiles.map(p => [p.user.toString(), p.avatarUrl]));
+
         // Calculate scores for each member
         const memberScores = team.members.map(member => {
             if (!member) return null;
@@ -539,10 +543,13 @@ router.get('/member-progress/:teamId', authMiddleware, async (req, res) => {
             );
             const totalMemberScore = memberActivities.reduce((sum, act) => sum + (act.points || 0), 0);
             
+            const avatarUrl = profileMap.get(member._id.toString());
+
             return {
                 userId: member._id,
                 displayName: member.name || (member.email ? member.email.split('@')[0] : 'Unnamed User'),
-                score: totalMemberScore
+                score: totalMemberScore,
+                avatarUrl: avatarUrl || null // Add avatarUrl here
             };
         }).filter(Boolean);
 

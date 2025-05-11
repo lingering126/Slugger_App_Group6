@@ -373,17 +373,17 @@ export default function AnalyticsScreen() {
                           {/* Medal icon */}
                           {member.rank === 1 && member.score > 0 && (
                             <View style={styles.medalBadge}>
-                              <Ionicons name="medal" size={16} color="#FFD700" />
+                              <Ionicons name="trophy" size={16} color="#FFD700" />
                             </View>
                           )}
                           {member.rank === 2 && member.score > 0 && (
                             <View style={styles.medalBadge}>
-                              <Ionicons name="medal" size={16} color="#C0C0C0" />
+                              <Ionicons name="trophy" size={16} color="#C0C0C0" />
                             </View>
                           )}
                           {member.rank === 3 && member.score > 0 && (
                             <View style={styles.medalBadge}>
-                              <Ionicons name="medal" size={16} color="#CD7F32" />
+                              <Ionicons name="trophy" size={16} color="#CD7F32" />
                             </View>
                           )}
                         </View>
