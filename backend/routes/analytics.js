@@ -160,7 +160,9 @@ function formatRelativeTime(timestamp, now, range, index, totalPoints) {
                 return { short: "Today", full: "Today" };
             }
             const dateFor1M = new Date(timestamp);
-            const shortLabel1M = dateFor1M.toLocaleString('default', { month: 'short' }) + ' ' + dateFor1M.getUTCDate();
+            const day = dateFor1M.getUTCDate();
+            const month = dateFor1M.getUTCMonth() + 1;
+            const shortLabel1M = `${month}/${day}`;
             return { short: shortLabel1M, full: dateFor1M.toLocaleDateString() };
         case '1Y':
             const dateFor1Y = new Date(timestamp);
@@ -588,9 +590,11 @@ router.get('/timeline/:teamId', authMiddleware, async (req, res) => {
             );
         } else {
             const startTime = getStartTimeFromRange(range, now); // startTime needed for non-1Y ranges
+
+            const { cycleStartDate } = getCycleInfoForTime(teamCreatedAtDate, startTime);
             const activitiesInRange = await Activity.find({
                 teamsId: teamId,
-                createdAt: { $gte: startTime, $lte: now }
+                createdAt: { $gte: cycleStartDate, $lte: now }
             }).sort({ createdAt: 1 }).select('points createdAt');
             const targetSnapshots = await TeamTargetSnapshot.find({
                 teamId: teamId,
@@ -666,10 +670,12 @@ router.get('/user-timeline/:teamId/:userId', authMiddleware, async (req, res) =>
             );
         } else {
             const startTime = getStartTimeFromRange(range, now);
+
+            const { cycleStartDate } = getCycleInfoForTime(teamCreatedAtDate, startTime);
             const activitiesInRange = await Activity.find({
                 teamsId: teamId,
                 userId: userId,
-                createdAt: { $gte: startTime, $lte: now }
+                createdAt: { $gte: cycleStartDate, $lte: now }
             }).sort({ createdAt: 1 }).select('points createdAt userId');
             const targetSnapshots = await UserTargetSnapshot.find({
                 teamId: teamId,

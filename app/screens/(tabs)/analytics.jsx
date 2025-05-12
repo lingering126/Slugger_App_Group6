@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ScrollView, SafeAreaView, ImageBackground, ActivityIndicator } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LineChart } from "react-native-chart-kit";
 import StatBox from "../components/StatBox";
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +26,8 @@ const getAuthAxios = async () => {
 export default function AnalyticsScreen() {
   const [timeRange, setTimeRange] = useState("24H");
   const [tooltipData, setTooltipData] = useState(null);
+  const dotRefs = useRef([]); // To store the position of all data points
+  const chartRef = useRef(null); // To get the chart container position information
 
   // new states
   const [teams, setTeams] = useState([]);
@@ -37,6 +39,7 @@ export default function AnalyticsScreen() {
   const [loading, setLoading] = useState(false);
   const [memberProgress, setMemberProgress] = useState([]);
   const [personalOverview, setPersonalOverview] = useState(null);
+  const [showAllMembers, setShowAllMembers] = useState(false); // To control whether to show all members
 
   // Load user & teams on mount
   useEffect(() => {
@@ -107,7 +110,7 @@ export default function AnalyticsScreen() {
           const timelineRes = await api.get(timelineUrl);
           const timelineData = timelineRes.data.data;
           
-          console.log(`${timeRange} Pattern Data:`, JSON.stringify(timelineData.data).substring(0, 100) + '...');
+          // console.log(`${timeRange} Pattern Data:`, JSON.stringify(timelineData.data).substring(0, 100) + '...');
           
           // Validate and sanitize timeline data
           const labels = Array.isArray(timelineData.labels) ? timelineData.labels : [];
@@ -203,37 +206,64 @@ export default function AnalyticsScreen() {
 
   // Chart config generation based on chartState
   const generateChartData = () => {
-    // Process label display for 24H unit, display one every hour
+    // Process label display dynamically based on screen width
+    const MIN_LABEL_SPACING = 30; // Minimum space between labels in pixels
+    const screenWidth = Dimensions.get("window").width - 72; // Chart width
     let displayLabels = chartState.labels;
-    if (timeRange === '24H' && chartState.labels.length > 12) {
-      displayLabels = chartState.labels.map((label, index) => {
-        // Display one every 2 indexes, others show empty strings
-        return index % 2 === 0 ? label : '';
-      });
+    
+    // Only apply spacing logic if we have labels
+    if (chartState.labels.length > 0) {
+      // Calculate maximum number of labels that can fit on screen
+      const maxLabelsToShow = Math.floor(screenWidth / MIN_LABEL_SPACING);
+      // Only apply spacing if we have more labels than can fit
+      if (chartState.labels.length > maxLabelsToShow) {
+        // Calculate step size (show every 'step' labels)
+        const step = Math.ceil(chartState.labels.length / maxLabelsToShow);
+        // Apply step to create displayLabels
+        displayLabels = chartState.labels.map((label, index) => {
+          return index % step === 0 ? label : '';
+        });
+      }
     }
     
     // Extract chart data
     let dataValues = [];
-    if (Array.isArray(chartState.data)) {
-      if (timeRange === '1Y') {
+    
+    try {
+      if (Array.isArray(chartState.data)) {
+        if (timeRange === '1Y') {
         // 1Y mode, data is an array of objects, each object has a value property
-        dataValues = chartState.data.map(item => {
-          if (typeof item === 'object' && item.value !== undefined) {
-            const value = Math.round(item.value);
-            // Ensure the value is a valid number (not Infinity, -Infinity, or NaN)
-            return isFinite(value) ? value : 0;
-          }
-          return 0;
-        });
-      } else {
+          dataValues = chartState.data.map(item => {
+            if (typeof item === 'object' && item !== null) {
+              // Use default value 0 to avoid invalid values
+              const rawValue = item.value !== undefined ? item.value : 0;
+              const value = Math.round(rawValue);
+              return isFinite(value) ? value : 0;
+            }
+            return 0;
+          });
+        } else {
         // Other modes, data is an array of numbers
-        dataValues = chartState.data.map(val => {
-          const value = Math.round(val);
-          // Ensure the value is a valid number (not Infinity, -Infinity, or NaN)
-          return isFinite(value) ? value : 0;
-        });
+          dataValues = chartState.data.map(val => {
+            const rawValue = val !== undefined ? val : 0;
+            const value = Math.round(rawValue);
+            return isFinite(value) ? value : 0;
+          });
+        }
       }
+    } catch (error) {
+      console.error('Error processing chart data:', error);
+      // When an error occurs, use an empty array
+      dataValues = [];
     }
+    
+    // Ensure there must be data
+    if (dataValues.length === 0) {
+      dataValues = [0]; // At least one point
+    }
+    
+    // Reset dotRefs array, ensure length consistent with data points
+    dotRefs.current = Array(dataValues.length).fill(null);
     
     return {
       labels: displayLabels,
@@ -245,11 +275,18 @@ export default function AnalyticsScreen() {
         },
       ],
       fullLabels: chartState.fullLabels,
-      rawData: chartState.data, // Pass original data to the chart
+      rawData: chartState.data, // Pass the original data to the chart
     };
   };
 
   const chartData = generateChartData();
+
+  // Function to get the actual screen coordinates of the data point
+  const measureDot = (index, layout) => {
+    if (index !== undefined && index >= 0) {
+      dotRefs.current[index] = layout;
+    }
+  };
 
   const handleDataPointClick = (data) => {
     const index = data.index;
@@ -268,20 +305,71 @@ export default function AnalyticsScreen() {
           cycleCount: rawPoint.cycleCount,
           fullyCompletedCycleCount: rawPoint.fullyCompletedCycleCount
         };
-        console.log(`Clicked ${label}, completion data:`, additionalInfo);
       }
+    }
+    
+    // Use the actual position stored in dotRefs, if any
+    const dotPosition = dotRefs.current[index];
+    let tooltipPosition = { x: data.x, y: data.y }; // Default to using the coordinates provided by onDataPointClick
+    
+    if (dotPosition) {
+      tooltipPosition = {
+        x: dotPosition.x,
+        y: dotPosition.y
+      };
     }
     
     setTooltipData({ 
       value, 
       label, 
-      x: data.x, 
-      y: data.y, 
+      x: tooltipPosition.x, 
+      y: tooltipPosition.y, 
       index,
-      additionalInfo 
+      additionalInfo,
+      timestamp: Date.now() // Add timestamp to force component update
     });
+  };
+
+  // Add a function to handle closing the tooltip when clicking on the chart background
+  const handleBackgroundPress = () => {
+    if (tooltipData) {
+      setTooltipData(null);
+    }
+  };
+
+  // Custom decorator function, used to draw data points and record their position
+  const customDecorator = (props) => {
+    const { x, y, index, indexData } = props;
     
-    setTimeout(() => setTooltipData(null), 3500);
+    // If the data point is invalid, do not render anything
+    if (!isFinite(indexData) || indexData === null) {
+      return null;
+    }
+    
+    return (
+      <View
+        key={index}
+        onLayout={(event) => {
+          const layout = event.nativeEvent.layout;
+          const dotCenter = {
+            x: layout.x + layout.width / 2,
+            y: layout.y + layout.height / 2
+          };
+          measureDot(index, dotCenter);
+        }}
+        style={{
+          position: 'absolute',
+          left: x - 4, // The radius of the dot is 4
+          top: y - 4,
+          width: 8, // The diameter is 8
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: '#3A8891',
+          borderWidth: 2,
+          borderColor: '#3A8891'
+        }}
+      />
+    );
   };
 
   const rangeOptions = ["24H", "1W", "1M", "1Y"];
@@ -413,66 +501,90 @@ export default function AnalyticsScreen() {
               ) : (
                 <View style={styles.avatarRowsContainer}>
                   <View style={[styles.avatarRow, { flexWrap: 'wrap', justifyContent: 'center' }]}>
-                    {memberProgress.map((member, index) => (
-                      <View key={member.userId || index} style={styles.avatarContainer}>
-                        <View style={styles.avatarWrapper}>
-                          {member.avatarUrl ? (
-                            <Image 
-                              source={{ uri: member.avatarUrl }} 
-                              style={[
+                    {/* Only show the top 10 or all, depending on the value of showAllMembers */}
+                    {memberProgress
+                      .slice(0, showAllMembers ? memberProgress.length : 10)
+                      .map((member, index) => (
+                        <View key={member.userId || index} style={styles.avatarContainer}>
+                          <View style={styles.avatarWrapper}>
+                            {member.avatarUrl ? (
+                              <Image 
+                                source={{ uri: member.avatarUrl }} 
+                                style={[
+                                  styles.avatar,
+                                  member.rank > 0 && member.rank <= 3 && styles.topRankAvatar,
+                                  member.rank === 1 && styles.firstRankAvatar,
+                                  member.rank === 2 && styles.secondRankAvatar,
+                                  member.rank === 3 && styles.thirdRankAvatar
+                                ]}
+                                onError={() => console.log('Avatar image error for', member.displayName)}
+                              />
+                            ) : (
+                              <View style={[
                                 styles.avatar,
+                                styles.avatarPlaceholder,
                                 member.rank > 0 && member.rank <= 3 && styles.topRankAvatar,
                                 member.rank === 1 && styles.firstRankAvatar,
                                 member.rank === 2 && styles.secondRankAvatar,
                                 member.rank === 3 && styles.thirdRankAvatar
-                              ]}
-                              onError={() => console.log('Avatar image error for', member.displayName)}
-                            />
-                          ) : (
-                            <View style={[
-                              styles.avatar,
-                              styles.avatarPlaceholder,
-                              member.rank > 0 && member.rank <= 3 && styles.topRankAvatar,
-                              member.rank === 1 && styles.firstRankAvatar,
-                              member.rank === 2 && styles.secondRankAvatar,
-                              member.rank === 3 && styles.thirdRankAvatar
-                            ]}>
-                              <Text style={styles.avatarText}>
-                                {member.displayName ? member.displayName.substring(0, 2).toUpperCase() : "??"}
-                              </Text>
-                            </View>
-                          )}
-                          
-                          {/* Medal icon */}
-                          {member.rank === 1 && member.score > 0 && (
-                            <View style={styles.medalBadge}>
-                              <Ionicons name="trophy" size={16} color="#FFD700" />
-                            </View>
-                          )}
-                          {member.rank === 2 && member.score > 0 && (
-                            <View style={styles.medalBadge}>
-                              <Ionicons name="trophy" size={16} color="#C0C0C0" />
-                            </View>
-                          )}
-                          {member.rank === 3 && member.score > 0 && (
-                            <View style={styles.medalBadge}>
-                              <Ionicons name="trophy" size={16} color="#CD7F32" />
-                            </View>
-                          )}
+                              ]}>
+                                <Text style={styles.avatarText}>
+                                  {member.displayName ? member.displayName.substring(0, 2).toUpperCase() : "??"}
+                                </Text>
+                              </View>
+                            )}
+                            
+                            {/* Medal icon */}
+                            {member.rank === 1 && member.score > 0 && (
+                              <View style={styles.medalBadge}>
+                                <Ionicons name="trophy" size={16} color="#FFD700" />
+                              </View>
+                            )}
+                            {member.rank === 2 && member.score > 0 && (
+                              <View style={styles.medalBadge}>
+                                <Ionicons name="trophy" size={16} color="#C0C0C0" />
+                              </View>
+                            )}
+                            {member.rank === 3 && member.score > 0 && (
+                              <View style={styles.medalBadge}>
+                                <Ionicons name="trophy" size={16} color="#CD7F32" />
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.avatarName}>{member.displayName || 'Member'}</Text>
+                          <Text style={[
+                            styles.avatarScore,
+                            member.rank === 1 && styles.firstRankScore,
+                            member.rank === 2 && styles.secondRankScore,
+                            member.rank === 3 && styles.thirdRankScore
+                          ]}>{member.score || 0}</Text>
                         </View>
-                        <Text style={styles.avatarName}>{member.displayName || 'Member'}</Text>
-                        <Text style={[
-                          styles.avatarScore,
-                          member.rank === 1 && styles.firstRankScore,
-                          member.rank === 2 && styles.secondRankScore,
-                          member.rank === 3 && styles.thirdRankScore
-                        ]}>{member.score || 0}</Text>
-                      </View>
-                    ))}
+                      ))}
                     {memberProgress.length === 0 && (
                       <Text style={{ padding: 10, color: '#666' }}>No members data</Text>
                     )}
                   </View>
+                  
+                  {/* Show the expand/collapse button, only when the number of members > 10 */}
+                  {memberProgress.length > 10 && (
+                    <TouchableOpacity 
+                      style={styles.expandButton}
+                      onPress={() => setShowAllMembers(!showAllMembers)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.expandButtonContent}>
+                        <Text style={styles.expandButtonText}>
+                          {showAllMembers ? "Collapse" : `Show all (${memberProgress.length})`}
+                        </Text>
+                        <Ionicons 
+                          name={showAllMembers ? "chevron-up" : "chevron-down"} 
+                          size={16} 
+                          color="#345C6F" 
+                          style={{ marginLeft: 4 }}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </View>
@@ -505,111 +617,222 @@ export default function AnalyticsScreen() {
               {loading ? (
                 <ActivityIndicator size="large" color="#3A8891" />
               ) : (
-                <View style={styles.chartContainer}>
-                  <LineChart
-                    data={chartData}
-                    width={Dimensions.get("window").width - 72}
-                    height={220}
-                    yAxisLabel=""
-                    yAxisSuffix="%"
-                    withInnerLines={false}
-                    withOuterLines={true}
-                    withVerticalLines={false}
-                    withHorizontalLines={true}
-                    bezier={false}
-                    onDataPointClick={handleDataPointClick}
-                    getDotColor={(dataPoint, index) => {
-                      // Return transparent if data point is not valid
-                      if (!isFinite(dataPoint)) return 'transparent';
-                      return '#3A8891';
-                    }}
-                    chartConfig={{
-                      backgroundColor: "#FFF",
-                      backgroundGradientFrom: "#FFF",
-                      backgroundGradientTo: "#FFF",
-                      decimalPlaces: 0,
-                      color: (opacity = 1) => `rgba(106, 90, 205, ${opacity})`,
-                      labelColor: (opacity = 1) => `rgba(153, 153, 153, ${opacity})`,
-                      style: { borderRadius: 15 },
-                      propsForDots: { 
-                        r: "4", 
-                        strokeWidth: "2", 
-                        stroke: "#3A8891" 
-                      },
-                      propsForBackgroundLines: { 
-                        strokeDasharray: "4, 4", 
-                        strokeWidth: 1, 
-                        stroke: "#E0E4E8" 
-                      },
-                      fillShadowGradient: "#6A5ACD",
-                      fillShadowGradientOpacity: 0.15,
-                      tooltipDecorator: () => null,
-                      // Filter out invalid data points when drawing the line
-                      formatYLabel: (value) => {
-                        return isFinite(parseFloat(value)) ? value : '0';
-                      },
-                      // Add custom line function to handle NaN and Infinity values
-                      useBezierCurve: false,
-                      // Override line drawing to prevent invalid points from being included
-                      renderLine: (data, { x, y, width, height, paddingRight, paddingTop }) => {
-                        const points = data.map((value, index) => {
-                          if (!isFinite(value)) return null;
-                          const xValue = paddingRight + (index * (width - paddingRight)) / data.length;
-                          const yValue = (height * (1 - (value / 100))) + paddingTop;
-                          return { x: xValue, y: yValue };
-                        }).filter(point => point !== null);
-                      
-                        // If there are no valid points, return nothing
-                        if (points.length === 0) return '';
-                      
-                        // Create SVG path with valid points only
-                        let path = `M ${points[0].x} ${points[0].y}`;
-                        for (let i = 1; i < points.length; i++) {
-                          path += ` L ${points[i].x} ${points[i].y}`;
+                <View 
+                  style={styles.chartContainer}
+                  ref={chartRef}
+                  onLayout={(event) => {
+                    // Record the position information of the chart container, to improve positioning accuracy
+                    chartRef.current = event.nativeEvent.layout;
+                  }}
+                >
+                  <TouchableOpacity 
+                    activeOpacity={1}
+                    onPress={handleBackgroundPress}
+                    delayPressIn={150}
+                  >
+                    <LineChart
+                      data={chartData}
+                      width={Dimensions.get("window").width - 72}
+                      height={220}
+                      yAxisLabel=""
+                      yAxisSuffix="%"
+                      withInnerLines={false}
+                      withOuterLines={true}
+                      withVerticalLines={false}
+                      withHorizontalLines={true}
+                      bezier={false}
+                      onDataPointClick={(data) => {
+                        // Validate the validity of the data point
+                        if (!isFinite(data.value) || !isFinite(data.x) || !isFinite(data.y)) {
+                          console.log("Invalid data point clicked, ignoring");
+                          return;
                         }
-                        return path;
-                      }
-                    }}
-                    style={{ marginVertical: 8, borderRadius: 15 }}
-                    decorator={() => null}
-                  />
+                        
+                        // Prevent background click event - since it's not possible to directly prevent bubbling, use the immediate display of a new tooltip
+                        // Regardless of whether the tooltip currently exists, force an update to the new data point tooltip
+                        handleDataPointClick(data);
+                        
+                        // Return true to indicate that the click event has been processed
+                        return true;
+                      }}
+                      getDotColor={(dataPoint, index) => {
+                        // Return transparent if data point is not valid
+                        if (!isFinite(dataPoint) || dataPoint === null) return 'transparent';
+                        return '#3A8891';
+                      }}
+                      getDotProps={(dataPoint, index) => {
+                        // Do not render invalid data points
+                        if (!isFinite(dataPoint) || dataPoint === null) {
+                          return {
+                            r: "0", // The radius is 0, indicating that it is not visible
+                            strokeWidth: "0",
+                            stroke: "transparent",
+                            fill: "transparent"
+                          };
+                        }
+                        return {
+                          r: "4",
+                          strokeWidth: "2",
+                          stroke: "#3A8891",
+                          fill: "#3A8891",
+                          // SVG elements cannot directly use onLayout or ref, so we rely on decorator
+                          'data-index': index, // Add a custom property to identify in decorator
+                        };
+                      }}
+                      chartConfig={{
+                        backgroundColor: "#FFF",
+                        backgroundGradientFrom: "#FFF",
+                        backgroundGradientTo: "#FFF",
+                        decimalPlaces: 0,
+                        color: (opacity = 1) => `rgba(106, 90, 205, ${opacity})`,
+                        labelColor: (opacity = 1) => `rgba(153, 153, 153, ${opacity})`,
+                        style: { borderRadius: 15 },
+                        propsForDots: { 
+                          r: "4", 
+                          strokeWidth: "2", 
+                          stroke: "#3A8891" 
+                        },
+                        propsForBackgroundLines: { 
+                          strokeDasharray: "4, 4", 
+                          strokeWidth: 1, 
+                          stroke: "#E0E4E8" 
+                        },
+                        fillShadowGradient: "#6A5ACD",
+                        fillShadowGradientOpacity: 0.15,
+                        tooltipDecorator: () => null,
+                        // Filter out invalid data points when drawing the line
+                        formatYLabel: (value) => {
+                          return isFinite(parseFloat(value)) ? value : '0';
+                        },
+                        // Add custom line function to handle NaN and Infinity values
+                        useBezierCurve: false,
+                        // Override line drawing to prevent invalid points from being included
+                        renderLine: (datapoints, { x, y, width, height, paddingRight, paddingTop, lastData }) => {
+                          // Filter out invalid data points
+                          const validPoints = datapoints
+                            .map((value, index) => {
+                              // Ensure value is valid and a number
+                              if (!isFinite(value)) return null;
+                              // Calculate SVG coordinates
+                              const xVal = paddingRight + (index * (width - paddingRight)) / datapoints.length;
+                              const yVal = height * (1 - (value / 100)) + paddingTop;
+                              // Ensure coordinates are valid numbers
+                              if (!isFinite(xVal) || !isFinite(yVal)) return null;
+                              return { x: xVal, y: yVal };
+                            })
+                            .filter(point => point !== null);
+                        
+                          // If there are no valid points, return nothing
+                          if (validPoints.length === 0) return '';
+                          
+                          // If there's only one valid point, draw a dot instead of a line
+                          if (validPoints.length === 1) {
+                            const point = validPoints[0];
+                            return `M ${point.x} ${point.y} a 0.5 0.5 0 1 1 1 0`;
+                          }
+                        
+                          // Create SVG path with valid points only
+                          let path = `M ${validPoints[0].x.toFixed(1)} ${validPoints[0].y.toFixed(1)}`;
+                          for (let i = 1; i < validPoints.length; i++) {
+                            path += ` L ${validPoints[i].x.toFixed(1)} ${validPoints[i].y.toFixed(1)}`;
+                          }
+                          
+                          return path;
+                        }
+                      }}
+                      style={{ marginVertical: 8, borderRadius: 15 }}
+                      decorator={customDecorator}
+                    />
+                  </TouchableOpacity>
 
                   {/* Tooltip Handling */}
                   {tooltipData && (
-                    <View style={styles.tooltipContainer}>
+                    <View 
+                      style={styles.tooltipContainer}
+                      pointerEvents="box-none"
+                    >
+                      {/* Use a more compatible way to implement vertical dashed lines */}
                       <View 
-                        style={[
-                          styles.verticalDashedLine,
-                          {
-                            left: Math.max(0, tooltipData.x - 8),
-                            top: Math.max(0, tooltipData.y + 11),
-                            height: Math.max(0, 180 - tooltipData.y)
-                          }
-                        ]}
-                      />
-                      <View
-                        style={[
-                          styles.tooltip,
-                          {
-                            left: timeRange === '1Y' ? Math.max(0, tooltipData.x - 52) : Math.max(0, tooltipData.x - 53),
-                            top: timeRange === '1Y' ? Math.max(0, tooltipData.y - 90) : Math.max(0, tooltipData.y - 57)
-                          }
-                        ]}
+                        style={{
+                          position: 'absolute',
+                          left: isFinite(tooltipData.x) ? tooltipData.x - 1 : 0,
+                          top: isFinite(tooltipData.y) ? tooltipData.y + 14 : 0,
+                          height: isFinite(tooltipData.y) ? Math.max(0, 180 - tooltipData.y) : 0,
+                          overflow: 'hidden',
+                          pointerEvents: 'none'
+                        }}
                       >
-                      <View style={styles.tooltipContent}>
-                        <Text style={styles.tooltipLabel}>{tooltipData.label || ''}</Text>
-                        <Text style={styles.tooltipValue}>{isFinite(tooltipData.value) ? tooltipData.value : 0}%</Text>
-                        {timeRange === '1Y' && tooltipData.additionalInfo && (
-                          <>
-                          <Text style={styles.tooltipCompletion}>Completed:</Text>
-                          <Text style={styles.tooltipCompletion}>
-                            {tooltipData.additionalInfo.fullyCompletedCycleCount}/{tooltipData.additionalInfo.cycleCount}
-                          </Text>
-                        </>
-                          )}
-                        </View>
-                        <View style={styles.tooltipArrow} />
+                        {/* Use multiple short Views to simulate the dashed line effect */}
+                        {(() => {
+                          const segmentHeight = 4;
+                          const segmentSpacing = 3;
+                          const segmentTotal = segmentHeight + segmentSpacing;
+                          const availableHeight = Math.max(0, isFinite(tooltipData.y) ? 180 - tooltipData.y : 0);
+                          const dashCount = Math.floor((availableHeight + segmentSpacing) / segmentTotal);
+                          
+                          return Array.from({ length: dashCount }).map((_, index) => (
+                            <View
+                              key={`dash-${index}`}
+                              style={{
+                                width: 2,
+                                height: segmentHeight,
+                                backgroundColor: '#345C6F',
+                                marginBottom: index === dashCount - 1 ? 0 : segmentSpacing
+                              }}
+                            />
+                          ));
+                        })()}
                       </View>
+                      
+                      {/* Dynamically adjust the tooltip direction based on the vertical position of the data point */}
+                      {(() => {
+                        // Define constants
+                        const CHART_HEIGHT = 180;
+                        const TOOLTIP_WIDTH = 90;
+                        const TOOLTIP_OFFSET = 10;
+                        
+                        // Determine if the data point is in the upper half of the chart
+                        const isInUpperHalf = tooltipData.y < CHART_HEIGHT / 2;
+                        
+                        // Calculate the tooltip height (base height + extra content height)
+                        const baseTooltipHeight = 70;
+                        const extraHeight = timeRange === '1Y' && tooltipData.additionalInfo ? 40 : 0;
+                        const tooltipHeight = baseTooltipHeight + extraHeight;
+                        
+                        return (
+                          <TouchableOpacity
+                            activeOpacity={1}
+                            onPress={(event) => {
+                              // Prevent event bubbling
+                              event.stopPropagation();
+                            }}
+                            style={[
+                              styles.tooltip,
+                              {
+                                left: tooltipData.x - TOOLTIP_WIDTH / 2,
+                                top: isInUpperHalf
+                                  ? tooltipData.y + TOOLTIP_OFFSET + 12 // Upper half → tooltip displayed below
+                                  : tooltipData.y - tooltipHeight - TOOLTIP_OFFSET + 21 // Lower half → tooltip displayed above
+                              }
+                            ]}
+                          >
+                            <View style={styles.tooltipContent}>
+                              <Text style={styles.tooltipLabel}>{tooltipData.label || ''}</Text>
+                              <Text style={styles.tooltipValue}>{isFinite(tooltipData.value) ? tooltipData.value : 0}%</Text>
+                              {timeRange === '1Y' && tooltipData.additionalInfo && (
+                                <>
+                                  <Text style={styles.tooltipCompletion}>Completed:</Text>
+                                  <Text style={styles.tooltipCompletion}>
+                                    {tooltipData.additionalInfo.fullyCompletedCycleCount}/{tooltipData.additionalInfo.cycleCount}
+                                  </Text>
+                                </>
+                              )}
+                            </View>
+                            {/* Dynamically switch the arrow direction based on position */}
+                            <View style={isInUpperHalf ? styles.arrowUp : styles.arrowDown} />
+                          </TouchableOpacity>
+                        );
+                      })()}
                     </View>
                   )}
                 </View>
@@ -962,15 +1185,6 @@ const styles = StyleSheet.create({
     zIndex: 900,
     pointerEvents: 'none',
   },
-  verticalDashedLine: {
-    position: 'absolute',
-    width: 0,
-    borderLeftWidth: 2,
-    borderColor: '#345C6F',
-    borderStyle: 'dashed',
-    borderRadius: 0,
-    zIndex: 995,
-  },
   tooltip: {
     position: 'absolute',
     alignItems: 'center',
@@ -999,9 +1213,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  tooltipArrow: {
-    width: 0,
-    height: 0,
+  arrowUp: {
+    position: 'absolute',
+    top: -8,
+    left: '50%',
+    marginLeft: -8,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderBottomWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#6A5ACD',
+  },
+  arrowDown: {
+    position: 'absolute',
+    bottom: -8,
+    left: '50%',
+    marginLeft: -8,
     borderLeftWidth: 8,
     borderRightWidth: 8,
     borderTopWidth: 8,
@@ -1064,5 +1292,30 @@ const styles = StyleSheet.create({
   },
   toggleThumbActive: {
     transform: [{ translateX: 16 }],
+  },
+  expandButton: {
+    marginTop: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  expandButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expandButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#345C6F',
   },
 });
