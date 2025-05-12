@@ -110,13 +110,35 @@ const userService = {
         try {
           const userId = await AsyncStorage.getItem('userId');
           const username = await AsyncStorage.getItem('username');
+          const token = await AsyncStorage.getItem('userToken');
           
-          if (userId && username) {
+          if (userId && token) {
+            // Try to fetch from API first
+            try {
+              const apiUrl = await getApiUrl();
+              const response = await fetch(`${apiUrl}/auth/me`, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              if (response.ok) {
+                const userData = await response.json();
+                await AsyncStorage.setItem('user', JSON.stringify(userData));
+                return userData;
+              }
+            } catch (apiError) {
+              console.error('Error fetching user data from API:', apiError);
+            }
+            
+            // Build a basic user object from available data
             const basicUser = {
               id: userId,
               _id: userId, // Include both formats for compatibility
-              username: username,
-              name: username // Use username as name if no dedicated name is available
+              username: username || 'User', // Fallback name if username is not available
+              name: username || 'User' // Use username as name if no dedicated name is available
             };
             
             // Save this basic profile for future use

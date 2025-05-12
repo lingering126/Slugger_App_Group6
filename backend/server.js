@@ -582,6 +582,7 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id || user._id,
         email: user.email,
         name: user.name,
+        username: user.name, // Adding username for backward compatibility
         avatarUrl: user.avatarUrl,
         bio: user.bio,
         longTermGoal: user.longTermGoal || '', // Added longTermGoal
@@ -1378,4 +1379,61 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`- ${ip}`);
   });
   console.log("================================\n");
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    // Extract the token from the Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key');
+    
+    // Get user from database
+    let user;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      // Find user in MongoDB
+      user = await User.findById(decoded.userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+    } else {
+      // Fallback to in-memory storage
+      user = inMemoryUsers.find(u => u.id === decoded.userId || u._id === decoded.userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+    }
+    
+    // Return user data (excluding password)
+    res.status(200).json({
+      id: user.id || user._id,
+      email: user.email,
+      name: user.name,
+      username: user.name, // Using name as username for backward compatibility
+      avatarUrl: user.avatarUrl,
+      bio: user.bio,
+      longTermGoal: user.longTermGoal || '',
+      activitySettings: user.activitySettings || {
+        physicalActivities: [],
+        mentalActivities: [],
+        bonusActivities: []
+      },
+      status: user.status || 'Active'
+    });
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+    
+    console.error('Error in /api/auth/me endpoint:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 });
