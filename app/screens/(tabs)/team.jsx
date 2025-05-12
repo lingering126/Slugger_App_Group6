@@ -232,7 +232,8 @@ export default function TeamsScreen() {
         return;
       }
 
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      // Always use the deployed URL
+      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
       console.log('Finding team with ID:', teamIdToJoin);
       
       // First get the team by ID
@@ -307,7 +308,8 @@ export default function TeamsScreen() {
       // Save team ID for later use
       const teamIdToLeave = userTeam._id;
       
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      // Always use the deployed URL
+      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
       
       // Call the leave team API endpoint
       const response = await fetch(`${apiUrl}/teams/leave`, {
@@ -502,7 +504,8 @@ export default function TeamsScreen() {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      // Always use the deployed URL
+      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
       console.log('Loading team activities for team:', userTeam._id);
       
       // Get the current user ID
@@ -620,7 +623,8 @@ export default function TeamsScreen() {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      // Always use the deployed URL
+      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
       
       const response = await fetch(`${apiUrl}/teams/${userTeam._id}/target?recalculate=true`, {
         method: 'GET',
@@ -837,7 +841,8 @@ export default function TeamsScreen() {
         return;
       }
 
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      // Always use the deployed URL
+      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
       console.log('Updating team:', userTeam._id, editedTeam);
       
       const response = await fetch(`${apiUrl}/groups/${userTeam._id}`, {
@@ -884,7 +889,8 @@ export default function TeamsScreen() {
         return;
       }
 
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      // Always use the deployed URL
+      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
       const response = await fetch(`${apiUrl}/groups/${userTeam._id}`, {
         method: 'PUT',
         headers: {
@@ -923,7 +929,8 @@ export default function TeamsScreen() {
         return;
       }
 
-      const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+      // Always use the deployed URL
+      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
       const response = await fetch(`${apiUrl}/groups/${userTeam._id}/targets`, {
         method: 'PUT',
         headers: {

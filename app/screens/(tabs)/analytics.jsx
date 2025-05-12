@@ -72,15 +72,30 @@ export default function AnalyticsScreen() {
         
         // Overview - According to the selected mode, get different data
         const overviewRes = await api.get(`/analytics/overview/${selectedTeam._id}`);
-        setOverview(overviewRes.data);
+        // Validate overview data
+        const validatedOverview = overviewRes.data ? {
+          totalScore: isFinite(overviewRes.data.totalScore) ? overviewRes.data.totalScore : 0,
+          groupTarget: isFinite(overviewRes.data.groupTarget) ? overviewRes.data.groupTarget : 100,
+          percentageOfTarget: isFinite(overviewRes.data.percentageOfTarget) ? overviewRes.data.percentageOfTarget : 0,
+          percentageOfTimeGone: isFinite(overviewRes.data.percentageOfTimeGone) ? overviewRes.data.percentageOfTimeGone : 0
+        } : null;
+        setOverview(validatedOverview);
         
         // If it's personal mode, also get personal overview data
         if (isPersonal && userId) {
           try {
             const personalOverviewRes = await api.get(`/analytics/user-overview/${selectedTeam._id}/${userId}`);
-            setPersonalOverview(personalOverviewRes.data);
+            // Validate personal overview data
+            const validatedPersonalOverview = personalOverviewRes.data ? {
+              totalScore: isFinite(personalOverviewRes.data.totalScore) ? personalOverviewRes.data.totalScore : 0,
+              individualTarget: isFinite(personalOverviewRes.data.individualTarget) ? personalOverviewRes.data.individualTarget : 100,
+              percentageOfTarget: isFinite(personalOverviewRes.data.percentageOfTarget) ? personalOverviewRes.data.percentageOfTarget : 0,
+              percentageOfTimeGone: isFinite(personalOverviewRes.data.percentageOfTimeGone) ? personalOverviewRes.data.percentageOfTimeGone : 0
+            } : null;
+            setPersonalOverview(validatedPersonalOverview);
           } catch (err) {
             console.error('Error fetching personal overview:', err.message);
+            setPersonalOverview(null);
           }
         }
 
@@ -88,47 +103,97 @@ export default function AnalyticsScreen() {
         let timelineUrl = isPersonal
           ? `/analytics/user-timeline/${selectedTeam._id}/${userId}?range=${timeRange}`
           : `/analytics/timeline/${selectedTeam._id}?range=${timeRange}`;
-        const timelineRes = await api.get(timelineUrl);
-        const timelineData = timelineRes.data.data;
-        
-        console.log(`${timeRange} Pattern Data:`, JSON.stringify(timelineData.data).substring(0, 100) + '...');
-        
-        // timelineData has { labels, fullLabels, data }
-        setChartState({
-          labels: timelineData.labels || [],
-          fullLabels: timelineData.fullLabels || [],
-          data: timelineData.data || [] // Keep original data, no pre-processing
-        });
+        try {
+          const timelineRes = await api.get(timelineUrl);
+          const timelineData = timelineRes.data.data;
+          
+          console.log(`${timeRange} Pattern Data:`, JSON.stringify(timelineData.data).substring(0, 100) + '...');
+          
+          // Validate and sanitize timeline data
+          const labels = Array.isArray(timelineData.labels) ? timelineData.labels : [];
+          const fullLabels = Array.isArray(timelineData.fullLabels) ? timelineData.fullLabels : [];
+          let data = [];
+          
+          // Validate data based on type
+          if (Array.isArray(timelineData.data)) {
+            if (timeRange === '1Y') {
+              // For object data with value property
+              data = timelineData.data.map(item => {
+                if (typeof item === 'object') {
+                  return {
+                    ...item,
+                    // Ensure value is valid
+                    value: isFinite(item.value) ? item.value : 0,
+                    // Ensure cycle counts are valid
+                    cycleCount: isFinite(item.cycleCount) ? item.cycleCount : 0,
+                    fullyCompletedCycleCount: isFinite(item.fullyCompletedCycleCount) ? item.fullyCompletedCycleCount : 0
+                  };
+                }
+                return { value: 0, cycleCount: 0, fullyCompletedCycleCount: 0 };
+              });
+            } else {
+              // For simple number array
+              data = timelineData.data.map(val => isFinite(val) ? val : 0);
+            }
+          }
+          
+          // Set validated chart state
+          setChartState({
+            labels,
+            fullLabels,
+            data
+          });
+        } catch (err) {
+          console.error('Error fetching timeline data:', err.message);
+          // Set empty chart state on error
+          setChartState({ labels: [], fullLabels: [], data: [] });
+        }
         
         // Get member progress
-        const memberProgressRes = await api.get(`/analytics/member-progress/${selectedTeam._id}`);
-        const memberProgressData = memberProgressRes.data || [];
-        
-        // Sort member progress by score (descending)
-        const sortedMemberProgress = [...memberProgressData].sort((a, b) => b.score - a.score);
-        
-        // Add ranking identifier to members (handle same score situation)
-        let currentRank = 1;
-        let prevScore = -1;
-        const rankedMembers = sortedMemberProgress.map((member, index) => {
-          // If the score is different from the previous one, update the current rank to the actual index+1
-          if (member.score !== prevScore) {
-            currentRank = index + 1;
-          }
-          prevScore = member.score;
+        try {
+          const memberProgressRes = await api.get(`/analytics/member-progress/${selectedTeam._id}`);
+          const memberProgressData = Array.isArray(memberProgressRes.data) ? memberProgressRes.data : [];
           
-          // Only users with a score greater than 0 have a rank
-          const rank = member.score > 0 ? currentRank : 0;
-          
-          return {
+          // Sanitize member data by ensuring scores are valid numbers
+          const sanitizedMemberProgress = memberProgressData.map(member => ({
             ...member,
-            rank
-          };
-        });
-        
-        setMemberProgress(rankedMembers);
+            score: isFinite(member.score) ? member.score : 0
+          }));
+          
+          // Sort member progress by score (descending)
+          const sortedMemberProgress = [...sanitizedMemberProgress].sort((a, b) => b.score - a.score);
+          
+          // Add ranking identifier to members (handle same score situation)
+          let currentRank = 1;
+          let prevScore = -1;
+          const rankedMembers = sortedMemberProgress.map((member, index) => {
+            // If the score is different from the previous one, update the current rank to the actual index+1
+            if (member.score !== prevScore) {
+              currentRank = index + 1;
+            }
+            prevScore = member.score;
+            
+            // Only users with a score greater than 0 have a rank
+            const rank = member.score > 0 ? currentRank : 0;
+            
+            return {
+              ...member,
+              rank
+            };
+          });
+          
+          setMemberProgress(rankedMembers);
+        } catch (err) {
+          console.error('Error fetching member progress:', err.message);
+          setMemberProgress([]);
+        }
       } catch (err) {
         console.error('Error fetching analytics', err);
+        // Set safe default values on error
+        setOverview(null);
+        setPersonalOverview(null);
+        setChartState({ labels: [], fullLabels: [], data: [] });
+        setMemberProgress([]);
       } finally {
         setLoading(false);
       }
@@ -152,14 +217,21 @@ export default function AnalyticsScreen() {
     if (Array.isArray(chartState.data)) {
       if (timeRange === '1Y') {
         // 1Y mode, data is an array of objects, each object has a value property
-        dataValues = chartState.data.map(item => 
-          typeof item === 'object' && item.value !== undefined 
-            ? Math.round(item.value) 
-            : 0
-        );
+        dataValues = chartState.data.map(item => {
+          if (typeof item === 'object' && item.value !== undefined) {
+            const value = Math.round(item.value);
+            // Ensure the value is a valid number (not Infinity, -Infinity, or NaN)
+            return isFinite(value) ? value : 0;
+          }
+          return 0;
+        });
       } else {
         // Other modes, data is an array of numbers
-        dataValues = chartState.data.map(val => Math.round(val));
+        dataValues = chartState.data.map(val => {
+          const value = Math.round(val);
+          // Ensure the value is a valid number (not Infinity, -Infinity, or NaN)
+          return isFinite(value) ? value : 0;
+        });
       }
     }
     
@@ -183,7 +255,8 @@ export default function AnalyticsScreen() {
     const index = data.index;
     if (!chartData.fullLabels[index]) return;
     
-    let value = data.value;
+    // Ensure value is a valid number
+    let value = isFinite(data.value) ? data.value : 0;
     let label = chartData.fullLabels[index];
     let additionalInfo = null;
     
@@ -445,6 +518,11 @@ export default function AnalyticsScreen() {
                     withHorizontalLines={true}
                     bezier={false}
                     onDataPointClick={handleDataPointClick}
+                    getDotColor={(dataPoint, index) => {
+                      // Return transparent if data point is not valid
+                      if (!isFinite(dataPoint)) return 'transparent';
+                      return '#3A8891';
+                    }}
                     chartConfig={{
                       backgroundColor: "#FFF",
                       backgroundGradientFrom: "#FFF",
@@ -453,26 +531,59 @@ export default function AnalyticsScreen() {
                       color: (opacity = 1) => `rgba(106, 90, 205, ${opacity})`,
                       labelColor: (opacity = 1) => `rgba(153, 153, 153, ${opacity})`,
                       style: { borderRadius: 15 },
-                      propsForDots: { r: "4", strokeWidth: "2", stroke: "#3A8891" },
-                      propsForBackgroundLines: { strokeDasharray: "4, 4", strokeWidth: 1, stroke: "#E0E4E8" },
+                      propsForDots: { 
+                        r: "4", 
+                        strokeWidth: "2", 
+                        stroke: "#3A8891" 
+                      },
+                      propsForBackgroundLines: { 
+                        strokeDasharray: "4, 4", 
+                        strokeWidth: 1, 
+                        stroke: "#E0E4E8" 
+                      },
                       fillShadowGradient: "#6A5ACD",
                       fillShadowGradientOpacity: 0.15,
                       tooltipDecorator: () => null,
+                      // Filter out invalid data points when drawing the line
+                      formatYLabel: (value) => {
+                        return isFinite(parseFloat(value)) ? value : '0';
+                      },
+                      // Add custom line function to handle NaN and Infinity values
+                      useBezierCurve: false,
+                      // Override line drawing to prevent invalid points from being included
+                      renderLine: (data, { x, y, width, height, paddingRight, paddingTop }) => {
+                        const points = data.map((value, index) => {
+                          if (!isFinite(value)) return null;
+                          const xValue = paddingRight + (index * (width - paddingRight)) / data.length;
+                          const yValue = (height * (1 - (value / 100))) + paddingTop;
+                          return { x: xValue, y: yValue };
+                        }).filter(point => point !== null);
+                      
+                        // If there are no valid points, return nothing
+                        if (points.length === 0) return '';
+                      
+                        // Create SVG path with valid points only
+                        let path = `M ${points[0].x} ${points[0].y}`;
+                        for (let i = 1; i < points.length; i++) {
+                          path += ` L ${points[i].x} ${points[i].y}`;
+                        }
+                        return path;
+                      }
                     }}
                     style={{ marginVertical: 8, borderRadius: 15 }}
                     decorator={() => null}
                   />
 
-                  {/* Tooltip Handling same as before, check here if there's any problem */}
+                  {/* Tooltip Handling */}
                   {tooltipData && (
                     <View style={styles.tooltipContainer}>
                       <View 
                         style={[
                           styles.verticalDashedLine,
                           {
-                            left: tooltipData.x - 8,
-                            top: tooltipData.y + 11,
-                            height: 180 - tooltipData.y
+                            left: Math.max(0, tooltipData.x - 8),
+                            top: Math.max(0, tooltipData.y + 11),
+                            height: Math.max(0, 180 - tooltipData.y)
                           }
                         ]}
                       />
@@ -480,14 +591,14 @@ export default function AnalyticsScreen() {
                         style={[
                           styles.tooltip,
                           {
-                            left: timeRange === '1Y' ? tooltipData.x - 52 : tooltipData.x - 53,
-                            top: timeRange === '1Y' ? tooltipData.y - 90 : tooltipData.y - 57
+                            left: timeRange === '1Y' ? Math.max(0, tooltipData.x - 52) : Math.max(0, tooltipData.x - 53),
+                            top: timeRange === '1Y' ? Math.max(0, tooltipData.y - 90) : Math.max(0, tooltipData.y - 57)
                           }
                         ]}
                       >
                       <View style={styles.tooltipContent}>
-                        <Text style={styles.tooltipLabel}>{tooltipData.label}</Text>
-                        <Text style={styles.tooltipValue}>{tooltipData.value}%</Text>
+                        <Text style={styles.tooltipLabel}>{tooltipData.label || ''}</Text>
+                        <Text style={styles.tooltipValue}>{isFinite(tooltipData.value) ? tooltipData.value : 0}%</Text>
                         {timeRange === '1Y' && tooltipData.additionalInfo && (
                           <>
                           <Text style={styles.tooltipCompletion}>Completed:</Text>

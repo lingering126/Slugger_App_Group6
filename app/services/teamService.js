@@ -14,32 +14,54 @@ const getAuthToken = async () => {
   }
 };
 
-// Create axios instance
+// Helper function to get the API base URL
+const getApiBaseUrl = async () => {
+  try {
+    // Try to get a custom API URL from AsyncStorage
+    const customUrl = await AsyncStorage.getItem('apiBaseUrl');
+    if (customUrl) {
+      return customUrl;
+    }
+    // Use global.workingApiUrl if available (set by the connection checker)
+    if (global.workingApiUrl) {
+      return global.workingApiUrl;
+    }
+    // Default to the deployed URL
+    return 'https://slugger-app-group6.onrender.com/api';
+  } catch (error) {
+    console.error('Error getting API base URL:', error);
+    // Default to the deployed URL in case of error
+    return 'https://slugger-app-group6.onrender.com/api';
+  }
+};
+
+// Create axios instance with dynamic base URL
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL, // Will be updated in the interceptor
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// Add request interceptor
+// Add request interceptor to dynamically set baseURL
 api.interceptors.request.use(
   async (config) => {
+    // Update baseURL for each request
+    config.baseURL = await getApiBaseUrl();
+    
+    // Add authentication token if available
     const token = await getAuthToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    console.log(`Making ${config.method.toUpperCase()} request to: ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => {
     return Promise.reject(error);
   }
 );
-
-// Helper function to get the API base URL
-const getApiBaseUrl = () => {
-  return global.workingApiUrl || API_URL;
-};
 
 // Helper to determine which endpoint to use
 const getEndpoint = (path) => {

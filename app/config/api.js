@@ -1,6 +1,7 @@
 // API Configuration
 const API_CONFIG = {
-  API_URL: 'http://localhost:5001/api',
+  API_URL: 'https://slugger-app-group6.onrender.com/api',
+  PORT: 5001,
   ENDPOINTS: {
     AUTH: {
       LOGIN: '/auth/login',
