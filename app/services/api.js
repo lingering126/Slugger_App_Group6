@@ -1,7 +1,25 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Base API URL - consider moving this to an environment config
-const API_BASE_URL = 'http://localhost:5001/api';
+const API_BASE_URL = 'https://slugger-app-group6.onrender.com/api';
+
+// Fallback URL if the main one fails
+const FALLBACK_API_URL = 'http://localhost:5001/api';
+
+// Function to determine which API URL to use
+const getApiUrl = async () => {
+  try {
+    // Try to get a stored custom API URL
+    const customUrl = await AsyncStorage.getItem('apiBaseUrl');
+    if (customUrl) {
+      return `${customUrl}/api`;
+    }
+    return API_BASE_URL;
+  } catch (error) {
+    console.error('Error getting API URL:', error);
+    return API_BASE_URL;
+  }
+};
 
 const userService = {
   // Get user information from local storage (cached)
@@ -14,9 +32,11 @@ const userService = {
         return null;
       }
       
+      const apiUrl = await getApiUrl();
+      
       try {
         // First try to get the profile from the profiles endpoint
-        const response = await fetch(`${API_BASE_URL}/profiles/me`, {
+        const response = await fetch(`${apiUrl}/profiles/me`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -64,7 +84,7 @@ const userService = {
         // Fallback to legacy endpoint if profile API fails
         console.warn('Profile API failed, falling back to user API');
         
-        const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+        const userResponse = await fetch(`${apiUrl}/auth/me`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -132,7 +152,8 @@ const userService = {
       
       // Try the profile API endpoint
       try {
-        const response = await fetch(`${API_BASE_URL}/profiles`, {
+        const apiUrl = await getApiUrl();
+        const response = await fetch(`${apiUrl}/profiles`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -238,7 +259,8 @@ const userService = {
       
       // Try profile activities endpoint
       try {
-        const response = await fetch(`${API_BASE_URL}/profiles/activities`, {
+        const apiUrl = await getApiUrl();
+        const response = await fetch(`${apiUrl}/profiles/activities`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -279,7 +301,8 @@ const userService = {
       
       for (const endpoint of legacyEndpoints) {
         try {
-          const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          const apiUrl = await getApiUrl();
+          const response = await fetch(`${apiUrl}${endpoint}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -354,7 +377,8 @@ const groupService = {
       
       // Make API request to get user's groups
       // Corrected endpoint from /groups to /teams
-      const response = await fetch(`${API_BASE_URL}/teams`, { 
+      const apiUrl = await getApiUrl();
+      const response = await fetch(`${apiUrl}/teams`, { 
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -404,7 +428,8 @@ const groupService = {
         return null;
       }
       
-      const response = await fetch(`${API_BASE_URL}/groups/${groupId}`, {
+      const apiUrl = await getApiUrl();
+      const response = await fetch(`${apiUrl}/groups/${groupId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -451,7 +476,8 @@ const profileService = {
         return null;
       }
       
-      const response = await fetch(`${API_BASE_URL}/profiles/me`, {
+      const apiUrl = await getApiUrl();
+      const response = await fetch(`${apiUrl}/profiles/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -480,7 +506,8 @@ const profileService = {
         throw new Error('Authentication required');
       }
       
-      const response = await fetch(`${API_BASE_URL}/profiles`, {
+      const apiUrl = await getApiUrl();
+      const response = await fetch(`${apiUrl}/profiles`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -510,7 +537,8 @@ const profileService = {
         throw new Error('Authentication required');
       }
       
-      const response = await fetch(`${API_BASE_URL}/profiles/activities`, {
+      const apiUrl = await getApiUrl();
+      const response = await fetch(`${apiUrl}/profiles/activities`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

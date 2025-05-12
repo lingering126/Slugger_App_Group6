@@ -1347,12 +1347,14 @@ app.post('/api/test/email', async (req, res) => {
   }
 });
 
-// Start server
 // Note: PORT is set to 5001 in the .env file, which overrides this default
 const PORT = process.env.PORT || 5001;
+
+// Listen on all available network interfaces
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api`);
+  console.log(`Access the server at http://localhost:${PORT}`);
+  console.log('Available on your network at:');
   
   // Print out all available IP addresses
   const networkInterfaces = require('os').networkInterfaces();

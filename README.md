@@ -154,6 +154,43 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 - `GET /api/test`: Test API connectivity and get request info
 - `POST /api/test/email`: Test email configuration
 
+## Deployment to Render.com
+
+### Backend Deployment
+
+1. Create a free account at [Render.com](https://render.com)
+
+2. Click on "New +" and select "Web Service"
+
+3. Connect your GitHub repository or deploy from a public Git repository
+
+4. Configure your service:
+   - Name: slugger-backend
+   - Root Directory: backend
+   - Runtime: Node
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+
+5. Add the following environment variables:
+   - MONGODB_URI: your MongoDB Atlas connection string
+   - JWT_SECRET: a secure random string for JWT tokens
+   - PORT: 5001
+   - MAIL_HOST: your email host
+   - MAIL_PORT: your email port
+   - MAIL_USER: your email username
+   - MAIL_PASS: your email password
+   - MAIL_FROM: the email address used as sender
+
+6. Click "Create Web Service"
+
+Your backend will be deployed to a URL like: https://slugger-app-group6.onrender.com
+
+### Frontend Updates for Deployment
+
+The frontend React Native app must be configured to use the deployed backend URL. The default configuration now points to the Render.com deployment URL.
+
+If you need to use a different URL, you can update it in `app/services/api.js` or use the server settings in the app to configure a custom server URL.
+
 ## Development Notes
 
 - **Frontend Framework**: React Native with Expo
