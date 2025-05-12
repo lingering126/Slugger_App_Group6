@@ -128,19 +128,35 @@ export default function SignupScreen() {
         
         console.log('Signup response status:', response.status);
         
-        const data = await response.json();
+        // Check if response might be HTML instead of JSON
+        const contentType = response.headers.get('content-type');
         
-        if (!response.ok) {
-          console.log('Signup error data:', data);
-          setError(data.message || 'Signup failed');
+        if (contentType && contentType.includes('text/html')) {
+          console.error('Server returned HTML instead of JSON');
+          setError('Server error. Please try again later.');
           setLoading(false);
           return;
         }
         
-        console.log('Signup successful');
-        setVerificationEmail(email);
-        setSignupSuccess(true);
-        setLoading(false);
+        try {
+          const data = await response.json();
+          
+          if (!response.ok) {
+            console.log('Signup error data:', data);
+            setError(data.message || 'Signup failed');
+            setLoading(false);
+            return;
+          }
+          
+          console.log('Signup successful');
+          setVerificationEmail(email);
+          setSignupSuccess(true);
+          setLoading(false);
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError);
+          setError('Error processing server response. Please try again.');
+          setLoading(false);
+        }
       } catch (fetchError) {
         clearTimeout(timeoutId);
         throw fetchError;

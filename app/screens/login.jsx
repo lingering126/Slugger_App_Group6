@@ -137,29 +137,42 @@ export default function LoginScreen() {
         // Clear the timeout since we got a response
         clearTimeout(timeoutId);
         
-        // Start with assumption that bad credentials were entered
-        // This is a safe fallback for any authentication error
-        setError('Invalid email or password');
+        // Check if response might be HTML instead of JSON
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('text/html')) {
+          console.error('Server returned HTML instead of JSON');
+          setError('Server error. Please try again later.');
+          setLoading(false);
+          return;
+        }
         
         try {
+          // Now try to parse JSON
           data = await response.json();
           console.log('Login response:', {
             status: response.status,
             data: data
           });
           
-          if (response.status === 403 && data.requiresVerification) {
-            setNeedsVerification(true);
-            setVerificationEmail(data.email || email);
-            setError('');
-          } else if (!response.ok) {
-            // Keep "Invalid email or password" for 400/401 errors
-            if (response.status !== 400 && response.status !== 401) {
+          // Default error message for auth failures
+          if (!response.ok) {
+            if (response.status === 403 && data.requiresVerification) {
+              setNeedsVerification(true);
+              setVerificationEmail(data.email || email);
+              setError('');
+            } else if (response.status === 400 || response.status === 401) {
+              // Authentication error
+              setError('Invalid email or password');
+            } else {
               setError(data.message || 'An error occurred during login. Please try again.');
             }
             setLoading(false);
             return;
           }
+          
+          // Clear any error message on success
+          setError('');
           
           // Process successful login
           console.log('Login successful');
@@ -187,7 +200,6 @@ export default function LoginScreen() {
           }
           
           await AsyncStorage.setItem('user', JSON.stringify(data.user));
-
           
           console.log('User data stored in AsyncStorage');
           
@@ -215,11 +227,7 @@ export default function LoginScreen() {
           }
         } catch (parseError) {
           console.error('Error parsing response:', parseError);
-          if (response.status === 400 || response.status === 401) {
-            // Keep the default "Invalid email or password" for auth errors
-          } else {
-            setError('An error occurred during login. Please try again.');
-          }
+          setError('Error processing server response. Please try again.');
           setLoading(false);
         }
       } catch (fetchError) {
