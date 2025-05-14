@@ -267,23 +267,19 @@ export default function EditProfile() {
         avatarUrl: updatedUserData.avatarUrl ? '[AVATAR DATA PRESENT]' : null
       }));
       
-      try {
-        console.log("Calling API to update profile...");
-        await userService.updateUserProfile(updatedUserData);
-        console.log("API call completed successfully");
-      } catch (error) {
-        console.error('Failed to update profile on server:', error);
-      }
+      console.log("Calling API to update profile...");
+      await userService.updateUserProfile(updatedUserData); // This will throw on network or server error >= 400
+      console.log("API call completed successfully");
       
-      // Show success message and navigate back
+      // Show success message and navigate back ONLY if API call was successful
       Alert.alert(
         'Success', 
         'Profile updated successfully',
         [{ text: 'OK', onPress: () => router.back() }]
       );
-    } catch (error) {
+    } catch (error) { // This outer catch will now handle errors from userService.updateUserProfile
       console.error('Error saving profile:', error);
-      Alert.alert('Error', 'Failed to save profile changes');
+      Alert.alert('Error', error.message || 'Failed to save profile changes. Please try again.');
     } finally {
       setSaving(false);
     }

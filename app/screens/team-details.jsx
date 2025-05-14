@@ -18,9 +18,16 @@ export default function TeamDetailsScreen({ route, navigation }) {
   const [team, setTeam] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
+  const [currentUtcTime, setCurrentUtcTime] = useState('');
 
   useEffect(() => {
     loadUserData();
+    const updateUtcTime = () => {
+      setCurrentUtcTime(new Date().toUTCString());
+    };
+    updateUtcTime();
+    const intervalId = setInterval(updateUtcTime, 1000); // Update every second
+    return () => clearInterval(intervalId); // Cleanup interval on component unmount
   }, []);
 
   const loadUserData = async () => {
@@ -101,6 +108,7 @@ export default function TeamDetailsScreen({ route, navigation }) {
       <View style={styles.header}>
         <Text style={styles.teamName}>{team.name}</Text>
         <Text style={styles.teamDescription}>{team.description}</Text>
+        <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
       </View>
 
       {/* Progress Section */}
@@ -142,7 +150,7 @@ export default function TeamDetailsScreen({ route, navigation }) {
               style={styles.avatar} 
             />
             <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>{member.name}</Text>
+              <Text style={styles.memberName}>{member.username || member.name}</Text> 
               <Text style={styles.memberRole}>{member.role}</Text>
               <Text style={styles.memberPoints}>{member.points} points</Text>
             </View>
@@ -197,6 +205,11 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 24,
+  },
+  utcTimeText: {
+    fontSize: 12,
+    color: '#555',
+    marginTop: 4,
   },
   teamName: {
     fontSize: 24,
@@ -316,4 +329,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-}); 
+});

@@ -1,20 +1,26 @@
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 
-export default function StatBox() {
+export default function StatBox({ total=0, groupTarget=0, percentOfTarget=0, percentOfTimeGone=0, isPersonal=false }) {
+  // Sanitize all input values to ensure they are valid numbers
+  const safeTotal = isFinite(total) ? total : 0;
+  const safeGroupTarget = isFinite(groupTarget) ? groupTarget : 0;
+  const safePercentOfTarget = isFinite(percentOfTarget) ? Math.round(percentOfTarget) : 0;
+  const safePercentOfTimeGone = isFinite(percentOfTimeGone) ? Math.round(percentOfTimeGone) : 0;
+  
   return (
     <View style={styles.statBox}>
       <View style={styles.statColumn}>
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Total</Text>
+          <Text style={styles.statLabel}>{isPersonal ? "Individual points" : "Total"}</Text>
           <View style={styles.statHeader}>
-            <Text style={styles.statValue}>46</Text>
+            <Text style={styles.statValue}>{safeTotal}</Text>
             <Ionicons name="trending-up" size={20} color="#3A8891" />
           </View>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Group target</Text>
-          <Text style={styles.groupTarget}>68</Text>
+          <Text style={styles.statLabel}>{isPersonal ? "Individual target" : "Group target"}</Text>
+          <Text style={styles.groupTarget}>{safeGroupTarget}</Text>
         </View>
       </View>
 
@@ -23,11 +29,11 @@ export default function StatBox() {
       <View style={styles.statColumn}>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>% of target</Text>
-          <Text style={[styles.percentValue, { color: '#3A8891' }]}>68%</Text>
+          <Text style={[styles.percentValue, { color: '#3A8891' }]}>{safePercentOfTarget}%</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>% of time gone</Text>
-          <Text style={styles.percentValue}>65%</Text>
+          <Text style={styles.percentValue}>{safePercentOfTimeGone}%</Text>
         </View>
       </View>
     </View>

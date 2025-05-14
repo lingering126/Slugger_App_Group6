@@ -52,18 +52,22 @@ export const getApiUrl = () => {
     console.log('Using previously discovered working API URL:', global.workingApiUrl);
     return [global.workingApiUrl];
   }
-
+  
+  // Always prioritize the deployed URL when running on a mobile device
+  const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+  
   // Check if we're running in a web browser environment
   const isWebEnvironment = typeof document !== 'undefined';
   
-  // In web browser environment, prioritize localhost
+  // In web browser environment, use the API config URL
   if (isWebEnvironment) {
     console.log('Detected web environment, using API config URL');
     return [API_CONFIG.API_URL];
   }
   
-  // Get the server URL from config
-  return [API_CONFIG.API_URL];
+  // For mobile devices, prioritize the deployed URL, then fallback to config
+  console.log('Using deployed API URL:', deployedUrl);
+  return [deployedUrl, API_CONFIG.API_URL];
 };
 
 // Simple ping function to test connectivity with minimal overhead
@@ -135,10 +139,16 @@ export const testDirectConnection = async () => {
   
   console.log('Test connection to server IP:', serverIP);
   
+  // Ensure port is defined, default to 5001 if not
+  const port = API_CONFIG.PORT || 5001;
+  
   // Create an array of URLs to test, prioritizing the user-specified IP
   const urls = [
-    `http://${serverIP}:${API_CONFIG.PORT}/health`,
+    `http://${serverIP}:${port}/health`,
   ];
+  
+  // Try the deployed URL too
+  urls.push('https://slugger-app-group6.onrender.com/health');
   
   const results = {};
   let foundWorkingUrl = false;
@@ -186,11 +196,11 @@ export const testDirectConnection = async () => {
   if (!foundWorkingUrl) {
     // Try your specific network's addresses
     const additionalUrls = [
-      `http://192.168.31.1:${API_CONFIG.PORT}/health`,  // Your router
-      `http://192.168.31.252:${API_CONFIG.PORT}/health`, // Your laptop IP explicitly
-      `http://10.0.2.2:${API_CONFIG.PORT}/health`,      // Android emulator
-      `http://localhost:${API_CONFIG.PORT}/health`,     // iOS simulator
-      `http://127.0.0.1:${API_CONFIG.PORT}/health`,     // Localhost
+      `http://192.168.31.1:${port}/health`,  // Your router
+      `http://192.168.31.252:${port}/health`, // Your laptop IP explicitly
+      `http://10.0.2.2:${port}/health`,      // Android emulator
+      `http://localhost:${port}/health`,     // iOS simulator
+      `http://127.0.0.1:${port}/health`,     // Localhost
     ];
     
     for (const url of additionalUrls) {
@@ -289,7 +299,7 @@ export const checkServerConnection = async (apiUrls) => {
     if (isWebEnvironment) {
       console.log('Web environment detected, checking localhost first');
       
-      const localhostUrl = `http://localhost:${API_CONFIG.PORT}/api`;
+      const localhostUrl = `http://localhost:${API_CONFIG.PORT || 5001}/api`;
       const pingResult = await pingServer(localhostUrl);
       
       if (pingResult) {
@@ -314,7 +324,55 @@ export const checkServerConnection = async (apiUrls) => {
       };
     }
     
-    // If we already have a working URL, try it first
+    // Always try the deployed URL first on mobile
+    const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+    try {
+      // Try a ping to the deployed URL
+      const pingResult = await pingServer(deployedUrl);
+      if (pingResult) {
+        console.log('Ping successful to deployed URL');
+        global.workingApiUrl = deployedUrl;
+        recordSuccessfulConnection(deployedUrl);
+        return {
+          status: 'online',
+          message: 'Connected to deployed server',
+          url: deployedUrl
+        };
+      }
+      
+      // If ping fails, try a full health check
+      const healthUrl = deployedUrl.replace('/api', '/health');
+      console.log('Trying deployed URL health check:', healthUrl);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        console.log('Successfully connected to deployed URL');
+        global.workingApiUrl = deployedUrl;
+        recordSuccessfulConnection(deployedUrl);
+        return {
+          status: 'online',
+          message: 'Connected to deployed server',
+          url: deployedUrl
+        };
+      }
+    } catch (error) {
+      console.log('Deployed URL check failed:', error.message);
+      // Continue to check other URLs
+    }
+    
+    // If we already have a working URL, try it next
     if (global.workingApiUrl) {
       try {
         // First try a ping which is faster

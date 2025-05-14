@@ -1,47 +1,89 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function NewActivityScreen() {
   const router = useRouter();
   const [activityType, setActivityType] = useState('Physical');
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  // Description is not part of the backend Activity model, removing.
+  // const [description, setDescription] = useState(''); 
   const [duration, setDuration] = useState('');
+  const [currentTeamId, setCurrentTeamId] = useState(null);
+  const [userToken, setUserToken] = useState(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        setUserToken(token);
+        const teamDataString = await AsyncStorage.getItem('userTeam');
+        if (teamDataString) {
+          const teamData = JSON.parse(teamDataString);
+          // Assuming teamData has an 'id' or '_id' field. Backend returns 'id' in response for team creation.
+          // And teamService.getTeamById likely returns an object with 'id' or '_id'.
+          // The createActivity on backend expects teamId as ObjectId string.
+          setCurrentTeamId(teamData.id || teamData._id); 
+        }
+      } catch (e) {
+        console.error("Failed to load data from storage", e);
+        Alert.alert("Error", "Could not load necessary data. Please try logging in again.");
+        router.replace('/screens/login');
+      }
+    };
+    loadData();
+  }, []);
 
   const handleSubmit = async () => {
-    if (!name || !description || !duration) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!name || !duration) { // Removed description from check
+      Alert.alert('Error', 'Please fill in activity name and duration');
+      return;
+    }
+    if (!userToken) {
+      Alert.alert('Error', 'Authentication token not found. Please log in.');
       return;
     }
 
+    const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
+    const activityPayload = {
+      type: activityType,
+      name,
+      duration: parseInt(duration),
+    };
+
+    if ((activityType === 'Physical' || activityType === 'Mental') && currentTeamId) {
+      activityPayload.teamId = currentTeamId;
+    } else if ((activityType === 'Physical' || activityType === 'Mental') && !currentTeamId) {
+      // Optional: Alert user or prevent submission if teamId is crucial for these types
+      console.warn("Attempting to log Physical/Mental activity without a teamId. Weekly limits might not apply correctly.");
+      // Alert.alert("Info", "Physical or Mental activities are best logged when associated with a team for weekly tracking.");
+    }
+
     try {
-      const response = await fetch('http://localhost:5001/api/homepage/activities', {
+      const response = await fetch(`${apiUrl}/homepage/activities`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${userToken}`
         },
-        body: JSON.stringify({
-          type: activityType,
-          name,
-          description,
-          duration: parseInt(duration),
-          date: new Date().toISOString()
-        })
+        body: JSON.stringify(activityPayload)
       });
 
+      const responseData = await response.json();
+
       if (response.ok) {
+        Alert.alert('Success', 'Activity created successfully!');
         router.back();
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to create activity');
+        // Specific handling for 403 (limit reached) or other errors
+        Alert.alert('Error', responseData.message || 'Failed to create activity');
       }
     } catch (error) {
       console.error('Error creating activity:', error);
-      Alert.alert('Error', 'Failed to create activity');
+      Alert.alert('Error', 'An unexpected error occurred. Failed to create activity.');
     }
   };
 
@@ -84,6 +126,8 @@ export default function NewActivityScreen() {
           />
         </View>
 
+        {/* Description field removed as it's not in the backend model */}
+        {/* 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Description</Text>
           <TextInput
@@ -96,7 +140,8 @@ export default function NewActivityScreen() {
             numberOfLines={4}
             textAlignVertical="top"
           />
-        </View>
+        </View> 
+        */}
 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Duration (minutes)</Text>
@@ -185,4 +230,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-}); 
+});

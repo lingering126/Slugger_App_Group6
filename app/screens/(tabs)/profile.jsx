@@ -370,252 +370,255 @@ export default function Profile() {
   
   return (
     <View style={styles.container}>
-      {/* Header/Top Information Area - replaced with dynamic user data */}
-      <View style={styles.headerContainer}>
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            {userData?.avatarUrl ? (
-              <Image 
-                source={{ uri: userData.avatarUrl }} 
-                style={{ width: '100%', height: '100%' }}
-                onError={(e) => {
-                  console.log('Avatar image error:', e.nativeEvent.error)
-                  // Fall back to placeholder on error
-                }}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>{getAvatarText()}</Text>
+      <ScrollView>
+        {/* Header/Top Information Area - replaced with dynamic user data */}
+        <View style={styles.headerContainer}>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarContainer}>
+              {userData?.avatarUrl ? (
+                <Image 
+                  source={{ uri: userData.avatarUrl }} 
+                  style={{ width: '100%', height: '100%' }}
+                  onError={(e) => {
+                    console.log('Avatar image error:', e.nativeEvent.error)
+                    // Fall back to placeholder on error
+                  }}
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarText}>{getAvatarText()}</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.userInfoContainer}>
+              <Text style={styles.userName}>{userData?.name || "Unknown User"}</Text>
+              <Text style={styles.userStatus}>Status: {userData?.status || "Active"}</Text>
+              <Text style={styles.userJoinDate}>Member since: {getFormattedJoinDate()}</Text>
+            </View>
+          </View>
+          
+          {/* Bio section */}
+          {userData?.bio ? (
+            <View style={styles.bioContainer}>
+              <View style={styles.goalLabelContainer}>
+                <Text style={styles.goalLabel}>Bio:</Text>
+              </View>
+              <Text style={styles.bioText}>{userData.bio}</Text>
+            </View>
+          ) : null}
+          
+          {/* Long-term Goal section */}
+          {userData?.longTermGoal ? (
+            <View style={styles.goalContainer}>
+              <View style={styles.goalLabelContainer}>
+                <Text style={styles.goalLabel}>Long-term Goal:</Text>
+              </View>
+              <Text style={styles.goalText}>{userData.longTermGoal}</Text>
+            </View>
+          ) : null}
+          
+          <TouchableOpacity 
+            style={styles.editButton}
+            onPress={handleEditProfile}
+          >
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Rest of the profile content */}
+        <View style={styles.content}>
+          <Text style={styles.sectionTitle}>My Groups</Text>
+          {loadingGroups ? (
+            <View style={styles.placeholder}>
+              <ActivityIndicator size="small" color="#3A8891" />
+              <Text style={[styles.placeholderText, {marginTop: 8}]}>Loading groups...</Text>
+            </View>
+          ) : groups.length === 0 ? (
+            <View style={styles.placeholder}>
+              <Text style={styles.placeholderText}>No groups joined yet</Text>
+            </View>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.groupsScrollView}
+            >
+              {groups.map(group => (
+                <View
+                  key={group._id || group.id}
+                  style={styles.groupCard}
+                >
+                  <View style={styles.groupCardIcon}>
+                    <Text style={styles.groupCardIconText}>
+                      {group.name.substring(0, 2).toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={styles.groupCardName}>{group.name}</Text>
+                  <Text style={styles.groupCardMembers}>
+                    {group.members?.length || 0} members
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+          
+          <Text style={styles.sectionTitle}>My Activity Preferences</Text>
+          
+          {/* Physical Activities Section */}
+          <View style={styles.activitySection}>
+            <Text style={styles.activityTitle}>Physical Activities</Text>
+            <Text style={styles.activityDescription}>Select the physical activities you want to track</Text>
+            
+            <TouchableOpacity 
+              style={styles.activitySelector} 
+              onPress={() => setPhysicalModalVisible(true)}
+            >
+              <Text style={styles.activitySelectorText}>
+                {selectedPhysicalActivities.length 
+                  ? `${selectedPhysicalActivities.length} activities selected` 
+                  : 'Select activities'}
+              </Text>
+              <Text style={styles.dropdownIcon}>▼</Text>
+            </TouchableOpacity>
+            
+            {selectedPhysicalActivities.length > 0 && (
+              <View style={styles.selectedActivitiesContainer}>
+                {selectedPhysicalActivities.map(activity => (
+                  <View key={activity.id} style={styles.activityChip}>
+                    <Text style={styles.activityChipIcon}>{activity.icon}</Text>
+                    <Text style={styles.activityChipText}>{activity.name}</Text>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        setSelectedPhysicalActivities(
+                          selectedPhysicalActivities.filter(item => item.id !== activity.id)
+                        )
+                      }}
+                      style={styles.activityChipRemove}
+                    >
+                      <Text style={styles.activityChipRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
             )}
           </View>
-          <View style={styles.userInfoContainer}>
-            <Text style={styles.userName}>{userData?.name || "Unknown User"}</Text>
-            <Text style={styles.userStatus}>Status: {userData?.status || "Active"}</Text>
-            <Text style={styles.userJoinDate}>Member since: {getFormattedJoinDate()}</Text>
-          </View>
-        </View>
-        
-        {/* Bio section */}
-        {userData?.bio ? (
-          <View style={styles.bioContainer}>
-            <View style={styles.goalLabelContainer}>
-              <Text style={styles.goalLabel}>Bio:</Text>
-            </View>
-            <Text style={styles.bioText}>{userData.bio}</Text>
-          </View>
-        ) : null}
-        
-        {/* Long-term Goal section */}
-        {userData?.longTermGoal ? (
-          <View style={styles.goalContainer}>
-            <View style={styles.goalLabelContainer}>
-              <Text style={styles.goalLabel}>Long-term Goal:</Text>
-            </View>
-            <Text style={styles.goalText}>{userData.longTermGoal}</Text>
-          </View>
-        ) : null}
-        
-        <TouchableOpacity 
-          style={styles.editButton}
-          onPress={handleEditProfile}
-        >
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
-      </View>
 
-      {/* Rest of the profile content */}
-      <ScrollView style={styles.content}>
-        <Text style={styles.sectionTitle}>My Groups</Text>
-        {loadingGroups ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator size="small" color="#3A8891" />
-            <Text style={[styles.placeholderText, {marginTop: 8}]}>Loading groups...</Text>
-          </View>
-        ) : groups.length === 0 ? (
-          <View style={styles.placeholder}>
-            <Text style={styles.placeholderText}>No groups joined yet</Text>
-          </View>
-        ) : (
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.groupsScrollView}
-          >
-            {groups.map(group => (
-              <View
-                key={group._id || group.id}
-                style={styles.groupCard}
-              >
-                <View style={styles.groupCardIcon}>
-                  <Text style={styles.groupCardIconText}>
-                    {group.name.substring(0, 2).toUpperCase()}
-                  </Text>
-                </View>
-                <Text style={styles.groupCardName}>{group.name}</Text>
-                <Text style={styles.groupCardMembers}>
-                  {group.members?.length || 0} members
-                </Text>
+          {/* Mental Activities Section */}
+          <View style={styles.activitySection}>
+            <Text style={styles.activityTitle}>Mental Activities</Text>
+            <Text style={styles.activityDescription}>Select the mental activities you want to track</Text>
+            
+            <TouchableOpacity 
+              style={styles.activitySelector} 
+              onPress={() => setMentalModalVisible(true)}
+            >
+              <Text style={styles.activitySelectorText}>
+                {selectedMentalActivities.length 
+                  ? `${selectedMentalActivities.length} activities selected` 
+                  : 'Select activities'}
+              </Text>
+              <Text style={styles.dropdownIcon}>▼</Text>
+            </TouchableOpacity>
+            
+            {selectedMentalActivities.length > 0 && (
+              <View style={styles.selectedActivitiesContainer}>
+                {selectedMentalActivities.map(activity => (
+                  <View key={activity.id} style={[styles.activityChip, { backgroundColor: '#0E5E6F' }]}>
+                    <Text style={styles.activityChipIcon}>{activity.icon}</Text>
+                    <Text style={styles.activityChipText}>{activity.name}</Text>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        setSelectedMentalActivities(
+                          selectedMentalActivities.filter(item => item.id !== activity.id)
+                        )
+                      }}
+                      style={styles.activityChipRemove}
+                    >
+                      <Text style={styles.activityChipRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
-            ))}
-          </ScrollView>
-        )}
-        
-        <Text style={styles.sectionTitle}>Activity Settings</Text>
-        
-        {/* Physical Activities Section */}
-        <View style={styles.activitySection}>
-          <Text style={styles.activityTitle}>Physical Activities</Text>
-          <Text style={styles.activityDescription}>Select the physical activities you want to track</Text>
-          
-          <TouchableOpacity 
-            style={styles.activitySelector} 
-            onPress={() => setPhysicalModalVisible(true)}
-          >
-            <Text style={styles.activitySelectorText}>
-              {selectedPhysicalActivities.length 
-                ? `${selectedPhysicalActivities.length} activities selected` 
-                : 'Select activities'}
-            </Text>
-            <Text style={styles.dropdownIcon}>▼</Text>
-          </TouchableOpacity>
-          
-          {selectedPhysicalActivities.length > 0 && (
-            <View style={styles.selectedActivitiesContainer}>
-              {selectedPhysicalActivities.map(activity => (
-                <View key={activity.id} style={styles.activityChip}>
-                  <Text style={styles.activityChipIcon}>{activity.icon}</Text>
-                  <Text style={styles.activityChipText}>{activity.name}</Text>
-                  <TouchableOpacity 
-                    onPress={() => {
-                      setSelectedPhysicalActivities(
-                        selectedPhysicalActivities.filter(item => item.id !== activity.id)
-                      )
-                    }}
-                    style={styles.activityChipRemove}
-                  >
-                    <Text style={styles.activityChipRemoveText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+            )}
+          </View>
 
-        {/* Mental Activities Section */}
-        <View style={styles.activitySection}>
-          <Text style={styles.activityTitle}>Mental Activities</Text>
-          <Text style={styles.activityDescription}>Select the mental activities you want to track</Text>
-          
-          <TouchableOpacity 
-            style={styles.activitySelector} 
-            onPress={() => setMentalModalVisible(true)}
-          >
-            <Text style={styles.activitySelectorText}>
-              {selectedMentalActivities.length 
-                ? `${selectedMentalActivities.length} activities selected` 
-                : 'Select activities'}
-            </Text>
-            <Text style={styles.dropdownIcon}>▼</Text>
-          </TouchableOpacity>
-          
-          {selectedMentalActivities.length > 0 && (
-            <View style={styles.selectedActivitiesContainer}>
-              {selectedMentalActivities.map(activity => (
-                <View key={activity.id} style={[styles.activityChip, { backgroundColor: '#0E5E6F' }]}>
-                  <Text style={styles.activityChipIcon}>{activity.icon}</Text>
-                  <Text style={styles.activityChipText}>{activity.name}</Text>
-                  <TouchableOpacity 
-                    onPress={() => {
-                      setSelectedMentalActivities(
-                        selectedMentalActivities.filter(item => item.id !== activity.id)
-                      )
-                    }}
-                    style={styles.activityChipRemove}
-                  >
-                    <Text style={styles.activityChipRemoveText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+          {/* Bonus Activities Section */}
+          <View style={styles.activitySection}>
+            <Text style={styles.activityTitle}>Bonus Activities</Text>
+            <Text style={styles.activityDescription}>Select bonus activities to earn extra points</Text>
+            
+            <TouchableOpacity 
+              style={styles.activitySelector} 
+              onPress={() => setBonusModalVisible(true)}
+            >
+              <Text style={styles.activitySelectorText}>
+                {selectedBonusActivities.length 
+                  ? `${selectedBonusActivities.length} activities selected` 
+                  : 'Select activities'}
+              </Text>
+              <Text style={styles.dropdownIcon}>▼</Text>
+            </TouchableOpacity>
+            
+            {selectedBonusActivities.length > 0 && (
+              <View style={styles.selectedActivitiesContainer}>
+                {selectedBonusActivities.map(activity => (
+                  <View key={activity.id} style={[styles.activityChip, { backgroundColor: '#FF6B6B' }]}>
+                    <Text style={styles.activityChipIcon}>{activity.icon}</Text>
+                    <Text style={styles.activityChipText}>{activity.name}</Text>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        setSelectedBonusActivities(
+                          selectedBonusActivities.filter(item => item.id !== activity.id)
+                        )
+                      }}
+                      style={styles.activityChipRemove}
+                    >
+                      <Text style={styles.activityChipRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
 
-        {/* Bonus Activities Section */}
-        <View style={styles.activitySection}>
-          <Text style={styles.activityTitle}>Bonus Activities</Text>
-          <Text style={styles.activityDescription}>Select bonus activities to earn extra points</Text>
+          {/* Developer Tools Section - For testing only */}
+          <View style={styles.devToolsSection}>
+            <Text style={styles.devToolsTitle}>Developer Tools</Text>
+            <Text style={styles.devToolsDescription}>These tools are for development testing only</Text>
+            
+            <TouchableOpacity 
+              style={styles.resetButton} 
+              onPress={async () => {
+                try {
+                  // Remove the welcomeCompleted flag from AsyncStorage
+                  await AsyncStorage.removeItem('welcomeCompleted')
+                  Alert.alert('Success', 'Welcome flow has been reset. Log out and back in to see the welcome screens.')
+                } catch (error) {
+                  console.error('Error resetting welcome flow:', error)
+                  Alert.alert('Error', 'Failed to reset welcome flow: ' + error.message)
+                }
+              }}
+            >
+              <Text style={styles.resetButtonText}>Reset Welcome Flow</Text>
+            </TouchableOpacity>
+          </View>
           
+          {/* Save Button */}
           <TouchableOpacity 
-            style={styles.activitySelector} 
-            onPress={() => setBonusModalVisible(true)}
+            style={styles.saveButton} 
+            onPress={saveUserSettings}
+            disabled={savingSettings}
           >
-            <Text style={styles.activitySelectorText}>
-              {selectedBonusActivities.length 
-                ? `${selectedBonusActivities.length} activities selected` 
-                : 'Select activities'}
-            </Text>
-            <Text style={styles.dropdownIcon}>▼</Text>
-          </TouchableOpacity>
-          
-          {selectedBonusActivities.length > 0 && (
-            <View style={styles.selectedActivitiesContainer}>
-              {selectedBonusActivities.map(activity => (
-                <View key={activity.id} style={[styles.activityChip, { backgroundColor: '#FF6B6B' }]}>
-                  <Text style={styles.activityChipIcon}>{activity.icon}</Text>
-                  <Text style={styles.activityChipText}>{activity.name}</Text>
-                  <TouchableOpacity 
-                    onPress={() => {
-                      setSelectedBonusActivities(
-                        selectedBonusActivities.filter(item => item.id !== activity.id)
-                      )
-                    }}
-                    style={styles.activityChipRemove}
-                  >
-                    <Text style={styles.activityChipRemoveText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Developer Tools Section - For testing only */}
-        <View style={styles.devToolsSection}>
-          <Text style={styles.devToolsTitle}>Developer Tools</Text>
-          <Text style={styles.devToolsDescription}>These tools are for development testing only</Text>
-          
-          <TouchableOpacity 
-            style={styles.resetButton} 
-            onPress={async () => {
-              try {
-                // Remove the welcomeCompleted flag from AsyncStorage
-                await AsyncStorage.removeItem('welcomeCompleted')
-                Alert.alert('Success', 'Welcome flow has been reset. Log out and back in to see the welcome screens.')
-              } catch (error) {
-                console.error('Error resetting welcome flow:', error)
-                Alert.alert('Error', 'Failed to reset welcome flow: ' + error.message)
-              }
-            }}
-          >
-            <Text style={styles.resetButtonText}>Reset Welcome Flow</Text>
+            {savingSettings ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>Save Settings</Text>
+            )}
           </TouchableOpacity>
         </View>
-        
-        {/* Save Button */}
-        <TouchableOpacity 
-          style={styles.saveButton} 
-          onPress={saveUserSettings}
-          disabled={savingSettings}
-        >
-          {savingSettings ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>Save Settings</Text>
-          )}
-        </TouchableOpacity>
       </ScrollView>
-      
+
+      {/* Modals remain outside of the ScrollView */}
       {/* Modal for selecting physical activities */}
       <Modal
         animationType="slide"
@@ -674,7 +677,7 @@ export default function Profile() {
           </View>
         </View>
       </Modal>
-
+      
       {/* Modal for selecting mental activities */}
       <Modal
         animationType="slide"
@@ -803,9 +806,9 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     backgroundColor: '#3A8891',
-    paddingTop: 60,
-    paddingBottom: 20,
     paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     shadowColor: '#000',
