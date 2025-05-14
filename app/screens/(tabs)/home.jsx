@@ -1322,7 +1322,7 @@ const HomeScreen = () => {
 
               {/* Monthly Progress */}
               <View style={styles.progressSection}>
-                <Text style={styles.progressTitle}>Monthly Progress</Text>
+                <Text style={styles.progressTitle}>Weekly Progress</Text>
                 <View style={styles.progressRow}>
                   <Text style={styles.progressLabel}>Team</Text>
                   <View style={styles.progressBar}>

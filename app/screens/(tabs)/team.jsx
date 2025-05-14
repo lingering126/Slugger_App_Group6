@@ -38,6 +38,8 @@ export default function TeamsScreen() {
   const [teamToJoin, setTeamToJoin] = useState(null);
   const [updateTargetModal, setUpdateTargetModal] = useState(false);
   const [newPersonalTarget, setNewPersonalTarget] = useState(0);
+  const [selectedForfeit, setSelectedForfeit] = useState('Pressups');
+  const [isEditingForfeit, setIsEditingForfeit] = useState(false);
 
   const targetData = [
     { label: 'Select a category', value: '' },
@@ -51,6 +53,16 @@ export default function TeamsScreen() {
     { label: 'Target 8', value: 'Target 8' },
     { label: 'Target 9', value: 'Target 9' },
     { label: 'Target 10', value: 'Target 10' },
+  ];
+  
+  const forfeitOptions = [
+    { label: 'Pressups', value: 'Pressups' },
+    { label: 'Meditation', value: 'Meditation' },
+    { label: 'Rap song', value: 'Rap song' },
+    { label: 'Phone free', value: 'Phone free' },
+    { label: "Do something you're avoiding", value: "Do something you're avoiding" },
+    { label: 'Vegan for a day', value: 'Vegan for a day' },
+    { label: 'Creature picture of classic Slug scene', value: 'Creature picture of classic Slug scene' },
   ];
 
   useEffect(() => {
@@ -1077,9 +1089,18 @@ export default function TeamsScreen() {
           <View style={styles.targetCard}>
             <Text style={styles.targetName}>{userTeam.targetName}</Text>
             <View style={styles.targetValues}>
-              <Text style={styles.targetValue}>Weekly Mental Limit: {userTeam.weeklyLimitMental || 7}</Text>
-              <Text style={styles.targetValue}>Weekly Physical Limit: {userTeam.weeklyLimitPhysical || 7}</Text>
-              <Text style={styles.targetValue}>Total Personal Targets: {calculateTeamTargets(userTeam).total}</Text>
+              <View style={styles.targetValueItem}>
+                <Text style={styles.targetLabel}>Weekly Mental Limit:</Text>
+                <Text style={styles.targetValueText}>{userTeam.weeklyLimitMental || 7}</Text>
+              </View>
+              <View style={styles.targetValueItem}>
+                <Text style={styles.targetLabel}>Weekly Physical Limit:</Text>
+                <Text style={styles.targetValueText}>{userTeam.weeklyLimitPhysical || 7}</Text>
+              </View>
+              <View style={[styles.targetValueItem, { borderBottomWidth: 0 }]}>
+                <Text style={styles.targetLabel}>Total Team Targets:</Text>
+                <Text style={styles.targetValueText}>{calculateTeamTargets(userTeam).total}</Text>
+              </View>
             </View>
           </View>
           
@@ -1093,6 +1114,111 @@ export default function TeamsScreen() {
             <Text style={styles.limitsExplanationExample}>
               Example: With limits of 6 mental and 6 physical, you must complete 6 of each type before unlocking unlimited logging for the remainder of the cycle.
             </Text>
+          </View>
+
+          {/* Team Forfeit Section */}
+          <View style={styles.teamForfeitContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.forfeitTitle}>Team Forfeit</Text>
+              <TouchableOpacity 
+                onPress={() => setIsEditingForfeit(!isEditingForfeit)}
+                style={styles.editForfeitButton}
+              >
+                <Ionicons name={isEditingForfeit ? "checkmark-circle" : "create-outline"} size={24} color="#4A90E2" />
+              </TouchableOpacity>
+            </View>
+            
+            {isEditingForfeit ? (
+              <View style={styles.forfeitDropdownContainer}>
+                <Text style={styles.forfeitDropdownLabel}>Select a forfeit option:</Text>
+                <Dropdown
+                  style={styles.forfeitDropdown}
+                  placeholderStyle={styles.placeholderStyle}
+                  selectedTextStyle={styles.selectedTextStyle}
+                  data={forfeitOptions}
+                  maxHeight={300}
+                  labelField="label"
+                  valueField="value"
+                  placeholder="Select forfeit"
+                  value={selectedForfeit}
+                  onChange={item => {
+                    setSelectedForfeit(item.value);
+                  }}
+                />
+                <Text style={styles.forfeitDropdownHint}>Select a forfeit to view its details</Text>
+              </View>
+            ) : (
+              <Text style={styles.selectedForfeitText}>
+                Currently viewing: <Text style={styles.selectedForfeitName}>{selectedForfeit}</Text>
+              </Text>
+            )}
+            
+            <View style={styles.forfeitTable}>
+              <View style={styles.forfeitHeader}>
+                <Text style={[styles.forfeitHeaderText, styles.forfeitName]}>Forfeits</Text>
+                <Text style={[styles.forfeitHeaderText, styles.forfeitQuantity]}>Quantity</Text>
+                <Text style={[styles.forfeitHeaderText, styles.forfeitUnits]}>Units</Text>
+              </View>
+              
+              <View style={styles.forfeitContent}>
+                {/* Show only the selected forfeit */}
+                {selectedForfeit === 'Pressups' && (
+                  <View style={styles.forfeitRow}>
+                    <Text style={[styles.forfeitText, styles.forfeitName]}>Pressups</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitQuantity]}>500</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitUnits]}>-</Text>
+                  </View>
+                )}
+                
+                {selectedForfeit === 'Meditation' && (
+                  <View style={styles.forfeitRow}>
+                    <Text style={[styles.forfeitText, styles.forfeitName]}>Meditation</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitQuantity]}>70</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitUnits]}>minutes</Text>
+                  </View>
+                )}
+                
+                {selectedForfeit === 'Rap song' && (
+                  <View style={styles.forfeitRow}>
+                    <Text style={[styles.forfeitText, styles.forfeitName]}>Rap song</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitQuantity]}>1</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitUnits]}>-</Text>
+                  </View>
+                )}
+                
+                {selectedForfeit === 'Phone free' && (
+                  <View style={styles.forfeitRow}>
+                    <Text style={[styles.forfeitText, styles.forfeitName]}>Phone free</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitQuantity]}>12</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitUnits]}>hours</Text>
+                  </View>
+                )}
+                
+                {selectedForfeit === "Do something you're avoiding" && (
+                  <View style={styles.forfeitRow}>
+                    <Text style={[styles.forfeitText, styles.forfeitName]}>Do something you're avoiding</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitQuantity]}>3</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitUnits]}>-</Text>
+                  </View>
+                )}
+                
+                {selectedForfeit === 'Vegan for a day' && (
+                  <View style={styles.forfeitRow}>
+                    <Text style={[styles.forfeitText, styles.forfeitName]}>Vegan for a day</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitQuantity]}>1</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitUnits]}>day</Text>
+                  </View>
+                )}
+                
+                {selectedForfeit === 'Creature picture of classic Slug scene' && (
+                  <View style={styles.forfeitRow}>
+                    <Text style={[styles.forfeitText, styles.forfeitName]}>Creature picture of classic Slug scene</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitQuantity]}>1</Text>
+                    <Text style={[styles.forfeitText, styles.forfeitUnits]}>-</Text>
+                  </View>
+                )}
+              </View>
+            </View>
           </View>
         </View>
       ) : (
@@ -1196,7 +1322,15 @@ export default function TeamsScreen() {
 
   // Fix renderTeamDashboard to use new component functions and remove goals section
   const renderTeamDashboard = () => (
-    <ScrollView style={styles.teamDashboard}>
+    <ScrollView 
+      style={styles.teamDashboard}
+      showsVerticalScrollIndicator={true}
+      contentContainerStyle={{ 
+        paddingBottom: 100,
+        paddingHorizontal: 4,
+        width: '100%'
+      }}
+    >
       <View style={styles.headerActions}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -2031,7 +2165,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F5F7FA",
-    padding: 16,
+    padding: 10, // Reduce padding to make container wider
   },
   // Join team by ID styles
   joinByIdCard: {
@@ -2087,13 +2221,15 @@ const styles = StyleSheet.create({
   dashboardCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
+    padding: 16, // Reduce padding
+    marginBottom: 16,
+    marginHorizontal: 2, // Reduce horizontal margin
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    width: '100%', // Make sure it uses full width
   },
   teamHeaderContainer: {
     marginBottom: 15,
@@ -2275,6 +2411,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     width: '100%',
     marginBottom: 10,
+    marginHorizontal: 2,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -2440,7 +2577,12 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   scrollView: { padding: 16 },
-  teamDashboard: { marginBottom: 20 },
+  teamDashboard: {
+    flex: 1,
+    backgroundColor: '#F5F7FA',
+    paddingHorizontal: 8, // Reduce horizontal padding
+    paddingBottom: 120,
+  },
   teamHeader: {
     marginBottom: 20,
   },
@@ -2456,14 +2598,16 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     backgroundColor: '#fff',
-    padding: 15,
+    padding: 14,
     borderRadius: 10,
     marginBottom: 15,
+    marginHorizontal: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    width: '100%',
   },
   sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
   progressBar: {
@@ -2484,14 +2628,16 @@ const styles = StyleSheet.create({
   },
   membersContainer: {
     backgroundColor: '#fff',
-    padding: 15,
+    padding: 14,
     borderRadius: 10,
     marginBottom: 15,
+    marginHorizontal: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    width: '100%',
   },
   memberCard: {
     flexDirection: 'row',
@@ -2564,65 +2710,141 @@ const styles = StyleSheet.create({
   },
   targetsContainer: {
     backgroundColor: '#fff',
-    padding: 15,
+    padding: 14,
     borderRadius: 10,
     marginBottom: 15,
+    marginHorizontal: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    width: '100%',
   },
   targetCard: {
     backgroundColor: '#F8F9FA',
     padding: 15,
     borderRadius: 10,
+    marginBottom: 10,
   },
   targetName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#2C3E50',
-    marginBottom: 10,
+    marginBottom: 15,
   },
   targetValues: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'space-between',
   },
-  targetValue: {
+  targetValueItem: {
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  targetLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  targetValueText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  teamForfeitContainer: {
+    marginTop: 15,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginHorizontal: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    width: '100%',
+  },
+  forfeitTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 0,
+  },
+  forfeitTable: {
+    width: '100%',
+    marginVertical: 10,
+  },
+  forfeitHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  forfeitHeaderText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  forfeitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  forfeitText: {
+    fontSize: 14,
+    color: '#34495E',
+  },
+  forfeitName: {
+    width: '50%',
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#2C3E50',
+    paddingRight: 5,
+  },
+  forfeitQuantity: {
+    width: '25%',
+    textAlign: 'center',
     fontSize: 14,
     color: '#666',
   },
-  picker: {
-    width: "100%",
-    height: 50,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
+  forfeitUnits: {
+    width: '25%',
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#7F8C8D',
+  },
+  forfeitDropdownContainer: {
+    marginVertical: 15,
+    backgroundColor: '#f8f9fa',
     padding: 12,
-    backgroundColor: "#F5F7FA",
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  halfWidth: {
-    width: "48%",
-  },
-  dropdown: {
-    width: "100%",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
     borderRadius: 8,
-    padding: 12,
-    backgroundColor: "#F5F7FA",
+    borderWidth: 1,
+    borderColor: '#e6e6e6',
+    width: '100%',
   },
-  placeholderStyle: {
-    fontSize: 16,
-    color: "#7F8C8D",
+  forfeitDropdownLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 8,
   },
-  selectedTextStyle: {
-    fontSize: 16,
-    color: "#2C3E50",
+  forfeitContent: {
+    flex: 1,
+    paddingHorizontal: 8,
+    width: '100%',
+  },
+  editForfeitButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
   },
   editTargetsContainer: {
     backgroundColor: '#F8F9FA',
@@ -2759,29 +2981,32 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   limitsExplanationContainer: {
-    marginTop: 15,
-    backgroundColor: '#f8f9ff',
-    padding: 15,
+    backgroundColor: '#f7fafc',
     borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: '#7f8be4',
+    padding: 14,
+    marginVertical: 15,
+    marginHorizontal: 2,
+    borderLeftWidth: 3,
+    borderLeftColor: '#4A90E2',
+    width: '100%',
   },
   limitsExplanationTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#2C3E50',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   limitsExplanationText: {
     fontSize: 14,
-    color: '#34495e',
+    color: '#34495E',
     lineHeight: 20,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   limitsExplanationExample: {
-    fontSize: 13,
-    color: '#7f8be4',
+    fontSize: 14,
     fontStyle: 'italic',
+    color: '#7F8C8D',
+    lineHeight: 20,
   },
   personalTargetUpdateContainer: {
     backgroundColor: '#fff',
@@ -2826,5 +3051,63 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Dropdown and form styles
+  dropdown: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#F5F7FA",
+  },
+  placeholderStyle: {
+    fontSize: 16,
+    color: "#7F8C8D",
+  },
+  selectedTextStyle: {
+    fontSize: 16,
+    color: "#2C3E50",
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  halfWidth: {
+    width: "48%",
+  },
+  picker: {
+    width: "100%",
+    height: 50,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#F5F7FA",
+  },
+  // Add styles for forfeit dropdown
+  forfeitDropdown: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: "#4A90E2",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#F5F7FA",
+    marginBottom: 10,
+  },
+  forfeitDropdownHint: {
+    fontSize: 12,
+    color: "#7F8C8D",
+    fontStyle: 'italic',
+    marginTop: 5,
+  },
+  selectedForfeitText: {
+    fontSize: 14,
+    color: "#7F8C8D",
+    marginVertical: 8,
+  },
+  selectedForfeitName: {
+    fontWeight: 'bold',
+    color: "#4A90E2",
   },
 });
