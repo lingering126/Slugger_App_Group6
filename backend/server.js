@@ -9,14 +9,13 @@ const bcrypt = require('bcryptjs');
 const os = require('os');
 const User = require('./src/models/user');
 const postsRouter = require('./homepage/routes/posts');
-const { router: authRoutes } = require('./routes/auth');
-const authMiddleware = require('./middleware/auth');
+// Fix the auth import to get both router and middleware from the same file
+const { router: authRoutes, authMiddleware } = require('./routes/auth');
 const activityRoutes = require('./routes/activities');
 const statsRoutes = require('./homepage/routes/index');
 const teamRoutes = require('./routes/team');
 // Add this line to import the new profiles routes
 const profileRoutes = require('./routes/profiles');
-
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
