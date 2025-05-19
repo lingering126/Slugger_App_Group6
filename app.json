@@ -26,7 +26,24 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "static",
+      "name": "Slugger Web",
+      "description": "Slugger App for Web Browsers",
+      "themeColor": "#ffffff",
+      "backgroundColor": "#ffffff",
+      "build": {
+        "babel": {
+          "include": [
+            "@expo/vector-icons",
+            "react-native-vector-icons",
+            "react-native-paper",
+            "react-native-elements",
+            "react-native"
+          ]
+        }
+      }
     },
     "plugins": [
       "expo-router"
