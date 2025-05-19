@@ -15,7 +15,7 @@ services:
     name: slugger-app-frontend
     env: static
     branch: main
-    buildCommand: npm install && npm run build:web
+    buildCommand: npm install --legacy-peer-deps && npm run build:web
     staticPublishPath: ./dist
     routes:
       - type: rewrite
