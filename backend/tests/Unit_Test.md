@@ -28,6 +28,42 @@ This document outlines the unit test coverage for the core user authentication f
 -   **Regression Prevention**: Helps catch unintended changes or bugs in the authentication logic during future development.
 -   **Clear Documentation**: The tests, along with this document, serve as a form of executable and written documentation for the authentication API's behavior.
 
+## Analytics Features
+
+### Purpose
+This section outlines the unit test coverage for the analytics functionalities, located in `analyticsController.test.js`. These tests ensure the correct calculation and retrieval of team and user performance statistics, progress tracking, and timeline data.
+
+### Covered Features and Scenarios:
+
+#### 1. Analytics Overview (`GET /api/analytics/overview/:teamId`)
+-   **Successful Overview Retrieval**: Verifies that for an existing team, core overview statistics (like total score, group target) are returned.
+-   **Team Not Found**: Ensures the endpoint returns HTTP 404 if the specified team ID does not exist.
+
+#### 2. User-Specific Analytics Overview (`GET /api/analytics/user-overview/:teamId/:userId`)
+-   **Successful User Overview Retrieval**: Confirms that for an existing team and user, user-specific overview statistics (like total score, individual target) are returned.
+-   **Team Not Found**: Ensures the endpoint returns HTTP 404 if the specified team ID does not exist.
+
+#### 3. Member Progress (`GET /api/analytics/member-progress/:teamId`)
+-   **Successful Member Progress Retrieval**: Checks that for an existing team, member progress data (including user ID, score, display name) is returned as an array.
+-   **Team Not Found**: Ensures the endpoint returns HTTP 404 if the specified team ID does not exist.
+
+#### 4. Team Timeline (`GET /api/analytics/timeline/:teamId`)
+-   **Successful Timeline Retrieval (1W Range)**: Validates that for an existing team and the '1W' time range, timeline data (including labels and data points) is returned successfully.
+-   **Team Not Found**: Ensures the endpoint returns HTTP 404 if the specified team ID does not exist.
+
+#### 5. User-Specific Timeline (`GET /api/analytics/user-timeline/:teamId/:userId`)
+-   **Successful User Timeline Retrieval (1W Range)**: Validates that for an existing team, user, and the '1W' time range, user-specific timeline data is returned successfully.
+-   **Team Not Found**: Ensures the endpoint returns HTTP 404 if the specified team ID does not exist.
+
+#### 6. Helper Functions
+-   **`recordTeamTargetSnapshot(teamId)`**: Verifies that a new team target snapshot document is successfully created in the database with the correct team ID and calculated group target value based on member targets.
+-   **`recordUserTargetSnapshot(userId, teamId, personalTargetValue)`**: Ensures a new user-specific target snapshot document is successfully created with the provided user ID, team ID, and personal target value.
+
+### Benefits
+-   **Core Functionality Verification**: Ensures the fundamental aspects of the analytics API are working correctly.
+-   **Regression Prevention**: Helps catch bugs in the analytics logic during future development.
+-   **API Behavior Documentation**: Serves as a reference for the expected behavior of the analytics endpoints.
+
 ## Running the Tests
 
 To execute these unit tests:
