@@ -1476,7 +1476,7 @@ app.get('/reset-password', (req, res) => {
           }
           
           try {
-            const response = await fetch('/auth/reset-password', {
+            const response = await fetch('/api/auth/reset-password', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -1486,6 +1486,12 @@ app.get('/reset-password', (req, res) => {
                 password: password
               })
             });
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+              throw new Error('Server returned non-JSON response. Please try again later.');
+            }
             
             const data = await response.json();
             
@@ -1499,13 +1505,14 @@ app.get('/reset-password', (req, res) => {
             document.getElementById('successMessage').style.display = 'block';
             document.getElementById('successScreen').style.display = 'block';
           } catch (error) {
-            errorMessage.textContent = error.message;
+            console.error('Password reset error:', error);
+            errorMessage.textContent = error.message || 'An unexpected error occurred. Please try again.';
             errorMessage.style.display = 'block';
           }
         }
         
         function redirectToLogin() {
-          window.location.href = '/';
+          window.location.href = '/api';
         }
       </script>
     </body>
