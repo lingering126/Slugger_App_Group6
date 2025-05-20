@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard, TouchableWithoutFeedback, Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
@@ -8,6 +8,21 @@ import { FontAwesome } from '@expo/vector-icons';
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
 let WORKING_URL = null;
+
+// Custom TextInput component that handles focus properly
+const CustomTextInput = ({style, ...props}) => {
+  const inputRef = useRef(null);
+  
+  return (
+    <Pressable onPress={() => inputRef.current && inputRef.current.focus()}>
+      <TextInput
+        ref={inputRef}
+        style={[style, Platform.OS === 'web' ? {outlineWidth: 0} : {}]}
+        {...props}
+      />
+    </Pressable>
+  );
+};
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -340,11 +355,7 @@ export default function LoginScreen() {
   if (needsVerification) {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.contentContainer} 
-          onPress={Keyboard.dismiss}
-        >
+        <View style={styles.contentContainer}>
           <Text style={styles.title}>Email Verification Required</Text>
           
           <View style={styles.verificationContainer}>
@@ -377,7 +388,7 @@ export default function LoginScreen() {
               <Text style={styles.backButtonText}>Back to Login</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -389,11 +400,7 @@ export default function LoginScreen() {
         style={styles.keyboardAvoidingView}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
       >
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.contentContainer} 
-          onPress={Keyboard.dismiss}
-        >
+        <View style={styles.contentContainer} onStartShouldSetResponder={() => false}>
           <Text style={styles.title}>Log in with your email</Text>
           
           {serverStatus === 'offline' && (
@@ -413,7 +420,7 @@ export default function LoginScreen() {
           )}
           
           <View style={styles.inputContainer}>
-            <TextInput
+            <CustomTextInput
               style={styles.input}
               placeholder="Email"
               value={email}
@@ -423,7 +430,7 @@ export default function LoginScreen() {
             />
             
             <View style={styles.passwordContainer}>
-              <TextInput
+              <CustomTextInput
                 style={styles.passwordInput}
                 placeholder="Password"
                 value={password}
@@ -475,7 +482,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -524,16 +531,21 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 25,
     marginBottom: 15,
+    position: 'relative',
   },
   passwordInput: {
     flex: 1,
     height: '100%',
     paddingHorizontal: 20,
     fontSize: 16,
+    paddingRight: 40,
   },
   eyeIcon: {
     padding: 10,
-    marginRight: 5,
+    position: 'absolute',
+    right: 5,
+    height: '100%',
+    justifyContent: 'center',
   },
   rememberContainer: {
     flexDirection: 'row',
