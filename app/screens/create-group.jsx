@@ -26,7 +26,7 @@ export default function CreateGroupScreen() {
   const [weeklyLimitMental, setWeeklyLimitMental] = useState(7); // Default weekly mental limit
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
   const router = useRouter(); // Router for navigation
-  const [currentUtcTime, setCurrentUtcTime] = useState('');
+  const [currentLocalTime, setCurrentLocalTime] = useState('');
 
   // Function to calculate and display the cycle end date
   const calculateCycleEndDate = () => {
@@ -45,16 +45,16 @@ export default function CreateGroupScreen() {
     const cycleEndDate = new Date(cycleStartDate);
     cycleEndDate.setUTCDate(cycleStartDate.getUTCDate() + 7);
     
-    // Return formatted date
-    return cycleEndDate.toUTCString();
+    // Return formatted date in local time
+    return cycleEndDate.toLocaleString();
   };
 
   useEffect(() => {
-    const updateUtcTime = () => {
-      setCurrentUtcTime(new Date().toUTCString());
+    const updateLocalTime = () => {
+      setCurrentLocalTime(new Date().toLocaleString());
     };
-    updateUtcTime();
-    const intervalId = setInterval(updateUtcTime, 1000); // Update every second
+    updateLocalTime();
+    const intervalId = setInterval(updateLocalTime, 1000); // Update every second
     return () => clearInterval(intervalId); // Cleanup interval on component unmount
   }, []);
 
@@ -229,8 +229,8 @@ export default function CreateGroupScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <Text style={styles.title}>Create a New Team</Text>
-          <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
-          <Text style={styles.utcTimeText}>Current 7-days cycle will end at: {calculateCycleEndDate()}</Text>
+          <Text style={styles.localTimeText}>Current Local Time: {currentLocalTime}</Text>
+          <Text style={styles.localTimeText}>Current 7-days cycle will end at: {calculateCycleEndDate()}</Text>
           <Text style={styles.infoText}>
             Team cycle starts at UTC 00:00 on the day of creation and lasts for 7 days.
           </Text>
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#0E5E6F',
   },
-  utcTimeText: {
+  localTimeText: {
     fontSize: 14,
     color: '#777',
     marginBottom: 10,
