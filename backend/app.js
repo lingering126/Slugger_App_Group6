@@ -6,6 +6,8 @@ const auth = require('./middleware/auth');
 const activityRoutes = require('./routes/activities');
 const homepageRoutes = require('./homepage/routes');
 const userTargetRoutes = require('./routes/userTarget');
+const teamRoutes = require('./routes/team'); // Added team routes
+const profileRoutes = require('./routes/profiles'); // Added profile routes
 
 const app = express();
 
@@ -39,6 +41,8 @@ app.use('/api/posts', auth, postRoutes);
 app.use('/api/activities', auth, activityRoutes);
 app.use('/api/homepage', auth, homepageRoutes);
 app.use('/api/user-target', auth, userTargetRoutes);
+app.use('/api/teams', auth, teamRoutes); // Added team routes usage
+app.use('/api/profiles', auth, profileRoutes); // Added profile routes usage
 
 // Error handling middleware
 app.use(errorHandler);

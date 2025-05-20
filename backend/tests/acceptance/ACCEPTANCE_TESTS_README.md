@@ -65,6 +65,35 @@ API-driven acceptance tests help ensure that key user flows and feature integrat
     5.  **Attempt Login with Old Password:** An attempt is made to log in using the user's email and the original (old) password.
         -   *Verification:* Checks for a 401 status (unauthorized), confirming the old password is no longer valid.
 
+### 5. Team Management Flow
+-   **File:** `teamManagement.acceptance.test.js`
+-   **Description:** This test covers creating a team, having another user join it, and viewing team details.
+-   **Steps:**
+    1.  **User A Registers & Logs In.**
+    2.  **User A Creates Team:** A POST request to `/api/teams` with team details (name, description, targetName, etc.).
+        -   *Verification:* 201 status, response contains team data, User A is a member, and a 6-digit `teamId` is present.
+    3.  **User A Fetches Their Teams:** A GET request to `/api/teams`.
+        -   *Verification:* The newly created team is listed.
+    4.  **User B Registers & Logs In.**
+    5.  **User B Joins Team:** A POST request to `/api/teams/join-by-id` using the 6-digit `teamId`.
+        -   *Verification:* 200 status, User B is now listed as a member in the response.
+    6.  **View Team Details:** One of the users fetches team details via GET `/api/teams/:teamMongoId`.
+        -   *Verification:* Team details are correct, and both User A and User B are listed as members.
+
+### 6. Profile Management Flow
+-   **File:** `profileManagement.acceptance.test.js`
+-   **Description:** This test verifies fetching, updating, and re-verifying a user's profile information, including synchronization with the User model.
+-   **Steps:**
+    1.  **User Registers & Logs In.**
+    2.  **Fetch Initial Profile:** A GET request to `/api/profiles/me`.
+        -   *Verification:* 200 status. The profile (possibly auto-created) should reflect initial data from the User record (e.g., name matches username).
+    3.  **Update Profile:** A PUT request to `/api/profiles` with new data (e.g., updated name, bio, longTermGoal).
+        -   *Verification:* 200 status, response contains the updated profile information. The populated `user.username` in the response should also reflect the new name if it was changed (due to sync logic).
+    4.  **Fetch Profile Again:** A GET request to `/api/profiles/me`.
+        -   *Verification:* The fetched profile shows the persisted updates.
+    5.  **Verify User Model Sync:** The `User` document is fetched directly from the database.
+        -   *Verification:* The `user.name` and `user.username` fields in the User model match the updated name from the profile, confirming synchronization.
+
 ## Running the Acceptance Tests
 
 These acceptance tests are part of the main test suite.
