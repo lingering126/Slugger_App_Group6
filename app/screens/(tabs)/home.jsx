@@ -272,8 +272,9 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
-      // Convert hours to minutes
-      const durationInMinutes = parseInt(selectedTime) * 60;
+      // Convert time value to minutes
+      // Format: "0.25" = 15 mins, "0.5" = 30 mins, "0.75" = 45 mins, "1" = 1 hour, etc.
+      const durationInMinutes = parseFloat(selectedTime) * 60;
       
       // Create request body
       const requestBody = {
@@ -354,11 +355,14 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             style={styles.picker} 
               onValueChange={(itemValue) => {
                 setSelectedTime(itemValue);
-                console.log('Selected time:', itemValue); // Changed from Chinese to English
+                console.log('Selected time:', itemValue);
               }}
           >
-            {[...Array(24).keys()].map((num) => (
-              <Picker.Item key={num + 1} label={`${num + 1} hour`} value={`${num + 1}`} />
+            <Picker.Item key="0.25" label="15 minutes" value="0.25" />
+            <Picker.Item key="0.5" label="30 minutes" value="0.5" />
+            <Picker.Item key="0.75" label="45 minutes" value="0.75" />
+            {[...Array(8).keys()].map((num) => (
+              <Picker.Item key={num + 1} label={`${num + 1} hour${num > 0 ? 's' : ''}`} value={`${num + 1}`} />
             ))}
           </Picker>
           </View>
@@ -375,7 +379,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
                 ]}
                   onPress={() => {
                     setSelectedActivity(activity);
-                    console.log('Selected activity:', activity); // Changed from Chinese to English
+                    console.log('Selected activity:', activity);
                   }}
               >
                 <Text style={[
