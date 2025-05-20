@@ -1449,7 +1449,7 @@ app.get('/reset-password', (req, res) => {
         
         <div id="successScreen" style="display: none; text-align: center;">
           <p>Your password has been reset successfully.</p>
-          <button type="button" onclick="redirectToLogin()">Go to Login</button>
+          <p style="margin-top: 15px; color: #666;">You can now close this window and login to the app with your new password.</p>
         </div>
       </div>
       
@@ -1509,10 +1509,6 @@ app.get('/reset-password', (req, res) => {
             errorMessage.textContent = error.message || 'An unexpected error occurred. Please try again.';
             errorMessage.style.display = 'block';
           }
-        }
-        
-        function redirectToLogin() {
-          window.location.href = '/api';
         }
       </script>
     </body>
