@@ -1,11 +1,11 @@
-// 这个文件是一个修复 nanoid/non-secure 模块的补丁
-// 使用 "node fix-nanoid.js" 命令运行
+// this file is a patch to fix the nanoid/non-secure module
+// run "node fix-nanoid.js" to run
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-// 递归查找所有 nanoid/non-secure/package.json 文件
+// recursively find all nanoid/non-secure/package.json files
 function findAllNanoidNonSecure(baseDir) {
   const results = [];
   
@@ -19,21 +19,21 @@ function findAllNanoidNonSecure(baseDir) {
       const stat = fs.statSync(fullPath);
       
       if (stat.isDirectory()) {
-        // 如果是 nanoid/non-secure 目录
+        // if it is a nanoid/non-secure directory
         if (file === 'non-secure' && path.basename(dir) === 'nanoid') {
           const packageJsonPath = path.join(fullPath, 'package.json');
           if (fs.existsSync(packageJsonPath)) {
             results.push(fullPath);
           }
         } else if (file !== 'node_modules') {
-          // 避免无限递归
+          // avoid infinite recursion
           searchDir(fullPath);
         }
       }
     }
   }
   
-  // 查找所有可能存在 nanoid 的目录
+  // find all possible directories that might contain nanoid
   const possibleDirs = [
     path.join(baseDir, 'node_modules', 'nanoid', 'non-secure'),
     path.join(baseDir, 'node_modules', '@react-navigation', 'core', 'node_modules', 'nanoid', 'non-secure'),
@@ -46,7 +46,7 @@ function findAllNanoidNonSecure(baseDir) {
     path.join(baseDir, 'node_modules', '@react-navigation', 'material-top-tabs', 'node_modules', 'nanoid', 'non-secure')
   ];
   
-  // 检查明确的目录
+  // check the explicit directories
   for (const dir of possibleDirs) {
     if (fs.existsSync(dir)) {
       const packageJsonPath = path.join(dir, 'package.json');
@@ -59,43 +59,43 @@ function findAllNanoidNonSecure(baseDir) {
   return results;
 }
 
-// 修复特定的 nanoid/non-secure 目录
+// fix the specific nanoid/non-secure directory
 function fixNanoidNonSecure(nonSecureDir) {
-  console.log(`修复目录: ${nonSecureDir}`);
+  console.log(`fixing directory: ${nonSecureDir}`);
   
   try {
-    // 检查当前 package.json
+    // check the current package.json
     const packageJsonPath = path.join(nonSecureDir, 'package.json');
     let packageJson;
     
     if (fs.existsSync(packageJsonPath)) {
-      // 读取当前内容
+      // read the current content
       packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
       
-      // 检查 index.js 是否存在
+      // check if index.js exists
       const indexJsPath = path.join(nonSecureDir, 'index.js');
       if (fs.existsSync(indexJsPath)) {
-        // 更新 package.json 配置，确保包可以被正确解析
+        // update the package.json config to ensure the package can be parsed correctly
         packageJson = {
           ...packageJson,
-          main: "index.js" // 将主入口指向 index.js 而不是 index.cjs
+          main: "index.js" // change the main entry to index.js instead of index.cjs
         };
         
         fs.writeFileSync(
           packageJsonPath,
           JSON.stringify(packageJson, null, 2)
         );
-        console.log(`已更新 ${packageJsonPath} 文件，将主入口改为 index.js`);
+        console.log(`updated ${packageJsonPath} file, changed the main entry to index.js`);
         
-        // 复制 index.js 到 index.cjs 以确保兼容性
+        // copy index.js to index.cjs to ensure compatibility
         const indexContent = fs.readFileSync(indexJsPath, 'utf8');
         fs.writeFileSync(path.join(nonSecureDir, 'index.cjs'), indexContent);
-        console.log(`已将 ${indexJsPath} 内容复制到 index.cjs 以确保兼容性`);
+        console.log(`copied ${indexJsPath} content to index.cjs to ensure compatibility`);
         
         return true;
       } else {
-        console.error(`无法找到 ${indexJsPath} 文件`);
-        // 如果没有 index.js 但有 nanoid/non-secure.js，尝试复制
+        console.error(`cannot find ${indexJsPath} file`);
+        // if there is no index.js but there is nanoid/non-secure.js, try to copy
         const mainNanoidDir = path.join(__dirname, 'node_modules', 'nanoid');
         if (fs.existsSync(mainNanoidDir)) {
           const mainIndexPath = path.join(mainNanoidDir, 'non-secure', 'index.js');
@@ -103,40 +103,40 @@ function fixNanoidNonSecure(nonSecureDir) {
             const indexContent = fs.readFileSync(mainIndexPath, 'utf8');
             fs.writeFileSync(path.join(nonSecureDir, 'index.js'), indexContent);
             fs.writeFileSync(path.join(nonSecureDir, 'index.cjs'), indexContent);
-            console.log(`已从主 nanoid 复制 index.js 到 ${nonSecureDir}`);
+            console.log(`copied index.js from the main nanoid to ${nonSecureDir}`);
             return true;
           }
         }
         return false;
       }
     } else {
-      console.error(`无法找到 ${packageJsonPath} 文件`);
+      console.error(`cannot find ${packageJsonPath} file`);
       
-      // 尝试创建目录和文件
+      // try to create the directory and file
       const mainNanoidDir = path.join(__dirname, 'node_modules', 'nanoid');
       if (fs.existsSync(mainNanoidDir)) {
         const mainNonSecureDir = path.join(mainNanoidDir, 'non-secure');
         if (fs.existsSync(mainNonSecureDir)) {
-          // 确保目录存在
+          // ensure the directory exists
           if (!fs.existsSync(path.dirname(packageJsonPath))) {
             fs.mkdirSync(path.dirname(packageJsonPath), { recursive: true });
           }
           
-          // 创建 package.json
+          // create the package.json
           const newPackageJson = {
             "main": "index.js",
             "module": "index.js"
           };
           fs.writeFileSync(packageJsonPath, JSON.stringify(newPackageJson, null, 2));
-          console.log(`已创建 ${packageJsonPath} 文件`);
+          console.log(`created ${packageJsonPath} file`);
           
-          // 复制 index.js
+          // copy index.js
           const mainIndexPath = path.join(mainNonSecureDir, 'index.js');
           if (fs.existsSync(mainIndexPath)) {
             const indexContent = fs.readFileSync(mainIndexPath, 'utf8');
             fs.writeFileSync(path.join(nonSecureDir, 'index.js'), indexContent);
             fs.writeFileSync(path.join(nonSecureDir, 'index.cjs'), indexContent);
-            console.log(`已从主 nanoid 复制 index.js 到 ${nonSecureDir}`);
+            console.log(`copied index.js from the main nanoid to ${nonSecureDir}`);
             return true;
           }
         }
@@ -145,25 +145,25 @@ function fixNanoidNonSecure(nonSecureDir) {
       return false;
     }
   } catch (error) {
-    console.error(`修复过程中出错 (${nonSecureDir}):`, error);
+    console.error(`error during fixing (${nonSecureDir}):`, error);
     return false;
   }
 }
 
-// 创建手动的映射文件，确保 nanoid/non-secure 被正确解析
+// create a manual mapping file to ensure nanoid/non-secure is parsed correctly
 function createNonSecureResolver() {
-  // 创建一个 node_modules/nanoid-non-secure 包
+  // create a node_modules/nanoid-non-secure package
   const helperDir = path.join(__dirname, 'node_modules', 'nanoid-non-secure');
   if (!fs.existsSync(helperDir)) {
     fs.mkdirSync(helperDir, { recursive: true });
   }
   
-  // 从主 nanoid 包复制非安全代码
+  // copy the non-secure code from the main nanoid package
   const mainNonSecurePath = path.join(__dirname, 'node_modules', 'nanoid', 'non-secure', 'index.js');
   if (fs.existsSync(mainNonSecurePath)) {
     const content = fs.readFileSync(mainNonSecurePath, 'utf8');
     
-    // 创建 package.json
+    // create the package.json
     const packageJson = {
       "name": "nanoid-non-secure",
       "version": "1.0.0",
@@ -176,10 +176,10 @@ function createNonSecureResolver() {
       JSON.stringify(packageJson, null, 2)
     );
     
-    // 创建 index.js
+    // create index.js
     fs.writeFileSync(path.join(helperDir, 'index.js'), content);
     
-    console.log('已创建 nanoid-non-secure 辅助包');
+    console.log('created nanoid-non-secure helper package');
     
     return true;
   }
@@ -187,33 +187,33 @@ function createNonSecureResolver() {
   return false;
 }
 
-// 主函数
+// main function
 function main() {
-  // 创建辅助解析器
+  // create the helper resolver
   createNonSecureResolver();
   
-  // 查找所有 nanoid/non-secure 目录
+  // find all nanoid/non-secure directories
   const nonSecureDirs = findAllNanoidNonSecure(__dirname);
   
-  console.log(`找到 ${nonSecureDirs.length} 个 nanoid/non-secure 目录需要修复`);
+  console.log(`found ${nonSecureDirs.length} nanoid/non-secure directories to fix`);
   
   let successCount = 0;
   
-  // 修复每个目录
+  // fix each directory
   for (const dir of nonSecureDirs) {
     if (fixNanoidNonSecure(dir)) {
       successCount++;
     }
   }
   
-  console.log(`成功修复 ${successCount}/${nonSecureDirs.length} 个 nanoid/non-secure 模块`);
+  console.log(`successfully fixed ${successCount}/${nonSecureDirs.length} nanoid/non-secure modules`);
   
-  // 如果需要更彻底的修复，可以尝试 metro 缓存清理
+  // if you need a more thorough fix, you can try to clean the metro cache
   try {
-    console.log('清理 Metro 缓存...');
+    console.log('cleaning Metro cache...');
     execSync('npx react-native start --reset-cache', { stdio: 'ignore' });
   } catch (error) {
-    // 忽略错误，因为这只是可选的步骤
+    // ignore the error, this is an optional step
   }
 }
 
