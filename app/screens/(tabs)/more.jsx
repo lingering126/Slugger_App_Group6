@@ -18,8 +18,9 @@ export default function MoreScreen() {
           'user', 
           'userTeam',         // If you store team info per user
           'savedPassword',    // Clearing saved password for security
+          'userIsNew',        // Clear the new user flag
           // 'savedEmail'    // Decide if you want to keep savedEmail for convenience
-          'welcomeCompleted'  // If you want to show welcome screen again for next login on this device
+          // 'welcomeCompleted' is intentionally not cleared to prevent welcome screen on next login
         ];
         await AsyncStorage.multiRemove(keysToRemove);
         
