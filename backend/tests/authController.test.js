@@ -104,6 +104,9 @@ describe('Auth Controller Tests', () => {
     });
 
     it('should fail to register a user with missing email', async () => {
+      // Spy on console.error and provide a mock implementation to silence it for this test
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
       const response = await request(app)
         .post('/api/auth/register')
         .send({
@@ -139,6 +142,9 @@ describe('Auth Controller Tests', () => {
       expect(response.status).toBe(500); // Or 400 if errorHandler is smart
       // A more specific check would be:
       // expect(response.body.message).toMatch(/email.*required/i);
+
+      // Restore the original console.error implementation
+      consoleErrorSpy.mockRestore();
     });
   });
 
@@ -263,6 +269,9 @@ describe('Auth Controller Tests', () => {
     });
 
     it('should initiate password reset for an existing user', async () => {
+      // Spy on console.warn and provide a mock implementation to silence it for this test
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
       const response = await request(app)
         .post('/api/auth/forgot-password')
         .send({ email: existingUserEmail });
@@ -282,6 +291,9 @@ describe('Auth Controller Tests', () => {
          expect(userInDb.resetPasswordToken).toBeDefined();
          expect(userInDb.resetPasswordToken).not.toBeNull();
       }
+
+      // Restore the original console.warn implementation
+      consoleWarnSpy.mockRestore();
     });
 
     it('should return a generic success message for a non-existent user', async () => {
