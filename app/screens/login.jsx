@@ -451,6 +451,13 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.rememberText}>Remember password</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.forgotPasswordContainer}
+              onPress={() => router.push('/screens/forgot-password')}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.buttonContainer}>
@@ -649,6 +656,14 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: '#666',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  forgotPasswordContainer: {
+    paddingVertical: 10,
+  },
+  forgotPasswordText: {
+    color: '#6c63ff',
     fontSize: 16,
     textDecorationLine: 'underline',
   }

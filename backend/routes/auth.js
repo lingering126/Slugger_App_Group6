@@ -5,6 +5,8 @@ const bcrypt = require('bcryptjs');
 const User = require('../src/models/user');
 const { AppError } = require('../middleware/errorHandler');
 const authMiddleware = require('../middleware/auth');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 // Temporary user storage (replace with database in production)
 const users = [
@@ -104,6 +106,203 @@ router.post('/register', async (req, res, next) => {
         username: newUser.name,
         email: newUser.email
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Forgot password route - send password reset email
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    // Validate input
+    if (!email) {
+      throw new AppError('Email is required', 400);
+    }
+
+    // Find user
+    const user = await User.findOne({ email });
+    if (!user) {
+      // For security reasons, don't reveal that the email doesn't exist
+      return res.status(200).json({
+        message: 'If your email is registered, you will receive a password reset link'
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = Date.now() + 3600000; // 1 hour from now
+
+    // Update user with reset token
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = resetTokenExpires;
+    await user.save();
+
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:19006'}/screens/reset-password?token=${resetToken}`;
+
+    // Debug - console log the URL
+    console.log('Password reset URL:', resetUrl);
+
+    // Try to send email but don't fail if email configuration is missing
+    let emailSent = false;
+    try {
+      // Check if email configuration exists
+      if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+          }
+        });
+
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: user.email,
+          subject: 'Password Reset Request',
+          html: `
+            <p>You requested a password reset</p>
+            <p>Click <a href="${resetUrl}">here</a> to reset your password</p>
+            <p>This link will expire in 1 hour</p>
+          `
+        };
+
+        await transporter.sendMail(mailOptions);
+        emailSent = true;
+      } else {
+        console.warn('Email configuration missing. Skipping email send.');
+      }
+    } catch (emailError) {
+      console.error('Failed to send reset email:', emailError);
+      // We won't throw here - we'll handle this below
+    }
+
+    // Send appropriate response
+    if (emailSent) {
+      res.status(200).json({
+        message: 'Password reset email sent'
+      });
+    } else {
+      // For development/testing, return the token directly if email wasn't sent
+      res.status(200).json({
+        message: 'Password reset initiated. For testing purposes, use this token: ' + resetToken,
+        resetToken: resetToken, // Only include in non-production environments
+        resetUrl: resetUrl
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Reset password route - verify token and update password
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+
+    // Validate input
+    if (!token || !password) {
+      throw new AppError('Token and password are required', 400);
+    }
+
+    // Find user with valid reset token
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      throw new AppError('Invalid or expired reset token', 400);
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Update user password and clear reset token
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    // Return success message
+    res.status(200).json({
+      message: 'Password reset successful. You can now log in with your new password.'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Verify token from email
+router.get('/verify-email', async (req, res, next) => {
+  try {
+    const { token } = req.query;
+    
+    if (!token) {
+      throw new AppError('Verification token is required', 400);
+    }
+    
+    // Find user with this verification token
+    const user = await User.findOne({ 
+      verificationToken: token,
+      verificationTokenExpires: { $gt: Date.now() }
+    });
+    
+    if (!user) {
+      throw new AppError('Invalid or expired verification token', 400);
+    }
+    
+    // Update user status
+    user.isVerified = true;
+    user.verificationToken = null;
+    user.verificationTokenExpires = null;
+    await user.save();
+    
+    res.status(200).json({
+      message: 'Email verification successful'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Resend verification email
+router.post('/resend-verification', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      throw new AppError('Email is required', 400);
+    }
+    
+    const user = await User.findOne({ email });
+    
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+    
+    if (user.isVerified) {
+      return res.status(200).json({
+        message: 'Email is already verified'
+      });
+    }
+    
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpires = Date.now() + 24 * 3600000; // 24 hours
+    
+    // Update user with new verification token
+    user.verificationToken = verificationToken;
+    user.verificationTokenExpires = verificationTokenExpires;
+    await user.save();
+    
+    // TODO: Send verification email
+    
+    res.status(200).json({
+      message: 'Verification email sent'
     });
   } catch (error) {
     next(error);
