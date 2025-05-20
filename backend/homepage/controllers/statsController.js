@@ -114,4 +114,74 @@ exports.updateUserTarget = async (req, res) => {
       error: error.message
     });
   }
+};
+
+// Reset weekly stats
+exports.resetWeeklyStats = async (req, res) => {
+  try {
+    console.log('\n=== Resetting Weekly Stats ===');
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    console.log('User ID:', userId);
+    
+    if (!userId) {
+      throw new Error('User ID is required but not found in request');
+    }
+    
+    // Get the user's stats document
+    let userStats = await UserStats.findOne({ userId });
+    if (!userStats) {
+      console.log('No UserStats record found to reset');
+      return res.status(404).json({
+        success: false,
+        message: 'User statistics not found'
+      });
+    }
+
+    // Store previous values for logging
+    const previousStats = {
+      totalPoints: userStats.totalPoints || 0,
+      activitiesCompleted: userStats.activitiesCompleted || 0,
+      streak: userStats.streak || 0
+    };
+
+    // Reset weekly stats
+    userStats.totalPoints = 0;
+    userStats.pointsByType = new Map();
+    userStats.activitiesCompleted = 0;
+    // Note: Optionally reset streak if that's part of the weekly reset
+    userStats.streak = 0;
+    
+    // Save the updated stats
+    await userStats.save();
+
+    console.log('Previous stats:', previousStats);
+    console.log('Stats reset successfully');
+    console.log('=== Weekly Stats Reset Complete ===\n');
+
+    res.json({
+      success: true,
+      message: 'Weekly statistics reset successfully',
+      data: {
+        previous: previousStats,
+        current: {
+          totalPoints: userStats.totalPoints,
+          activitiesCompleted: userStats.activitiesCompleted,
+          streak: userStats.streak,
+          progress: userStats.calculateProgress()
+        }
+      }
+    });
+  } catch (error) {
+    console.error('\n=== Weekly Stats Reset Error ===');
+    console.error('Error details:', error);
+    console.error('Stack trace:', error.stack);
+    console.error('Request user object:', req.user);
+    console.error('=== Error End ===\n');
+    
+    res.status(500).json({ 
+      success: false,
+      message: 'Error resetting weekly statistics',
+      error: error.message 
+    });
+  }
 }; 

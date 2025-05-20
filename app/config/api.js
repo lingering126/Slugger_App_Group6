@@ -22,7 +22,8 @@ const API_CONFIG = {
     USER: {
       STATS: '/stats/user',
       PROFILE: '/users/profile',
-      UPDATE_PROFILE: '/users/profile'
+      UPDATE_PROFILE: '/users/profile',
+      RESET_WEEKLY_STATS: '/stats/user/reset-weekly'
     }
   }
 };

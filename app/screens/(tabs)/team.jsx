@@ -30,7 +30,7 @@ export default function TeamsScreen() {
   const [teamProgress, setTeamProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
-  const [currentUtcTime, setCurrentUtcTime] = useState('');
+  const [currentLocalTime, setCurrentLocalTime] = useState('');
   const navigation = useNavigation();
   const router = useRouter();
   const [personalTargetModal, setPersonalTargetModal] = useState(false);
@@ -81,11 +81,11 @@ export default function TeamsScreen() {
   }, [navigation, userTeam]);
 
   useEffect(() => {
-    const updateUtcTime = () => {
-      setCurrentUtcTime(new Date().toUTCString());
+    const updateLocalTime = () => {
+      setCurrentLocalTime(new Date().toLocaleString());
     };
-    updateUtcTime();
-    const intervalId = setInterval(updateUtcTime, 1000); // Update every second
+    updateLocalTime();
+    const intervalId = setInterval(updateLocalTime, 1000); // Update every second
     return () => clearInterval(intervalId); // Cleanup interval on component unmount
   }, []);
 
@@ -993,7 +993,10 @@ export default function TeamsScreen() {
       // Get remaining hours after full days are counted
       const hoursUntilCycleEnd = Math.floor((msUntilCycleEnd % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       
-      return `${daysUntilCycleEnd}d ${hoursUntilCycleEnd}h left (${cycleEnd.toUTCString()})`;
+      // Format the date in local time
+      const localCycleEnd = cycleEnd.toLocaleString();
+      
+      return `${daysUntilCycleEnd}d ${hoursUntilCycleEnd}h left (${localCycleEnd})`;
     }
     
     // Fallback to calculating based on team creation date
@@ -1017,7 +1020,10 @@ export default function TeamsScreen() {
     // Calculate remaining hours after full days
     const hoursUntilCycleEnd = Math.floor((msUntilCycleEnd % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     
-    return `${daysUntilCycleEnd}d ${hoursUntilCycleEnd}h left (${cycleEndDate.toUTCString()})`;
+    // Format the date in local time
+    const localCycleEnd = cycleEndDate.toLocaleString();
+    
+    return `${daysUntilCycleEnd}d ${hoursUntilCycleEnd}h left (${localCycleEnd})`;
   };
 
   // Team members section with personal targets
@@ -1345,7 +1351,7 @@ export default function TeamsScreen() {
         <View style={styles.teamHeaderContainer}>
           <View style={styles.teamHeader}>
             <Text style={styles.teamName}>{userTeam.name}</Text>
-            <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
+            <Text style={styles.localTimeText}>Current Time: {currentLocalTime}</Text>
             <TouchableOpacity 
               style={styles.editIconButton} 
               onPress={() => setIsEditingTeam(true)}
@@ -2915,7 +2921,7 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: "top",
   },
-  utcTimeText: {
+  localTimeText: {
     fontSize: 14,
     color: '#7F8C8D',
     marginLeft: 8,

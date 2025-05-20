@@ -1365,3 +1365,153 @@ app.use((err, req, res, next) => {
   
   next(err);
 });
+
+// Add a route for handling web-based password reset
+app.get('/reset-password', (req, res) => {
+  const token = req.query.token;
+  if (!token) {
+    return res.status(400).send('Missing reset token');
+  }
+  
+  // Serve a simple HTML form for resetting password
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Reset Password - Slugger App</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          max-width: 500px;
+          margin: 0 auto;
+          padding: 20px;
+        }
+        h1 {
+          color: #6c63ff;
+          text-align: center;
+        }
+        .container {
+          background: #f9f9f9;
+          border-radius: 8px;
+          padding: 20px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input {
+          width: 100%;
+          padding: 10px;
+          margin-bottom: 15px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          box-sizing: border-box;
+        }
+        button {
+          background: #6c63ff;
+          color: white;
+          border: none;
+          padding: 12px 20px;
+          border-radius: 25px;
+          cursor: pointer;
+          width: 100%;
+          font-size: 16px;
+        }
+        .error {
+          color: red;
+          margin-bottom: 15px;
+        }
+        .success {
+          color: green;
+          margin-bottom: 15px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Reset Your Password</h1>
+        <div id="errorMessage" class="error" style="display: none;"></div>
+        <div id="successMessage" class="success" style="display: none;"></div>
+        
+        <div id="resetForm">
+          <div>
+            <label for="password">New Password</label>
+            <input type="password" id="password" placeholder="Enter new password" minlength="6" required>
+          </div>
+          
+          <div>
+            <label for="confirmPassword">Confirm Password</label>
+            <input type="password" id="confirmPassword" placeholder="Confirm new password" minlength="6" required>
+          </div>
+          
+          <button type="button" onclick="resetPassword()">Reset Password</button>
+        </div>
+        
+        <div id="successScreen" style="display: none; text-align: center;">
+          <p>Your password has been reset successfully.</p>
+          <p style="margin-top: 15px; color: #666;">You can now close this window and login to the app with your new password.</p>
+        </div>
+      </div>
+      
+      <script>
+        const token = "${token}";
+        
+        async function resetPassword() {
+          const password = document.getElementById('password').value;
+          const confirmPassword = document.getElementById('confirmPassword').value;
+          const errorMessage = document.getElementById('errorMessage');
+          
+          errorMessage.style.display = 'none';
+          
+          if (!password || password.length < 6) {
+            errorMessage.textContent = 'Password must be at least 6 characters long';
+            errorMessage.style.display = 'block';
+            return;
+          }
+          
+          if (password !== confirmPassword) {
+            errorMessage.textContent = 'Passwords do not match';
+            errorMessage.style.display = 'block';
+            return;
+          }
+          
+          try {
+            const response = await fetch('/api/auth/reset-password', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                token: token,
+                password: password
+              })
+            });
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+              throw new Error('Server returned non-JSON response. Please try again later.');
+            }
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+              throw new Error(data.message || 'Failed to reset password');
+            }
+            
+            // Show success screen
+            document.getElementById('resetForm').style.display = 'none';
+            document.getElementById('successMessage').textContent = data.message;
+            document.getElementById('successMessage').style.display = 'block';
+            document.getElementById('successScreen').style.display = 'block';
+          } catch (error) {
+            console.error('Password reset error:', error);
+            errorMessage.textContent = error.message || 'An unexpected error occurred. Please try again.';
+            errorMessage.style.display = 'block';
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});

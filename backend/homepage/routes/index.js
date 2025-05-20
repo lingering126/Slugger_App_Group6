@@ -26,7 +26,8 @@ router.get('/posts', auth, postController.getPosts);
 router.post('/posts/:postId/comments', auth, postController.addComment);
 
 // Statistics-related routes
-router.get('/user', auth, statsController.getUserStats);
-router.put('/user/target', auth, statsController.updateUserTarget);
+router.get('/stats/user', auth, statsController.getUserStats);
+router.put('/stats/user/target', auth, statsController.updateUserTarget);
+router.post('/stats/user/reset-weekly', auth, statsController.resetWeeklyStats);
 
 module.exports = router; 

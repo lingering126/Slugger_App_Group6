@@ -272,8 +272,9 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
-      // Convert hours to minutes
-      const durationInMinutes = parseInt(selectedTime) * 60;
+      // Convert time value to minutes
+      // Format: "0.25" = 15 mins, "0.5" = 30 mins, "0.75" = 45 mins, "1" = 1 hour, etc.
+      const durationInMinutes = parseFloat(selectedTime) * 60;
       
       // Create request body
       const requestBody = {
@@ -354,11 +355,14 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             style={styles.picker} 
               onValueChange={(itemValue) => {
                 setSelectedTime(itemValue);
-                console.log('Selected time:', itemValue); // Changed from Chinese to English
+                console.log('Selected time:', itemValue);
               }}
           >
-            {[...Array(24).keys()].map((num) => (
-              <Picker.Item key={num + 1} label={`${num + 1} hour`} value={`${num + 1}`} />
+            <Picker.Item key="0.25" label="15 minutes" value="0.25" />
+            <Picker.Item key="0.5" label="30 minutes" value="0.5" />
+            <Picker.Item key="0.75" label="45 minutes" value="0.75" />
+            {[...Array(8).keys()].map((num) => (
+              <Picker.Item key={num + 1} label={`${num + 1} hour${num > 0 ? 's' : ''}`} value={`${num + 1}`} />
             ))}
           </Picker>
           </View>
@@ -375,7 +379,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
                 ]}
                   onPress={() => {
                     setSelectedActivity(activity);
-                    console.log('Selected activity:', activity); // Changed from Chinese to English
+                    console.log('Selected activity:', activity);
                   }}
               >
                 <Text style={[
@@ -899,10 +903,121 @@ const HomeScreen = () => {
   const [currentUtcTime, setCurrentUtcTime] = useState('');
   const [checkingCategoryLimit, setCheckingCategoryLimit] = useState(null);
   const [weeklyLimitsUnlocked, setWeeklyLimitsUnlocked] = useState(false);
+  const [weekCycleEndTime, setWeekCycleEndTime] = useState('');
+  const [timeUntilReset, setTimeUntilReset] = useState('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+
+  // Calculate UTC week cycle (starts on Monday 00:00 UTC)
+  const calculateWeekCycle = () => {
+    const now = new Date();
+    const currentUtcDay = now.getUTCDay(); // 0 (Sunday) to 6 (Saturday)
+    const daysUntilNextMonday = currentUtcDay === 0 ? 1 : 8 - currentUtcDay; // If Sunday (0), next Monday is 1 day away
+    
+    // Calculate next Monday at 00:00 UTC
+    const nextMonday = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + daysUntilNextMonday,
+      0, 0, 0, 0
+    ));
+    
+    // Convert UTC time to local time for display
+    const nextMondayLocal = new Date(nextMonday);
+    
+    // Format the date and time in user's local timezone
+    const options = { 
+      weekday: 'long',
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    };
+    
+    const formattedEndTime = nextMondayLocal.toLocaleDateString(undefined, options);
+    setWeekCycleEndTime(formattedEndTime);
+    
+    // Calculate time remaining until reset
+    const msUntilReset = nextMonday.getTime() - now.getTime();
+    const daysLeft = Math.floor(msUntilReset / (1000 * 60 * 60 * 24));
+    const hoursLeft = Math.floor((msUntilReset % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutesLeft = Math.floor((msUntilReset % (1000 * 60 * 60)) / (1000 * 60));
+    
+    setTimeUntilReset(`${daysLeft}d ${hoursLeft}h ${minutesLeft}m`);
+    
+    return { nextMonday, msUntilReset };
+  };
+  
+  // Check if weekly reset is needed
+  const checkWeeklyReset = async () => {
+    try {
+      // Get the last reset time from AsyncStorage
+      const lastResetTimeStr = await AsyncStorage.getItem('lastWeeklyReset');
+      const now = new Date();
+      
+      // If no last reset time, store current time and return
+      if (!lastResetTimeStr) {
+        await AsyncStorage.setItem('lastWeeklyReset', now.toISOString());
+        return false;
+      }
+      
+      const lastResetTime = new Date(lastResetTimeStr);
+      
+      // Check if we're in a new UTC week cycle since the last reset
+      // UTC week starts on Monday 00:00
+      const lastResetDay = lastResetTime.getUTCDay();
+      const lastResetDateNum = lastResetTime.getUTCDate();
+      
+      const currentDay = now.getUTCDay();
+      const currentDateNum = now.getUTCDate();
+      
+      // Determine if we've crossed a Monday 00:00 UTC boundary since last reset
+      const isNewWeekCycle = 
+        // If current day is Monday (1) or later in the week, and last reset was before this week's Monday
+        (currentDay >= 1 && lastResetDay >= currentDay && lastResetDateNum < currentDateNum) ||
+        // If current day is early in the week, and last reset was in previous week
+        (currentDay < lastResetDay) ||
+        // If it's been more than 7 days since last reset
+        (now.getTime() - lastResetTime.getTime() > 7 * 24 * 60 * 60 * 1000);
+      
+      if (isNewWeekCycle) {
+        console.log("New week cycle detected, resetting stats...");
+        
+        // Reset stats and store new reset time
+        await AsyncStorage.setItem('lastWeeklyReset', now.toISOString());
+        
+        // Reset user stats by calling backend endpoint
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+          const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.USER.RESET_WEEKLY_STATS}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (response.ok) {
+            console.log("Weekly stats reset successfully");
+            // After reset, fetch updated stats
+            await fetchUserStats();
+            return true;
+          } else {
+            console.error("Failed to reset weekly stats:", await response.text());
+          }
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Error checking weekly reset:", error);
+      return false;
+    }
+  };
 
   // Check if weekly limits are unlocked
   const checkWeeklyLimits = async () => {
@@ -973,11 +1088,18 @@ const HomeScreen = () => {
   };
 
   useEffect(() => {
-    const updateUtcTime = () => {
+    // Update UTC time and week cycle end time every minute
+    const updateTimes = () => {
       setCurrentUtcTime(new Date().toUTCString());
+      calculateWeekCycle();
     };
-    updateUtcTime();
-    const intervalId = setInterval(updateUtcTime, 1000);
+    
+    updateTimes();
+    const intervalId = setInterval(updateTimes, 60000); // Update every minute
+    
+    // Check for weekly reset on component mount
+    checkWeeklyReset();
+    
     return () => clearInterval(intervalId);
   }, []);
 
@@ -1222,7 +1344,8 @@ const HomeScreen = () => {
     return (
       <View style={styles.actionButtonsContainer}>
         <View style={styles.utcTimeContainer}>
-          <Text style={styles.utcTimeText}>Current UTC: {currentUtcTime}</Text>
+          <Text style={styles.utcTimeText}>Week cycle ends: {weekCycleEndTime}</Text>
+          <Text style={styles.resetCountdownText}>Time until reset: {timeUntilReset}</Text>
         </View>
         
         <View style={styles.actionButtons}>
@@ -1959,12 +2082,23 @@ const styles = StyleSheet.create({
     right: 0,
   },
   utcTimeContainer: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 8,
     marginBottom: 10,
+    alignItems: 'center',
   },
   utcTimeText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  resetCountdownText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
   },
   actionButtons: {
     flexDirection: 'row',

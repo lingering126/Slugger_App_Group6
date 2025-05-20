@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
+import CustomTextInput from '../components/CustomTextInput';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
@@ -207,17 +208,21 @@ export default function LoginScreen() {
           const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
           console.log('Welcome completed status:', welcomeCompleted);
           
-          // If the user is logging in for the first time, redirect to welcome page
-          if (!welcomeCompleted) {
+          // If the user is logging in for the first time or welcomeCompleted is not set, redirect to welcome page
+          if (welcomeCompleted !== 'true') {
             console.log('First time login detected, redirecting to welcome page');
             
+            // Set a userIsNew flag in AsyncStorage to mark this as a new user
+            await AsyncStorage.setItem('userIsNew', 'true');
+            
             try {
-              // Verify that the welcome route exists
+              // Verify that the welcome route exists and navigate to it
               router.replace('/screens/welcome');
               console.log('Navigation to welcome page initiated');
             } catch (navError) {
               console.error('Error navigating to welcome page:', navError);
               // Fallback to home if welcome page navigation fails
+              await AsyncStorage.setItem('welcomeCompleted', 'true'); // Mark as completed if we can't show welcome page
               router.replace('/screens/(tabs)/home');
             }
           } else {
@@ -340,11 +345,7 @@ export default function LoginScreen() {
   if (needsVerification) {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.contentContainer} 
-          onPress={Keyboard.dismiss}
-        >
+        <View style={styles.contentContainer}>
           <Text style={styles.title}>Email Verification Required</Text>
           
           <View style={styles.verificationContainer}>
@@ -377,7 +378,7 @@ export default function LoginScreen() {
               <Text style={styles.backButtonText}>Back to Login</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -389,11 +390,7 @@ export default function LoginScreen() {
         style={styles.keyboardAvoidingView}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
       >
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.contentContainer} 
-          onPress={Keyboard.dismiss}
-        >
+        <View style={styles.contentContainer} onStartShouldSetResponder={() => false}>
           <Text style={styles.title}>Log in with your email</Text>
           
           {serverStatus === 'offline' && (
@@ -413,7 +410,7 @@ export default function LoginScreen() {
           )}
           
           <View style={styles.inputContainer}>
-            <TextInput
+            <CustomTextInput
               style={styles.input}
               placeholder="Email"
               value={email}
@@ -423,12 +420,13 @@ export default function LoginScreen() {
             />
             
             <View style={styles.passwordContainer}>
-              <TextInput
+              <CustomTextInput
                 style={styles.passwordInput}
                 placeholder="Password"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                showPassword={showPassword}
               />
               <TouchableOpacity 
                 style={styles.eyeIcon} 
@@ -453,6 +451,13 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.rememberText}>Remember password</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.forgotPasswordContainer}
+              onPress={() => router.push('/screens/forgot-password')}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.buttonContainer}>
@@ -475,7 +480,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -524,16 +529,21 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 25,
     marginBottom: 15,
+    position: 'relative',
   },
   passwordInput: {
     flex: 1,
     height: '100%',
     paddingHorizontal: 20,
     fontSize: 16,
+    paddingRight: 40,
   },
   eyeIcon: {
     padding: 10,
-    marginRight: 5,
+    position: 'absolute',
+    right: 5,
+    height: '100%',
+    justifyContent: 'center',
   },
   rememberContainer: {
     flexDirection: 'row',
@@ -646,6 +656,14 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: '#666',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  forgotPasswordContainer: {
+    paddingVertical: 10,
+  },
+  forgotPasswordText: {
+    color: '#6c63ff',
     fontSize: 16,
     textDecorationLine: 'underline',
   }

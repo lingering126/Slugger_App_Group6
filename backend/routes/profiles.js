@@ -2,14 +2,14 @@ const express = require('express');
 const router = express.Router();
 const Profile = require('../src/models/profile');
 const User = require('../src/models/user');
-const authMiddleware = require('../src/middleware/auth');
+// Removed internal authMiddleware import, will rely on router-level auth
 
 /**
  * @route GET /api/profiles/me
  * @desc Get current user's profile
  * @access Private
  */
-router.get('/me', authMiddleware, async (req, res) => {
+router.get('/me', async (req, res) => {
   try {
     const userId = req.user.id; // Corrected from req.userData.userId
     
@@ -39,6 +39,8 @@ router.get('/me', authMiddleware, async (req, res) => {
       });
       
       await profile.save();
+      // Re-fetch and populate the newly created profile to ensure 'user' field is populated
+      profile = await Profile.findById(profile._id).populate('user', 'email username');
     }
     
     res.json(profile);
@@ -53,7 +55,7 @@ router.get('/me', authMiddleware, async (req, res) => {
  * @desc Get profile by user ID
  * @access Private
  */
-router.get('/:userId', authMiddleware, async (req, res) => {
+router.get('/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -75,7 +77,7 @@ router.get('/:userId', authMiddleware, async (req, res) => {
  * @desc Update current user's profile
  * @access Private
  */
-router.put('/', authMiddleware, async (req, res) => {
+router.put('/', async (req, res) => {
   try {
     const userId = req.user.id; // Corrected from req.userData.userId
     const { name, bio, longTermGoal, avatarUrl, activitySettings, status } = req.body;
@@ -151,7 +153,7 @@ router.put('/', authMiddleware, async (req, res) => {
  * @desc Update user's activity settings
  * @access Private
  */
-router.put('/activities', authMiddleware, async (req, res) => {
+router.put('/activities', async (req, res) => {
   try {
     const userId = req.user.id; // Corrected from req.userData.userId
     const activitySettings = req.body;
