@@ -140,8 +140,9 @@ router.post('/forgot-password', async (req, res, next) => {
     user.resetPasswordExpires = resetTokenExpires;
     await user.save();
 
-    // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:19006'}/screens/reset-password?token=${resetToken}`;
+    // Create reset URL - use FRONTEND_URL from environment variables
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:19006';
+    const resetUrl = `${frontendUrl}/screens/reset-password?token=${resetToken}`;
 
     // Debug - console log the URL
     console.log('Password reset URL:', resetUrl);
@@ -149,18 +150,24 @@ router.post('/forgot-password', async (req, res, next) => {
     // Try to send email but don't fail if email configuration is missing
     let emailSent = false;
     try {
-      // Check if email configuration exists
-      if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      // Check if Mailgun configuration exists
+      if (process.env.MAIL_HOST && process.env.MAIL_PORT && 
+          process.env.MAIL_USER && process.env.MAIL_PASS) {
+        
+        console.log('Email configuration found, attempting to send email...');
+        
         const transporter = nodemailer.createTransport({
-          service: 'gmail',
+          host: process.env.MAIL_HOST,         // smtp.mailgun.org
+          port: process.env.MAIL_PORT,         // 587
+          secure: false,                       // true for 465, false for other ports
           auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
+            user: process.env.MAIL_USER,       // postmaster@slugger4health.site
+            pass: process.env.MAIL_PASS        // your Mailgun SMTP password
           }
         });
 
         const mailOptions = {
-          from: process.env.EMAIL_USER,
+          from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
           to: user.email,
           subject: 'Password Reset Request',
           html: `
@@ -171,9 +178,10 @@ router.post('/forgot-password', async (req, res, next) => {
         };
 
         await transporter.sendMail(mailOptions);
+        console.log('Password reset email sent successfully to:', user.email);
         emailSent = true;
       } else {
-        console.warn('Email configuration missing. Skipping email send.');
+        console.warn('Email configuration missing. Required environment variables: MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS');
       }
     } catch (emailError) {
       console.error('Failed to send reset email:', emailError);
