@@ -88,9 +88,9 @@ describe('Activity Controller Tests', () => {
         .set('Authorization', `Bearer ${mockUser._id}`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('activities');
-      expect(response.body).toHaveProperty('stats');
-      expect(Array.isArray(response.body.activities)).toBe(true);
+      expect(response.body.data).toHaveProperty('activities');
+      expect(response.body.data).toHaveProperty('stats');
+      expect(Array.isArray(response.body.data.activities)).toBe(true);
     }, 60000);
   });
 
@@ -116,4 +116,4 @@ describe('Activity Controller Tests', () => {
       expect(response.body.data).toHaveProperty('duration', 45);
     }, 60000);
   });
-}); 
+});
