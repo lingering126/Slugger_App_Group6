@@ -1,28 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard, TouchableWithoutFeedback, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
+import CustomTextInput from '../components/CustomTextInput';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
 let WORKING_URL = null;
-
-// Custom TextInput component that handles focus properly
-const CustomTextInput = ({style, ...props}) => {
-  const inputRef = useRef(null);
-  
-  return (
-    <Pressable onPress={() => inputRef.current && inputRef.current.focus()}>
-      <TextInput
-        ref={inputRef}
-        style={[style, Platform.OS === 'web' ? {outlineWidth: 0} : {}]}
-        {...props}
-      />
-    </Pressable>
-  );
-};
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -222,17 +208,21 @@ export default function LoginScreen() {
           const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
           console.log('Welcome completed status:', welcomeCompleted);
           
-          // If the user is logging in for the first time, redirect to welcome page
-          if (!welcomeCompleted) {
+          // If the user is logging in for the first time or welcomeCompleted is not set, redirect to welcome page
+          if (welcomeCompleted !== 'true') {
             console.log('First time login detected, redirecting to welcome page');
             
+            // Set a userIsNew flag in AsyncStorage to mark this as a new user
+            await AsyncStorage.setItem('userIsNew', 'true');
+            
             try {
-              // Verify that the welcome route exists
+              // Verify that the welcome route exists and navigate to it
               router.replace('/screens/welcome');
               console.log('Navigation to welcome page initiated');
             } catch (navError) {
               console.error('Error navigating to welcome page:', navError);
               // Fallback to home if welcome page navigation fails
+              await AsyncStorage.setItem('welcomeCompleted', 'true'); // Mark as completed if we can't show welcome page
               router.replace('/screens/(tabs)/home');
             }
           } else {
@@ -436,6 +426,7 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                showPassword={showPassword}
               />
               <TouchableOpacity 
                 style={styles.eyeIcon} 

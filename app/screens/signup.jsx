@@ -1,27 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard, TouchableWithoutFeedback, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
+import CustomTextInput from '../components/CustomTextInput';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
 let WORKING_URL = null;
-
-// Custom TextInput component that handles focus properly
-const CustomTextInput = ({style, ...props}) => {
-  const inputRef = useRef(null);
-  
-  return (
-    <Pressable onPress={() => inputRef.current && inputRef.current.focus()}>
-      <TextInput
-        ref={inputRef}
-        style={[style, Platform.OS === 'web' ? {outlineWidth: 0} : {}]}
-        {...props}
-      />
-    </Pressable>
-  );
-};
 
 export default function SignupScreen() {
   const [email, setEmail] = useState('');
