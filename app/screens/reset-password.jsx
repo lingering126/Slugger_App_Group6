@@ -39,9 +39,15 @@ export default function ResetPasswordScreen() {
     console.log('Reset token provided:', resetToken ? 'Yes' : 'No');
     
     // Check if token is provided
+    console.log('Reset password screen loaded, token param:', resetToken);
+    
     if (!resetToken) {
+      console.log('No token provided, showing error screen');
       setTokenValid(false);
       setError('Invalid or missing reset token. Please request a new password reset link.');
+    } else {
+      console.log('Token found, showing reset password form');
+      setTokenValid(true);
     }
   }, [resetToken]);
 

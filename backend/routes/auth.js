@@ -141,11 +141,11 @@ router.post('/forgot-password', async (req, res, next) => {
     await user.save();
 
     // Create reset URL - use FRONTEND_URL from environment variables
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:19006';
-    // For Expo/React Native apps, we need to use the correct URL format
-    // Mobile app URLs typically don't include /screens/ in the path
-    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
-
+    const apiUrl = process.env.APP_PUBLIC_URL || 'http://localhost:3000';
+    
+    // Use the direct web-based reset page on the server
+    const resetUrl = `${apiUrl}/reset-password?token=${resetToken}`;
+    
     // Debug - console log the URL
     console.log('Password reset URL:', resetUrl);
 
