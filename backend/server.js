@@ -372,22 +372,31 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ message: 'Password must contain at least one letter' });
     }
     
-    // Generate verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    // Hash the password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
       // Check if user already exists in MongoDB
       const existingUser = await User.findOne({ email });
       if (existingUser) {
+        // If the user exists but is not verified, offer to resend verification email
+        if (!existingUser.isVerified) {
+          console.log('Email exists but not verified');
+          return res.status(409).json({ 
+            message: 'This email is registered but not verified yet',
+            requiresVerification: true,
+            email: email
+          });
+        }
         console.log('Email already in use');
         return res.status(400).json({ message: 'Email already in use' });
       }
+      
+      // Generate verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      // Hash the password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
       
       // Create new user in MongoDB
       const newUser = new User({
@@ -406,14 +415,33 @@ app.post('/api/auth/signup', async (req, res) => {
       // Fallback to in-memory storage
       const existingUser = inMemoryUsers.find(user => user.email === email);
       if (existingUser) {
+        // If the user exists but is not verified, offer to resend verification email
+        if (!existingUser.isVerified) {
+          console.log('Email exists but not verified');
+          return res.status(409).json({ 
+            message: 'This email is registered but not verified yet',
+            requiresVerification: true,
+            email: email
+          });
+        }
         console.log('Email already in use');
         return res.status(400).json({ message: 'Email already in use' });
       }
+      
+      // Generate verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      // Hash the password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
       
       const newUser = {
         id: Date.now().toString(),
         email,
         password: hashedPassword, // Store the hashed password
+        name,
+        username: name,
         isVerified: false,
         verificationToken,
         verificationTokenExpires
@@ -644,22 +672,37 @@ app.get('/api/auth/verify-email', async (req, res) => {
                 font-size: 16px;
                 font-weight: bold;
                 transition: background-color 0.3s;
-                margin: 10px;
               }
               .button:hover {
                 background-color: #5a52d5;
+              }
+              .steps {
+                text-align: left;
+                margin: 20px 0;
+              }
+              .steps li {
+                margin-bottom: 10px;
               }
             </style>
           </head>
           <body>
             <div class="container">
               <h1>Verification Failed</h1>
-              <p>Invalid verification link. The verification token or email is missing.</p>
+              <p>The verification link is invalid or has expired.</p>
               <div class="error-details">
-                Error: Missing required parameters for verification.
+                If you're trying to verify your email, please follow these steps:
+                <ol class="steps">
+                  <li>Go to the Slugger app and try to log in with your email</li>
+                  <li>When prompted that your email needs verification, click "Resend Verification Email"</li>
+                  <li>Check your inbox for a new verification link</li>
+                </ol>
+                
+                Or you can try signing up again with the same email to get a new verification link.
               </div>
               
-              <p>Please try using the verification link from your email again or request a new verification email through the app.</p>
+              <p>
+                <a href="${deployedUrl}" class="button">Go to Slugger App</a>
+              </p>
             </div>
           </body>
         </html>
@@ -729,6 +772,13 @@ app.get('/api/auth/verify-email', async (req, res) => {
               .button:hover {
                 background-color: #5a52d5;
               }
+              .steps {
+                text-align: left;
+                margin: 20px 0;
+              }
+              .steps li {
+                margin-bottom: 10px;
+              }
             </style>
           </head>
           <body>
@@ -736,11 +786,18 @@ app.get('/api/auth/verify-email', async (req, res) => {
               <h1>Verification Failed</h1>
               <p>The verification link is invalid or has expired.</p>
               <div class="error-details">
-                Please try using the Resend Verification option from the login screen to get a new verification email.
+                If you're trying to verify your email, please follow these steps:
+                <ol class="steps">
+                  <li>Go to the Slugger app and try to log in with your email</li>
+                  <li>When prompted that your email needs verification, click "Resend Verification Email"</li>
+                  <li>Check your inbox for a new verification link</li>
+                </ol>
+                
+                Or you can try signing up again with the same email to get a new verification link.
               </div>
               
               <p>
-                <a href="slugger://login" class="button">Open Slugger App</a>
+                <a href="${deployedUrl}" class="button">Go to Slugger App</a>
               </p>
             </div>
           </body>
@@ -856,6 +913,17 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       // Find user in MongoDB
       user = await User.findOne({ email });
       
+      if (!user) {
+        return res.status(404).json({ message: 'User not found. Please sign up first.' });
+      }
+      
+      if (user.isVerified) {
+        return res.status(400).json({ 
+          message: 'Email is already verified. You can log in now.',
+          alreadyVerified: true 
+        });
+      }
+      
       if (user && !user.isVerified) {
         // Generate new verification token
         const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -867,17 +935,26 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       }
     } else {
       // Fallback to in-memory storage
-      const userIndex = inMemoryUsers.findIndex(u => u.email === email && !u.isVerified);
+      const userIndex = inMemoryUsers.findIndex(u => u.email === email);
       
-      if (userIndex !== -1) {
-        // Generate new verification token
-        const verificationToken = crypto.randomBytes(32).toString('hex');
-        const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-        
-        inMemoryUsers[userIndex].verificationToken = verificationToken;
-        inMemoryUsers[userIndex].verificationTokenExpires = verificationTokenExpires;
-        user = inMemoryUsers[userIndex];
+      if (userIndex === -1) {
+        return res.status(404).json({ message: 'User not found. Please sign up first.' });
       }
+      
+      if (inMemoryUsers[userIndex].isVerified) {
+        return res.status(400).json({ 
+          message: 'Email is already verified. You can log in now.',
+          alreadyVerified: true 
+        });
+      }
+      
+      // Generate new verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      inMemoryUsers[userIndex].verificationToken = verificationToken;
+      inMemoryUsers[userIndex].verificationTokenExpires = verificationTokenExpires;
+      user = inMemoryUsers[userIndex];
     }
     
     if (!user) {

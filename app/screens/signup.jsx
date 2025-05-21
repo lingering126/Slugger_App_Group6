@@ -22,6 +22,8 @@ export default function SignupScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const router = useRouter();
 
   // Check if the server is reachable
@@ -144,6 +146,15 @@ export default function SignupScreen() {
           
           if (!response.ok) {
             console.log('Signup error data:', data);
+            
+            // Check if the email exists but is not verified
+            if (response.status === 409 && data.requiresVerification) {
+              setVerificationEmail(email);
+              setNeedsVerification(true);
+              setLoading(false);
+              return;
+            }
+            
             setError(data.message || 'Signup failed');
             setLoading(false);
             return;
@@ -183,6 +194,50 @@ export default function SignupScreen() {
       }
       
       console.log('Error details:', error);
+    }
+  };
+
+  const resendVerificationEmail = async () => {
+    try {
+      setResendingEmail(true);
+      
+      // Use the working URL if available, otherwise try all URLs
+      const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
+      
+      const response = await fetch(`${apiUrl}/auth/resend-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: verificationEmail
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        Alert.alert(
+          'Verification Email Sent',
+          'Please check your inbox for the verification link.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          data.message || 'Failed to resend verification email',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error resending verification email:', error);
+      Alert.alert(
+        'Error',
+        'Failed to resend verification email. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -242,6 +297,58 @@ export default function SignupScreen() {
               onPress={navigateToLogin}
             >
               <Text style={styles.loginButtonText}>Go to Login</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // If email exists but is not verified
+  if (needsVerification) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.contentContainer}>
+          <Text style={styles.title}>Email Verification Required</Text>
+          
+          <View style={styles.verificationContainer}>
+            <Text style={styles.verificationText}>
+              This email is already registered but not verified yet.
+            </Text>
+            
+            <Text style={styles.emailText}>{verificationEmail}</Text>
+            
+            <Text style={styles.verificationText}>
+              We'll send a new verification link to this email address.
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.resendButton} 
+              onPress={resendVerificationEmail}
+              disabled={resendingEmail}
+            >
+              {resendingEmail ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.resendButtonText}>Resend Verification Email</Text>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => {
+                setNeedsVerification(false);
+                setVerificationEmail('');
+              }}
+            >
+              <Text style={styles.backButtonText}>Use a different email</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.loginLinkContainer} 
+              onPress={navigateToLogin}
+            >
+              <Text style={styles.loginLinkText}>Go to Login</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -485,6 +592,39 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   loginButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  resendButton: {
+    backgroundColor: '#6c63ff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  resendButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  backButton: {
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  backButtonText: {
+    color: '#666',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  loginLinkContainer: {
+    backgroundColor: '#6c63ff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  loginLinkText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

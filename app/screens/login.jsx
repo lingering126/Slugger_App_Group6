@@ -585,13 +585,6 @@ export default function LoginScreen() {
                 <Text style={styles.signupLink}>Sign up</Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity 
-              style={styles.verifyEmailLink}
-              onPress={() => setShowVerificationPrompt(true)}
-            >
-              <Text style={styles.verifyEmailText}>Need to verify your email?</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -780,12 +773,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textDecorationLine: 'underline',
   },
-  verifyEmailLink: {
-    paddingVertical: 10,
-  },
-  verifyEmailText: {
-    color: '#6c63ff',
-    fontSize: 16,
-    textDecorationLine: 'underline',
-  }
 }); 
