@@ -64,6 +64,32 @@ This section outlines the unit test coverage for the analytics functionalities, 
 -   **Regression Prevention**: Helps catch bugs in the analytics logic during future development.
 -   **API Behavior Documentation**: Serves as a reference for the expected behavior of the analytics endpoints.
 
+## Home Page Features
+
+### Purpose
+This document outlines the unit test coverage for the Home Page functionalities, primarily located in `postController.test.js` and `statsController.test.js`. These tests ensure the reliability of post and comment management, as well as user statistics and target tracking.
+
+### Covered Features and Scenarios:
+
+#### 1. Post Management (from `postController.test.js`)
+-   **Retrieve All Posts (`GET /api/posts`)**
+    -   Verifies that all posts can be retrieved successfully (returns HTTP 200 and an array of posts).
+-   **Create New Post (`POST /api/posts`)**
+    -   Verifies that a new post can be created successfully (returns HTTP 201 and the created post details).
+-   **Add Comment to Post (`POST /api/posts/:postId/comments`)**
+    -   Verifies that a comment can be added to an existing post successfully (returns HTTP 201 and the created comment details).
+
+#### 2. User Statistics and Targets (from `statsController.test.js`)
+-   **Retrieve User Statistics (`GET /api/stats/user`)**
+    -   Verifies that user-specific statistics (total points, activities completed) can be retrieved successfully (returns HTTP 200).
+-   **Update User Target (`PUT /api/stats/user/target`)**
+    -   Verifies that a user's target points can be updated and progress is calculated (returns HTTP 200 with updated target and progress).
+
+### Benefits
+-   **Ensures Core Home Page Functionality**: Provides confidence that essential features like viewing posts, creating content, and tracking personal stats are working correctly.
+-   **Supports Feature Integrity**: Helps maintain the stability of home page features during ongoing development and refactoring.
+-   **Documents API Behavior**: The tests and this documentation clarify the expected behavior of home page related API endpoints.
+
 ## Running the Tests
 
 To execute these unit tests:
