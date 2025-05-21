@@ -21,6 +21,8 @@ export default function LoginScreen() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
+  const [verificationPromptEmail, setVerificationPromptEmail] = useState('');
   const router = useRouter();
   const params = useLocalSearchParams();
 
@@ -341,6 +343,51 @@ export default function LoginScreen() {
     setRememberPassword(!rememberPassword);
   };
 
+  // If showing verification prompt
+  if (showVerificationPrompt) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.contentContainer}>
+          <Text style={styles.title}>Resend Verification Email</Text>
+          
+          <View style={styles.verificationContainer}>
+            <Text style={styles.verificationText}>
+              Enter your email address to receive a new verification link:
+            </Text>
+            
+            <CustomTextInput
+              style={styles.input}
+              placeholder="Email"
+              value={verificationPromptEmail}
+              onChangeText={setVerificationPromptEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            
+            <TouchableOpacity 
+              style={styles.resendButton} 
+              onPress={handleVerificationPromptSubmit}
+              disabled={resendingEmail}
+            >
+              {resendingEmail ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.resendButtonText}>Send Verification Email</Text>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => setShowVerificationPrompt(false)}
+            >
+              <Text style={styles.backButtonText}>Back to Login</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // If user needs to verify email, show verification screen
   if (needsVerification) {
     return (
@@ -382,6 +429,65 @@ export default function LoginScreen() {
       </SafeAreaView>
     );
   }
+
+  // Handle resend verification from prompt
+  const handleVerificationPromptSubmit = async () => {
+    if (!verificationPromptEmail) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(verificationPromptEmail)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+    
+    try {
+      setResendingEmail(true);
+      
+      // Use the working URL if available, otherwise try all URLs
+      const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
+      
+      const response = await fetch(`${apiUrl}/auth/resend-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: verificationPromptEmail
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        Alert.alert(
+          'Verification Email Sent',
+          'Please check your inbox for the verification link.',
+          [{ text: 'OK' }]
+        );
+        setShowVerificationPrompt(false);
+        setVerificationPromptEmail('');
+      } else {
+        Alert.alert(
+          'Error',
+          data.message || 'Failed to resend verification email',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error resending verification email:', error);
+      Alert.alert(
+        'Error',
+        'Failed to resend verification email. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -479,6 +585,13 @@ export default function LoginScreen() {
                 <Text style={styles.signupLink}>Sign up</Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity 
+              style={styles.verifyEmailLink}
+              onPress={() => setShowVerificationPrompt(true)}
+            >
+              <Text style={styles.verifyEmailText}>Need to verify your email?</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -663,6 +776,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   forgotPasswordText: {
+    color: '#6c63ff',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  verifyEmailLink: {
+    paddingVertical: 10,
+  },
+  verifyEmailText: {
     color: '#6c63ff',
     fontSize: 16,
     textDecorationLine: 'underline',

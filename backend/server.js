@@ -22,11 +22,14 @@ const { analyticsRouter } = require('./routes/analytics'); // Import the analyti
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
+  // Always include the deployed URL first for verification links
+  const deployedUrl = 'https://slugger-app-group6.onrender.com';
   const networkInterfaces = os.networkInterfaces();
   const serverIPs = [];
   
   console.log('=== Network Interface Scanning Started ===');
   console.log('Available interfaces:', Object.keys(networkInterfaces));
+  console.log('Deployed URL:', deployedUrl);
   
   // First pass: Look for preferred IPs (192.168.x.x)
   Object.keys(networkInterfaces).forEach((interfaceName) => {
@@ -423,12 +426,23 @@ app.post('/api/auth/signup', async (req, res) => {
     // Send verification email
     const serverIPs = getServerIPs();
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
+    const port = process.env.PORT || 5001;
+    
+    // Always use the deployed URL as the primary verification link
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const verificationLink = `${deployedUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}`;
     
     console.log('=== Signup Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
     console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', process.env.PORT || 5001);
-    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
+    console.log('Port being used:', port);
+    console.log('Deployed URL:', deployedUrl);
+    console.log('Generated verification links:');
+    console.log(`Deployed link: ${verificationLink}`);
+    serverIPs.forEach((ip, index) => {
+      console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
+    });
+    console.log('Localhost link:', `http://localhost:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
     console.log('===============================');
     
     // 确保有邮件发送配置
@@ -458,7 +472,7 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+            <a href="${verificationLink}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -467,8 +481,9 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
+            <li><a href="${verificationLink}">Cloud Server Link</a></li>
+            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
+            <li><a href="http://localhost:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
           </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
@@ -608,7 +623,47 @@ app.get('/api/auth/verify-email', async (req, res) => {
     const { token, email } = req.query;
     
     if (!token || !email) {
-      return res.status(400).json({ message: 'Invalid verification link' });
+      return res.status(400).send(`
+        <html>
+          <head>
+            <title>Verification Failed</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+              h1 { color: #e74c3c; }
+              p { font-size: 18px; line-height: 1.6; color: #555; }
+              .error-details { font-size: 16px; background-color: #f8f8f8; padding: 15px; border-radius: 4px; text-align: left; margin: 20px 0; }
+              .button { 
+                display: inline-block; 
+                background-color: #6c63ff; 
+                color: white; 
+                padding: 12px 30px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                margin-top: 20px; 
+                font-size: 16px;
+                font-weight: bold;
+                transition: background-color 0.3s;
+                margin: 10px;
+              }
+              .button:hover {
+                background-color: #5a52d5;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Verification Failed</h1>
+              <p>Invalid verification link. The verification token or email is missing.</p>
+              <div class="error-details">
+                Error: Missing required parameters for verification.
+              </div>
+              
+              <p>Please try using the verification link from your email again or request a new verification email through the app.</p>
+            </div>
+          </body>
+        </html>
+      `);
     }
     
     // Get server IP addresses for building App links
@@ -658,6 +713,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
               .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
               h1 { color: #e74c3c; }
               p { font-size: 18px; line-height: 1.6; color: #555; }
+              .error-details { font-size: 16px; background-color: #f8f8f8; padding: 15px; border-radius: 4px; text-align: left; margin: 20px 0; }
               .button { 
                 display: inline-block; 
                 background-color: #6c63ff; 
@@ -669,40 +725,23 @@ app.get('/api/auth/verify-email', async (req, res) => {
                 font-size: 16px;
                 font-weight: bold;
                 transition: background-color 0.3s;
-                margin: 10px;
               }
               .button:hover {
                 background-color: #5a52d5;
-              }
-              .error-icon {
-                font-size: 64px;
-                color: #e74c3c;
-                margin-bottom: 20px;
-              }
-              .button-container {
-                margin-top: 20px;
-              }
-              .note {
-                margin-top: 20px;
-                font-size: 14px;
-                color: #777;
               }
             </style>
           </head>
           <body>
             <div class="container">
-              <div class="error-icon">✗</div>
               <h1>Verification Failed</h1>
               <p>The verification link is invalid or has expired.</p>
-              <p>Please try logging in or request a new verification email.</p>
-              
-              <div class="button-container">
-                <p>If you're using the app on this device, try one of these links:</p>
-                <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-                <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
+              <div class="error-details">
+                Please try using the Resend Verification option from the login screen to get a new verification email.
               </div>
               
-              <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
+              <p>
+                <a href="slugger://login" class="button">Open Slugger App</a>
+              </p>
             </div>
           </body>
         </html>
@@ -730,7 +769,6 @@ app.get('/api/auth/verify-email', async (req, res) => {
               font-size: 16px;
               font-weight: bold;
               transition: background-color 0.3s;
-              margin: 10px;
             }
             .button:hover {
               background-color: #5a52d5;
@@ -740,14 +778,6 @@ app.get('/api/auth/verify-email', async (req, res) => {
               color: #2ecc71;
               margin-bottom: 20px;
             }
-            .button-container {
-              margin-top: 20px;
-            }
-            .note {
-              margin-top: 20px;
-              font-size: 14px;
-              color: #777;
-            }
           </style>
         </head>
         <body>
@@ -755,7 +785,9 @@ app.get('/api/auth/verify-email', async (req, res) => {
             <div class="success-icon">✓</div>
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your account.</p>
-            <p>Please open the Slugger app on your device and log in with your credentials.</p>
+            <p>
+              <a href="slugger://login" class="button">Open Slugger App</a>
+            </p>
           </div>
         </body>
       </html>
@@ -771,7 +803,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
             .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             h1 { color: #e74c3c; }
             p { font-size: 18px; line-height: 1.6; color: #555; }
-            .error { color: #e74c3c; font-family: monospace; margin: 20px 0; padding: 10px; background: #f8f8f8; border-radius: 4px; }
+            .error-details { font-size: 16px; background-color: #f8f8f8; padding: 15px; border-radius: 4px; text-align: left; margin: 20px 0; }
             .button { 
               display: inline-block; 
               background-color: #6c63ff; 
@@ -783,40 +815,25 @@ app.get('/api/auth/verify-email', async (req, res) => {
               font-size: 16px;
               font-weight: bold;
               transition: background-color 0.3s;
-              margin: 10px;
             }
             .button:hover {
               background-color: #5a52d5;
-            }
-            .error-icon {
-              font-size: 64px;
-              color: #e74c3c;
-              margin-bottom: 20px;
-            }
-            .button-container {
-              margin-top: 20px;
-            }
-            .note {
-              margin-top: 20px;
-              font-size: 14px;
-              color: #777;
             }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="error-icon">⚠</div>
             <h1>Verification Error</h1>
             <p>An error occurred during the verification process.</p>
-            <div class="error">${error.message}</div>
-            
-            <div class="button-container">
-              <p>If you're using the app on this device, try one of these links:</p>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
+            <div class="error-details">
+              ${error.message}
             </div>
             
-            <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
+            <p>Please try using the Resend Verification option from the login screen.</p>
+            
+            <p>
+              <a href="slugger://login" class="button">Open Slugger App</a>
+            </p>
           </div>
         </body>
       </html>
@@ -872,11 +889,17 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
     const port = process.env.PORT || 5001;
     
+    // Always use the deployed URL as the primary verification link
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const verificationLink = `${deployedUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`;
+    
     console.log('=== Resend Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
     console.log('Primary IP being used:', primaryIP);
     console.log('Port being used:', port);
+    console.log('Deployed URL:', deployedUrl);
     console.log('Generated verification links:');
+    console.log(`Deployed link: ${verificationLink}`);
     serverIPs.forEach((ip, index) => {
       console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
     });
@@ -893,7 +916,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
+            <a href="${verificationLink}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
@@ -902,6 +925,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
           <ul style="font-size: 14px; color: #666;">
+            <li><a href="${verificationLink}">Cloud Server Link</a></li>
             ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
             <li><a href="http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Local Link (localhost)</a></li>
           </ul>
