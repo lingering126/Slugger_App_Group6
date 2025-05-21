@@ -82,7 +82,7 @@ export default function LoginScreen() {
       } catch (error) {
         console.error('Server check failed:', error.message);
         setServerStatus('offline');
-        setError('Cannot connect to server. Please check your network connection and server status.');
+        setError('Cannot connect to server. Please check your network connection and server status.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
       }
     };
     
@@ -116,7 +116,7 @@ export default function LoginScreen() {
       const timeoutId = setTimeout(() => {
         controller.abort();
         console.log('Login request timed out after 15 seconds');
-        setError('Request timed out. Server might be unavailable.');
+        setError('Request timed out. Server might be unavailable.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         setLoading(false);
       }, 15000);
       
@@ -143,7 +143,7 @@ export default function LoginScreen() {
         
         if (contentType && contentType.includes('text/html')) {
           console.error('Server returned HTML instead of JSON');
-          setError('Server error. Please try again later.');
+          setError('Server error. Please try again later.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
           setLoading(false);
           return;
         }
@@ -166,7 +166,7 @@ export default function LoginScreen() {
               // Authentication error
               setError('Invalid email or password');
             } else {
-              setError(data.message || 'An error occurred during login. Please try again.');
+              setError(data.message || 'An error occurred during login. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
             }
             setLoading(false);
             return;
@@ -232,7 +232,7 @@ export default function LoginScreen() {
           }
         } catch (parseError) {
           console.error('Error parsing response:', parseError);
-          setError('Error processing server response. Please try again.');
+          setError('Error processing server response. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
           setLoading(false);
         }
       } catch (fetchError) {
@@ -241,11 +241,11 @@ export default function LoginScreen() {
         
         // Only show connection errors for actual network issues
         if (fetchError.name === 'AbortError') {
-          setError('Connection timed out. Please check your internet connection and try again.');
+          setError('Connection timed out. Please check your internet connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         } else if (fetchError.name === 'TypeError' && fetchError.message.includes('Network request failed')) {
-          setError('Network error. Please check your connection and try again.');
+          setError('Network error. Please check your connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         } else {
-          setError('An error occurred during login. Please try again.');
+          setError('An error occurred during login. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         }
         
         setLoading(false);
@@ -259,7 +259,7 @@ export default function LoginScreen() {
       });
       setLoading(false);
       // Only show this message if all other error handlers failed
-      setError('An unexpected error occurred. Please try again later.');
+      setError('An unexpected error occurred. Please try again later.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
     }
   };
 

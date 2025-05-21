@@ -48,7 +48,7 @@ export default function SignupScreen() {
       } catch (error) {
         console.error('Server check failed:', error.message);
         setServerStatus('offline');
-        setError('Cannot connect to server. Please check your network connection and server status.');
+        setError('Cannot connect to server. Please check your network connection and server status.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
       }
     };
     
@@ -106,7 +106,7 @@ export default function SignupScreen() {
       const timeoutId = setTimeout(() => {
         controller.abort();
         console.log('Signup request timed out after 15 seconds');
-        setError('Request timed out. Server might be unavailable.');
+        setError('Request timed out. Server might be unavailable.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         setLoading(false);
       }, 15000);
       
@@ -134,7 +134,7 @@ export default function SignupScreen() {
         
         if (contentType && contentType.includes('text/html')) {
           console.error('Server returned HTML instead of JSON');
-          setError('Server error. Please try again later.');
+          setError('Server error. Please try again later.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
           setLoading(false);
           return;
         }
@@ -155,7 +155,7 @@ export default function SignupScreen() {
           setLoading(false);
         } catch (parseError) {
           console.error('Error parsing response:', parseError);
-          setError('Error processing server response. Please try again.');
+          setError('Error processing server response. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
           setLoading(false);
         }
       } catch (fetchError) {
@@ -167,9 +167,9 @@ export default function SignupScreen() {
       setLoading(false);
       
       if (error.name === 'AbortError') {
-        setError('Request timed out. Please try again.');
+        setError('Request timed out. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
       } else if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
-        setError('Network error. Please check your connection and try again.');
+        setError('Network error. Please check your connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         // Try to find another working URL
         const connectionStatus = await checkServerConnection(API_URLS);
         if (connectionStatus.status === 'online' && connectionStatus.url) {
@@ -179,7 +179,7 @@ export default function SignupScreen() {
           setServerStatus('offline');
         }
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        setError('An unexpected error occurred. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
       }
       
       console.log('Error details:', error);

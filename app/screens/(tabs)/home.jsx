@@ -927,9 +927,8 @@ const HomeScreen = () => {
     // Convert UTC time to local time for display
     const nextMondayLocal = new Date(nextMonday);
     
-    // Format the date and time in user's local timezone
+    // Format the date and time in user's local timezone (without weekday)
     const options = { 
-      weekday: 'long',
       year: 'numeric', 
       month: 'long', 
       day: 'numeric',
