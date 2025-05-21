@@ -67,45 +67,166 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-// Register route
-router.post('/register', async (req, res, next) => {
+// Signup route (renamed from /register and added email verification)
+router.post('/signup', async (req, res, next) => {
   try {
-    const { username, password, email } = req.body;
+    const { name, password, email } = req.body; // Changed username to name to match frontend
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      throw new AppError('Email already registered', 400);
+      // If user exists but is not verified, allow signup to proceed to resend verification
+      if (!existingUser.isVerified) {
+        // Trigger resend logic or inform frontend to switch to "needs verification" state
+        // For now, we'll let the frontend handle this based on a specific status/message
+        // Or, we can directly call the send verification logic here for an existing unverified user.
+        // Let's send a new verification email.
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationTokenExpires = Date.now() + 24 * 3600000; // 24 hours
+
+        existingUser.verificationToken = verificationToken;
+        existingUser.verificationTokenExpires = verificationTokenExpires;
+        await existingUser.save();
+
+        // Send verification email (logic adapted from /resend-verification)
+        let emailSent = false;
+        let testModeData = {};
+        try {
+          if (process.env.MAIL_HOST && process.env.MAIL_PORT && process.env.MAIL_USER && process.env.MAIL_PASS) {
+            const transporter = nodemailer.createTransport({
+              host: process.env.MAIL_HOST,
+              port: process.env.MAIL_PORT,
+              secure: false,
+              auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
+            });
+            const appUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+            const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`;
+            const mailOptions = {
+              from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
+              to: existingUser.email,
+              subject: 'Welcome to Slugger! Please Verify Your Email',
+              html: `
+                <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+                  <h1 style="font-size: 24px; color: #6c63ff; text-align: center;">Welcome to Slugger!</h1>
+                  <p>You recently attempted to sign up, or someone tried to use your email. We've sent a new verification link.</p>
+                  <p>Please verify your email address by clicking the button below:</p>
+                  <div style="text-align: center; margin: 20px 0;">
+                    <a href="${verificationUrl}" style="background-color: #6c63ff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; font-size: 16px; display: inline-block;">Verify Email</a>
+                  </div>
+                  <p>If the button above doesn't work, you can try clicking this alternative link:</p>
+                  <p style="text-align: center;"><a href="${verificationUrl}" style="color: #6c63ff;">${verificationUrl}</a></p>
+                  <p style="font-size: 0.9em; color: #777;">This link will expire in 24 hours.</p>
+                  <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                  <p style="font-size: 0.8em; color: #aaa;">If you did not attempt to sign up, please ignore this email.</p>
+                </div>
+              `,
+            };
+            if (process.env.MAILGUN_TEST_MODE === 'true') {
+              testModeData = { testMode: true, previewUrl: verificationUrl };
+              emailSent = true;
+            } else {
+              await transporter.sendMail(mailOptions);
+              emailSent = true;
+            }
+          }
+        } catch (emailError) {
+          console.error('Failed to send verification email during signup for existing unverified user:', emailError);
+        }
+        // Inform frontend that user exists and needs verification
+        return res.status(409).json({ 
+          message: 'Email already registered but not verified. A new verification email has been sent.',
+          requiresVerification: true, // Signal to frontend
+          email: existingUser.email,
+          ...(emailSent && testModeData) 
+        });
+      }
+      // If user exists and is verified
+      throw new AppError('Email already registered and verified.', 409); // Changed status to 409 for conflict
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpires = Date.now() + 24 * 3600000; // 24 hours
+
     // Create new user
     const newUser = new User({
-      username,
+      name, // Use name from request body
       password: hashedPassword,
       email,
-      name: username,
-      isVerified: false
+      isVerified: false,
+      verificationToken,
+      verificationTokenExpires
     });
 
     await newUser.save();
 
-    // Create token
-    const token = jwt.sign(
-      { userId: newUser._id, username: newUser.name },
-      process.env.JWT_SECRET || 'fallback_secret_key',
-      { expiresIn: '24h' }
-    );
-
-    res.status(201).json({
-      token,
-      user: {
-        id: newUser._id,
-        username: newUser.name,
-        email: newUser.email
+    // Send verification email (logic adapted from /resend-verification)
+    let emailSent = false;
+    let testModeDataForNewUser = {};
+    try {
+      if (process.env.MAIL_HOST && process.env.MAIL_PORT && process.env.MAIL_USER && process.env.MAIL_PASS) {
+        const transporter = nodemailer.createTransport({
+          host: process.env.MAIL_HOST,
+          port: process.env.MAIL_PORT,
+          secure: false, 
+          auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
+        });
+        const appUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+        const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`;
+        console.log('New user verification URL:', verificationUrl);
+        const mailOptions = {
+          from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
+          to: newUser.email,
+          subject: 'Welcome to Slugger! Please Verify Your Email',
+          html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+              <h1 style="font-size: 24px; color: #6c63ff; text-align: center;">Welcome to Slugger!</h1>
+              <p>Thank you for signing up. Please verify your email address by clicking the button below:</p>
+              <div style="text-align: center; margin: 20px 0;">
+                <a href="${verificationUrl}" style="background-color: #6c63ff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; font-size: 16px; display: inline-block;">Verify Email</a>
+              </div>
+              <p>If the button above doesn't work, you can try clicking this alternative link:</p>
+              <p style="text-align: center;"><a href="${verificationUrl}" style="color: #6c63ff;">${verificationUrl}</a></p>
+              <p style="font-size: 0.9em; color: #777;">This link will expire in 24 hours.</p>
+              <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+              <p style="font-size: 0.8em; color: #aaa;">If you did not sign up for Slugger, please ignore this email.</p>
+            </div>
+          `,
+        };
+        if (process.env.MAILGUN_TEST_MODE === 'true') {
+          console.log(`MAILGUN_TEST_MODE active. Email to ${newUser.email} with token ${verificationToken} would be sent.`);
+          console.log(`Preview URL (simulated for Mailgun sandbox): ${verificationUrl}`);
+          testModeDataForNewUser = { testMode: true, previewUrl: verificationUrl };
+          emailSent = true;
+        } else {
+          await transporter.sendMail(mailOptions);
+          console.log('Verification email sent successfully to new user:', newUser.email);
+          emailSent = true;
+        }
+      } else {
+        console.warn('Email configuration missing for new user signup. Required: MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS');
       }
+    } catch (emailError) {
+      console.error('Failed to send verification email for new user:', emailError);
+      // Don't let email failure stop the signup, but log it.
+      // The user can use "resend verification" later.
+    }
+
+    // Create token for immediate login if desired, though user is not verified yet.
+    // Typically, you might not issue a JWT until verification, or issue one with limited scope.
+    // For now, let's return a message indicating verification is needed.
+    
+    res.status(201).json({
+      message: 'Signup successful. Please check your email to verify your account.',
+      user: { // Send back minimal user info, not a token until verified
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email
+      },
+      ...(emailSent && testModeDataForNewUser) // Include testMode and previewUrl if applicable
     });
   } catch (error) {
     next(error);
