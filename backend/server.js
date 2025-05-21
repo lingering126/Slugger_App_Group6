@@ -676,17 +676,15 @@ app.post('/api/auth/signup', async (req, res) => {
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
     const port = process.env.PORT || 5001;
     
-        // Always use the deployed URL as the primary verification link    const deployedUrl = 'https://slugger-app-group6.onrender.com';    const verificationLink = `${deployedUrl}/verify-email?token=${verificationToken}`;
+    const verificationLink = `${primaryIP}:${port}/verify-email?token=${verificationToken}`;
     
     console.log('=== Signup Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
     console.log('Primary IP being used:', primaryIP);
     console.log('Port being used:', port);
-    console.log('Deployed URL:', deployedUrl);
+    console.log('Deployed URL:', primaryIP);
     console.log('Generated verification links:');
     console.log(`Deployed link: ${verificationLink}`);
-        serverIPs.forEach((ip, index) => {      console.log(`Link ${index + 1}: http://${ip}:${port}/verify-email?token=${verificationToken}`);    });    console.log('Localhost link:', `http://localhost:${port}/verify-email?token=${verificationToken}`);
-    console.log('===============================');
     
     // 确保有邮件发送配置
     if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
@@ -723,7 +721,9 @@ app.post('/api/auth/signup', async (req, res) => {
           
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
-                    <ul style="font-size: 14px; color: #666;">            <li><a href="${verificationLink}">Cloud Server Link</a></li>            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/verify-email?token=${verificationToken}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}            <li><a href="http://localhost:${port}/verify-email?token=${verificationToken}">Local Link (localhost)</a></li>          </ul>
+          <ul style="font-size: 14px; color: #666;">
+            <li><a href="${verificationLink}">Cloud Server Link</a></li>
+          </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
@@ -737,7 +737,7 @@ app.post('/api/auth/signup', async (req, res) => {
     
     try {
       console.log('==== EMAIL SENDING DETAILS ====');
-      console.log('Attempting to resend verification email to:', email);
+      console.log('Attempting to send verification email to:', email);
       console.log('Using from address:', process.env.MAIL_FROM || 'noreply@slugger4health.site');
       console.log('Using SMTP settings:', {
         host: process.env.MAIL_HOST || 'smtp.mailgun.org',
@@ -767,12 +767,16 @@ app.post('/api/auth/signup', async (req, res) => {
       }
       
       const info = await transporter.sendMail(mailOptions);
-      console.log('Verification email resent to:', email);
+      console.log('Verification email sent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
       console.log('==== EMAIL SENDING COMPLETE ====');
       
-      res.status(200).json({ message: 'Verification email sent. Please check your inbox.' });
+      res.status(201).json({
+        message: 'User registered successfully. Please check your email to verify your account.',
+        requiresVerification: true,
+        email: email
+      });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
       console.error('Error details:', emailError.message);
@@ -828,7 +832,7 @@ app.post('/api/auth/signup', async (req, res) => {
       }
     }
   } catch (error) {
-    console.error('Resend verification error:', error);
+    console.error('Signup error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -984,9 +988,17 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     // Send verification email
     const serverIPs = getServerIPs();
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-        const port = process.env.PORT || 5001;                // Always use the deployed URL as the primary verification link        const deployedUrl = 'https://slugger-app-group6.onrender.com';        const verificationLink = `${deployedUrl}/verify-email?token=${user.verificationToken}`;                console.log('=== Resend Email Link Details ===');        console.log('Available server IPs:', serverIPs);        console.log('Primary IP being used:', primaryIP);        console.log('Port being used:', port);        console.log('Deployed URL:', deployedUrl);        console.log('Generated verification links:');        console.log(`Deployed link: ${verificationLink}`);
-          serverIPs.forEach((ip, index) => {        console.log(`Link ${index + 1}: http://${ip}:${port}/verify-email?token=${user.verificationToken}`);      });      console.log('Localhost link:', `http://localhost:${port}/verify-email?token=${user.verificationToken}`);
-    console.log('================================');
+    const port = process.env.PORT || 5001;
+    
+    const verificationLink = `${primaryIP}:${port}/verify-email?token=${user.verificationToken}`;
+    
+    console.log('=== Resend Email Link Details ===');
+    console.log('Available server IPs:', serverIPs);
+    console.log('Primary IP being used:', primaryIP);
+    console.log('Port being used:', port);
+    console.log('Deployed URL:', primaryIP);
+    console.log('Generated verification links:');
+    console.log(`Deployed link: ${verificationLink}`);
     
     const mailOptions = {
       from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
@@ -1006,7 +1018,9 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
-                    <ul style="font-size: 14px; color: #666;">            <li><a href="${verificationLink}">Cloud Server Link</a></li>            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/verify-email?token=${user.verificationToken}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}            <li><a href="http://localhost:${port}/verify-email?token=${user.verificationToken}">Local Link (localhost)</a></li>          </ul>
+          <ul style="font-size: 14px; color: #666;">
+            <li><a href="${verificationLink}">Cloud Server Link</a></li>
+          </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
@@ -1020,7 +1034,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     
     try {
       console.log('==== EMAIL SENDING DETAILS ====');
-      console.log('Attempting to resend verification email to:', email);
+      console.log('Attempting to send verification email to:', email);
       console.log('Using from address:', process.env.MAIL_FROM || 'noreply@slugger4health.site');
       console.log('Using SMTP settings:', {
         host: process.env.MAIL_HOST || 'smtp.mailgun.org',
@@ -1050,12 +1064,16 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       }
       
       const info = await transporter.sendMail(mailOptions);
-      console.log('Verification email resent to:', email);
+      console.log('Verification email sent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
       console.log('==== EMAIL SENDING COMPLETE ====');
       
-      res.status(200).json({ message: 'Verification email sent. Please check your inbox.' });
+      res.status(201).json({
+        message: 'User registered successfully. Please check your email to verify your account.',
+        requiresVerification: true,
+        email: email
+      });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
       console.error('Error details:', emailError.message);
@@ -1111,7 +1129,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       }
     }
   } catch (error) {
-    console.error('Resend verification error:', error);
+    console.error('Signup error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
