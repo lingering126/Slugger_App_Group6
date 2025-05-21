@@ -90,6 +90,44 @@ This document outlines the unit test coverage for the Home Page functionalities,
 -   **Supports Feature Integrity**: Helps maintain the stability of home page features during ongoing development and refactoring.
 -   **Documents API Behavior**: The tests and this documentation clarify the expected behavior of home page related API endpoints.
 
+## Profile Management Features
+
+### Purpose
+This section outlines the unit test coverage for the profile management functionalities, located in `profileController.test.js`. These tests ensure the correct handling of user profiles, including profile creation, retrieval, updates, and activity settings management, which are central to the Slugger app's personalization capabilities.
+
+### Covered Features and Scenarios:
+
+#### 1. Retrieve User Profile (`GET /api/profiles/me`)
+-   **Automatic Profile Creation**: Verifies that when a user who doesn't have a profile yet requests their profile, a new one is automatically created and returned (returns HTTP 200).
+-   **Existing Profile Retrieval**: Confirms that a user can retrieve their existing profile successfully, with all associated data fields (name, bio, longTermGoal, activitySettings).
+-   **Authentication Required**: Ensures the endpoint returns HTTP 401 if a request is made without proper authentication.
+
+#### 2. Retrieve Specific User Profile (`GET /api/profiles/:userId`)
+-   **Successful Profile Retrieval**: Validates that a specific user's profile can be retrieved by their user ID (returns HTTP 200).
+-   **Non-Existent Profile**: Ensures the endpoint returns HTTP 404 if the specified user ID doesn't have an associated profile.
+-   **Invalid ID Format**: Verifies appropriate error handling (returns HTTP 400) when an invalid ObjectId format is provided.
+
+#### 3. Update User Profile (`PUT /api/profiles`)
+-   **Complete Profile Update**: Tests updating a user's profile with all fields (name, bio, longTermGoal, status) and verifies the changes are applied correctly.
+-   **Partial Profile Update**: Confirms that updating only specific fields preserves the values of unspecified fields.
+-   **Empty Field Handling**: Verifies that empty strings for bio and longTermGoal are handled correctly and stored as intended.
+
+#### 4. Update Activity Settings (`PUT /api/profiles/activities`)
+-   **Activity Settings Update**: Tests updating a user's activity preferences (physicalActivities, mentalActivities, bonusActivities) and verifies the changes are reflected in the database.
+-   **New Profile Creation with Activities**: Confirms that if a profile doesn't exist when updating activity settings, a new profile is created with those settings.
+-   **Authentication Required**: Ensures the endpoint returns HTTP 401 if a request is made without proper authentication.
+
+#### 5. Edge Cases
+-   **Empty Fields**: Validates proper handling of empty strings in text fields like bio and longTermGoal.
+-   **Field Preservation**: Confirms that when updating only certain profile fields, other fields maintain their previous values.
+-   **Large Data Sets**: Tests profile updates with extensive activity lists to ensure the system can handle larger data volumes.
+
+### Benefits
+-   **Feature Reliability**: Ensures the profile management system works correctly across various scenarios.
+-   **Data Integrity**: Validates that user profile data is stored and retrieved accurately.
+-   **UX Consistency**: Helps maintain a consistent user experience by verifying expected API behaviors.
+-   **Regression Prevention**: Protects against unintended changes to profile functionality during ongoing development.
+  
 ## Running the Tests
 
 To execute these unit tests:
