@@ -23,8 +23,8 @@ let server;
 // Helper function to register and login a user
 async function registerAndLoginUser(appInstance, { email, username, password }) {
   const registerResponse = await request(appInstance)
-    .post('/api/auth/register')
-    .send({ username, email, password });
+    .post('/api/auth/signup')
+    .send({ name: username, email, password }); // Changed username to name
   if (registerResponse.status !== 201) throw new Error(`User registration failed: ${registerResponse.status} ${JSON.stringify(registerResponse.body)}`);
   const userId = registerResponse.body.user.id;
 

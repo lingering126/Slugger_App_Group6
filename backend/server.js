@@ -22,11 +22,14 @@ const { analyticsRouter } = require('./routes/analytics'); // Import the analyti
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
+  // Always include the deployed URL first for verification links
+  const deployedUrl = 'https://slugger-app-group6.onrender.com';
   const networkInterfaces = os.networkInterfaces();
   const serverIPs = [];
   
   console.log('=== Network Interface Scanning Started ===');
   console.log('Available interfaces:', Object.keys(networkInterfaces));
+  console.log('Deployed URL:', deployedUrl);
   
   // First pass: Look for preferred IPs (192.168.x.x)
   Object.keys(networkInterfaces).forEach((interfaceName) => {
@@ -88,16 +91,15 @@ const app = express();
 
 // Configure Nodemailer based on environment
 const emailConfig = {
-  host: process.env.MAIL_HOST,
-  port: parseInt(process.env.MAIL_PORT),
+  host: process.env.MAIL_HOST || 'smtp.mailgun.org',
+  port: parseInt(process.env.MAIL_PORT || '587'),
   auth: {
-    user: process.env.MAIL_USER,
+    user: process.env.MAIL_USER || 'postmaster@slugger4health.site',
     pass: process.env.MAIL_PASS
   },
   // Add secure option for TLS connections
   secure: process.env.MAIL_PORT === '465',
   // Add additional options for better deliverability
-  
   tls: {
     // Do not fail on invalid certs
     rejectUnauthorized: false
@@ -115,7 +117,19 @@ transporter.verify()
   .then(() => console.log('Email service is ready to send emails'))
   .catch(err => {
     console.error('Error with email configuration:', err);
+    console.error('Error message:', err.message);
     console.error('Please check your email credentials and settings in .env file');
+    
+    // Print detailed error information
+    if (err.code) {
+      console.error('Error code:', err.code);
+    }
+    if (err.command) {
+      console.error('SMTP command:', err.command);
+    }
+    if (err.response) {
+      console.error('SMTP response:', err.response);
+    }
   });
 
 // CORS configuration - 合并了第二个文件中的更完整配置
@@ -201,14 +215,223 @@ app.use((err, req, res, next) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/teams', teamRoutes);
+app.use('/api/teams', authMiddleware, teamRoutes);
 app.use('/api/posts', authMiddleware, postsRouter);
 app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
 // Add this line to register the profiles routes
-app.use('/api/profiles', profileRoutes);
-app.use('/api/user-team-targets', userTeamTargetRoutes);
+app.use('/api/profiles', authMiddleware, profileRoutes);
+app.use('/api/user-team-targets', authMiddleware, userTeamTargetRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRouter); // Mount the analytics router, ensure authMiddleware if all routes under it are protected
+
+// Add web route handler for email verification that redirects to the app
+app.get('/verify-email', async (req, res) => {
+  try {
+    const { token, email } = req.query;
+    
+    if (!token) {
+      return res.status(400).send(`
+        <html>
+          <head>
+            <title>Verification Failed</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+              h1 { color: #e74c3c; }
+              p { font-size: 18px; line-height: 1.6; color: #555; }
+              .error-icon {
+                font-size: 64px;
+                color: #e74c3c;
+                margin-bottom: 20px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="error-icon">✗</div>
+              <h1>Verification Failed</h1>
+              <p>The verification link is missing required parameters.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+    
+    // Find user with matching token (no longer requiring email parameter)
+    let user = null;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      // First try to find by token and email if provided
+      if (email) {
+        user = await User.findOne({ 
+          email,
+          verificationToken: token,
+          verificationTokenExpires: { $gt: new Date() } // Token not expired
+        });
+      }
+      
+      // If not found and email was provided, try just by token
+      if (!user) {
+        user = await User.findOne({ 
+          verificationToken: token,
+          verificationTokenExpires: { $gt: new Date() } // Token not expired
+        });
+      }
+      
+      if (!user) {
+        return res.status(400).send(`
+          <html>
+            <head>
+              <title>Verification Failed</title>
+              <style>
+                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+                .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                h1 { color: #e74c3c; }
+                p { font-size: 18px; line-height: 1.6; color: #555; }
+                .error-icon {
+                  font-size: 64px;
+                  color: #e74c3c;
+                  margin-bottom: 20px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="error-icon">✗</div>
+                <h1>Verification Failed</h1>
+                <p>The verification link is invalid or has expired. Please request a new verification email.</p>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+      
+      // Update user to verified status
+      user.isVerified = true;
+      user.verificationToken = undefined;
+      user.verificationTokenExpires = undefined;
+      await user.save();
+    } else {
+      // Fallback to in-memory storage
+      // First try with email if provided
+      let userIndex = -1;
+      
+      if (email) {
+        userIndex = inMemoryUsers.findIndex(u => u.email === email && u.verificationToken === token);
+      }
+      
+      // If not found, try just by token
+      if (userIndex === -1) {
+        userIndex = inMemoryUsers.findIndex(u => u.verificationToken === token);
+      }
+      
+      if (userIndex === -1 || inMemoryUsers[userIndex].verificationTokenExpires < new Date()) {
+        return res.status(400).send(`
+          <html>
+            <head>
+              <title>Verification Failed</title>
+              <style>
+                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+                .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                h1 { color: #e74c3c; }
+                p { font-size: 18px; line-height: 1.6; color: #555; }
+                .error-icon {
+                  font-size: 64px;
+                  color: #e74c3c;
+                  margin-bottom: 20px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="error-icon">✗</div>
+                <h1>Verification Failed</h1>
+                <p>The verification link is invalid or has expired. Please request a new verification email.</p>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+      
+      // Update in-memory user to verified status
+      inMemoryUsers[userIndex].isVerified = true;
+      inMemoryUsers[userIndex].verificationToken = undefined;
+      inMemoryUsers[userIndex].verificationTokenExpires = undefined;
+      user = inMemoryUsers[userIndex];
+    }
+    
+    // Send HTML response with success message and redirect button
+    res.status(200).send(`
+      <html>
+        <head>
+          <title>Email Verified</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #2ecc71; }
+            p { font-size: 18px; line-height: 1.6; color: #555; }
+            .button { 
+              display: inline-block; 
+              background-color: #6c63ff; 
+              color: white; 
+              padding: 12px 30px; 
+              text-decoration: none; 
+              border-radius: 4px; 
+              margin-top: 20px; 
+              font-size: 16px;
+              font-weight: bold;
+              transition: background-color 0.3s;
+            }
+            .button:hover {
+              background-color: #5a52d5;
+            }
+            .success-icon {
+              font-size: 64px;
+              color: #2ecc71;
+              margin-bottom: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">✓</div>
+            <h1>Email Verified Successfully!</h1>
+            <p>Your email has been verified. You can now log in to your account.</p>
+            <p>Please open the Slugger app on your device to log in.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).send(`
+      <html>
+        <head>
+          <title>Verification Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #e74c3c; }
+            p { font-size: 18px; line-height: 1.6; color: #555; }
+            .error-icon {
+              font-size: 64px;
+              color: #e74c3c;
+              margin-bottom: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="error-icon">✗</div>
+            <h1>Verification Error</h1>
+            <p>An error occurred during email verification. Please try again later or contact support.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+});
 
 // ADD THIS NEW ENDPOINT: GET user profile - Updated to include longTermGoal
 app.get('/api/user/profile', authMiddleware, async (req, res) => {
@@ -369,22 +592,31 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ message: 'Password must contain at least one letter' });
     }
     
-    // Generate verification token
+    // Generate verification token - do this BEFORE user creation to ensure it's available in all branches
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    // Hash the password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
     
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
       // Check if user already exists in MongoDB
       const existingUser = await User.findOne({ email });
       if (existingUser) {
+        // If the user exists but is not verified, offer to resend verification email
+        if (!existingUser.isVerified) {
+          console.log('Email exists but not verified');
+          return res.status(409).json({ 
+            message: 'This email is registered but not verified yet',
+            requiresVerification: true,
+            email: email
+          });
+        }
         console.log('Email already in use');
         return res.status(400).json({ message: 'Email already in use' });
       }
+      
+      // Hash the password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
       
       // Create new user in MongoDB
       const newUser = new User({
@@ -403,14 +635,29 @@ app.post('/api/auth/signup', async (req, res) => {
       // Fallback to in-memory storage
       const existingUser = inMemoryUsers.find(user => user.email === email);
       if (existingUser) {
+        // If the user exists but is not verified, offer to resend verification email
+        if (!existingUser.isVerified) {
+          console.log('Email exists but not verified');
+          return res.status(409).json({ 
+            message: 'This email is registered but not verified yet',
+            requiresVerification: true,
+            email: email
+          });
+        }
         console.log('Email already in use');
         return res.status(400).json({ message: 'Email already in use' });
       }
+      
+      // Hash the password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
       
       const newUser = {
         id: Date.now().toString(),
         email,
         password: hashedPassword, // Store the hashed password
+        name,
+        username: name,
         isVerified: false,
         verificationToken,
         verificationTokenExpires
@@ -422,21 +669,25 @@ app.post('/api/auth/signup', async (req, res) => {
     
     // Send verification email
     const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
+    
+    // Always use the deployed URL as the primary verification link
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const verificationLink = `${deployedUrl}/verify-email?token=${verificationToken}`;
     
     console.log('=== Signup Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
-    console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', process.env.PORT || 5001);
-    console.log('Full verification link:', `http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
-    console.log('===============================');
+    console.log('Using deployed URL:', deployedUrl);
+    console.log('Generated verification link:', verificationLink);
     
-    // 确保有邮件发送配置
+    // Create transporter for email sending
+    let currentTransporter = transporter;
+    
+    // If no email configuration, create a test account
     if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
       console.warn('Email configuration missing. Setting up a default transporter for development.');
-      // 如果没有配置邮件服务，创建一个测试用的transporter
+      // Create a test account with Ethereal for development/testing
       const testAccount = await nodemailer.createTestAccount();
-      transporter = nodemailer.createTransport({
+      currentTransporter = nodemailer.createTransport({
         host: 'smtp.ethereal.email',
         port: 587,
         secure: false,
@@ -449,7 +700,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
     
     const mailOptions = {
-      from: process.env.MAIL_FROM || 'test@example.com',
+      from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
       to: email,
       subject: 'Verify your Slugger account',
       html: `
@@ -458,18 +709,19 @@ app.post('/api/auth/signup', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}" 
+            <a href="${verificationLink}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
           </div>
           
-          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
+          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking the link below:</p>
           
-          <ul style="font-size: 14px; color: #666;">
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${process.env.PORT || 5001}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
-          </ul>
+          <p style="text-align: center; margin: 15px 0;">
+            <a href="${verificationLink}" style="color: #6c63ff; text-decoration: underline;">
+              ${verificationLink}
+            </a>
+          </p>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
@@ -482,36 +734,128 @@ app.post('/api/auth/signup', async (req, res) => {
     };
     
     try {
+      console.log('==== EMAIL SENDING DETAILS ====');
       console.log('Attempting to send verification email to:', email);
-      console.log('Using from address:', mailOptions.from);
+      console.log('Using from address:', process.env.MAIL_FROM || 'noreply@slugger4health.site');
+      console.log('Using SMTP settings:', {
+        host: process.env.MAIL_HOST || 'smtp.mailgun.org',
+        port: process.env.MAIL_PORT || '587',
+        user: process.env.MAIL_USER || 'postmaster@slugger4health.site',
+        secure: process.env.MAIL_PORT === '465'
+      });
+      console.log('Verification token:', verificationToken);
       
-      const info = await transporter.sendMail(mailOptions);
+      // Check if using Mailgun sandbox domain
+      const isSandboxDomain = (process.env.MAIL_FROM || '').includes('sandbox') || 
+                              (process.env.MAIL_USER || '').includes('sandbox');
+      
+      if (isSandboxDomain) {
+        console.log('⚠️ WARNING: Using Mailgun sandbox domain');
+        console.log('Sandbox domains have restrictions: https://help.mailgun.com/hc/en-us/articles/217531258-Authorized-Recipients');
+        console.log('You need to authorize recipient emails in the Mailgun dashboard first');
+      }
+      
+      // Verify transporter configuration before sending
+      try {
+        await currentTransporter.verify();
+        console.log('Transporter verification successful');
+      } catch (verifyError) {
+        console.error('Transporter verification failed:', verifyError);
+        console.error('Mail configuration error details:', verifyError.message);
+      }
+      
+      const info = await currentTransporter.sendMail(mailOptions);
       console.log('Verification email sent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
       
-      // 如果使用了Ethereal测试账户，提供预览链接
-      if (info.messageId && info.messageId.includes('ethereal')) {
-        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
-        console.log('IMPORTANT: This is a test email. Check the preview URL above to view it.');
+      // Check if we're using Ethereal for testing
+      if (currentTransporter !== transporter) {
+        const previewURL = nodemailer.getTestMessageUrl(info);
+        console.log('Ethereal Email Preview URL:', previewURL);
+        
+        console.log('==== EMAIL SENDING COMPLETE ====');
+        
+        // Return success with preview URL for testing
+        return res.status(201).json({
+          message: 'User registered successfully. Please check the preview URL for verification.',
+          previewUrl: previewURL,
+          testMode: true,
+          email: email
+        });
       }
+      
+      console.log('==== EMAIL SENDING COMPLETE ====');
+      
+      // Standard success response
+      res.status(201).json({
+        message: 'User registered successfully. Please check your email to verify your account.',
+        requiresVerification: true,
+        email: email
+      });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
       console.error('Error details:', emailError.message);
       
+      // Try using Ethereal as fallback if Mailgun fails
+      try {
+        console.log('Attempting to use Ethereal email service as fallback...');
+        
+        // Create a test account on ethereal.email
+        const testAccount = await nodemailer.createTestAccount();
+        console.log('Created Ethereal test account:', testAccount.user);
+        
+        // Create a new transporter with Ethereal credentials
+        const etherealTransporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+        
+        // Send mail with ethereal transporter
+        const info = await etherealTransporter.sendMail(mailOptions);
+        console.log('Test email sent via Ethereal!');
+        console.log('Message ID:', info.messageId);
+        
+        // Generate preview URL
+        const previewURL = nodemailer.getTestMessageUrl(info);
+        console.log('Preview URL:', previewURL);
+        
+        // Return success with a message to check the preview URL
+        return res.status(201).json({ 
+          message: 'Email sent via test service. Access verification link via preview URL (check server logs).',
+          previewUrl: previewURL,
+          testMode: true,
+          email: email
+        });
+      } catch (etherealError) {
+        console.error('Ethereal fallback also failed:', etherealError);
+      }
+      
       if (emailError.message.includes('authorized')) {
         console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
         console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
+        
+        res.status(201).json({ 
+          message: 'User registered, but failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients. Please add your email to authorized recipients in Mailgun.',
+          error: 'unauthorized_recipient',
+          requiresVerification: true,
+          email: email
+        });
+      } else {
+        // Still return success for the user creation part, but indicate email sending failed
+        res.status(201).json({ 
+          message: 'User registered, but failed to send verification email. Please try using the resend verification option.',
+          requiresVerification: true, 
+          email: email,
+          error: emailError.message
+        });
       }
-      
-      // Continue with registration even if email fails
     }
-    
-    console.log('Signup successful for:', email);
-    res.status(201).json({ 
-      message: 'User registered successfully. Please check your email to verify your account.',
-      requiresVerification: true
-    });
   } catch (error) {
     console.error('Signup error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -603,227 +947,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/auth/verify-email', async (req, res) => {
-  try {
-    const { token, email } = req.query;
-    
-    if (!token || !email) {
-      return res.status(400).json({ message: 'Invalid verification link' });
-    }
-    
-    // Get server IP addresses for building App links
-    const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost';
-    
-    let user;
-    
-    // Check if MongoDB is connected
-    if (mongoose.connection.readyState === 1) {
-      // Find user in MongoDB
-      user = await User.findOne({ 
-        email, 
-        verificationToken: token,
-        verificationTokenExpires: { $gt: new Date() }
-      });
-      
-      if (user) {
-        user.isVerified = true;
-        user.verificationToken = null;
-        user.verificationTokenExpires = null;
-        await user.save();
-      }
-    } else {
-      // Fallback to in-memory storage
-      const userIndex = inMemoryUsers.findIndex(u => 
-        u.email === email && 
-        u.verificationToken === token && 
-        new Date(u.verificationTokenExpires) > new Date()
-      );
-      
-      if (userIndex !== -1) {
-        inMemoryUsers[userIndex].isVerified = true;
-        inMemoryUsers[userIndex].verificationToken = null;
-        inMemoryUsers[userIndex].verificationTokenExpires = null;
-        user = inMemoryUsers[userIndex];
-      }
-    }
-    
-    if (!user) {
-      return res.status(400).send(`
-        <html>
-          <head>
-            <title>Verification Failed</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-              h1 { color: #e74c3c; }
-              p { font-size: 18px; line-height: 1.6; color: #555; }
-              .button { 
-                display: inline-block; 
-                background-color: #6c63ff; 
-                color: white; 
-                padding: 12px 30px; 
-                text-decoration: none; 
-                border-radius: 4px; 
-                margin-top: 20px; 
-                font-size: 16px;
-                font-weight: bold;
-                transition: background-color 0.3s;
-                margin: 10px;
-              }
-              .button:hover {
-                background-color: #5a52d5;
-              }
-              .error-icon {
-                font-size: 64px;
-                color: #e74c3c;
-                margin-bottom: 20px;
-              }
-              .button-container {
-                margin-top: 20px;
-              }
-              .note {
-                margin-top: 20px;
-                font-size: 14px;
-                color: #777;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="error-icon">✗</div>
-              <h1>Verification Failed</h1>
-              <p>The verification link is invalid or has expired.</p>
-              <p>Please try logging in or request a new verification email.</p>
-              
-              <div class="button-container">
-                <p>If you're using the app on this device, try one of these links:</p>
-                <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-                <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
-              </div>
-              
-              <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-    
-    // Send HTML response with success message and redirect button
-    res.status(200).send(`
-      <html>
-        <head>
-          <title>Email Verified</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { color: #2ecc71; }
-            p { font-size: 18px; line-height: 1.6; color: #555; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-              margin: 10px;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
-            .success-icon {
-              font-size: 64px;
-              color: #2ecc71;
-              margin-bottom: 20px;
-            }
-            .button-container {
-              margin-top: 20px;
-            }
-            .note {
-              margin-top: 20px;
-              font-size: 14px;
-              color: #777;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="success-icon">✓</div>
-            <h1>Email Verified Successfully!</h1>
-            <p>Your email has been verified. You can now log in to your account.</p>
-            <p>Please open the Slugger app on your device and log in with your credentials.</p>
-          </div>
-        </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error('Verification error:', error);
-    res.status(500).send(`
-      <html>
-        <head>
-          <title>Verification Error</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { color: #e74c3c; }
-            p { font-size: 18px; line-height: 1.6; color: #555; }
-            .error { color: #e74c3c; font-family: monospace; margin: 20px 0; padding: 10px; background: #f8f8f8; border-radius: 4px; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-              margin: 10px;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
-            .error-icon {
-              font-size: 64px;
-              color: #e74c3c;
-              margin-bottom: 20px;
-            }
-            .button-container {
-              margin-top: 20px;
-            }
-            .note {
-              margin-top: 20px;
-              font-size: 14px;
-              color: #777;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="error-icon">⚠</div>
-            <h1>Verification Error</h1>
-            <p>An error occurred during the verification process.</p>
-            <div class="error">${error.message}</div>
-            
-            <div class="button-container">
-              <p>If you're using the app on this device, try one of these links:</p>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Open App</a>
-              <a href="exp://${primaryIP}:19000/screens/login" class="button">Alternative Link</a>
-            </div>
-            
-            <p class="note">Note: If the buttons above don't work, please manually open the Slugger app on your device.</p>
-          </div>
-        </body>
-      </html>
-    `);
-  }
-});
-
 app.post('/api/auth/resend-verification', async (req, res) => {
   try {
     const { email } = req.body;
@@ -833,15 +956,27 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
     
     let user;
+    let verificationToken;
     
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
       // Find user in MongoDB
       user = await User.findOne({ email });
       
+      if (!user) {
+        return res.status(404).json({ message: 'User not found. Please sign up first.' });
+      }
+      
+      if (user.isVerified) {
+        return res.status(400).json({ 
+          message: 'Email is already verified. You can log in now.',
+          alreadyVerified: true 
+        });
+      }
+      
       if (user && !user.isVerified) {
         // Generate new verification token
-        const verificationToken = crypto.randomBytes(32).toString('hex');
+        verificationToken = crypto.randomBytes(32).toString('hex');
         const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
         
         user.verificationToken = verificationToken;
@@ -850,17 +985,26 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       }
     } else {
       // Fallback to in-memory storage
-      const userIndex = inMemoryUsers.findIndex(u => u.email === email && !u.isVerified);
+      const userIndex = inMemoryUsers.findIndex(u => u.email === email);
       
-      if (userIndex !== -1) {
-        // Generate new verification token
-        const verificationToken = crypto.randomBytes(32).toString('hex');
-        const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-        
-        inMemoryUsers[userIndex].verificationToken = verificationToken;
-        inMemoryUsers[userIndex].verificationTokenExpires = verificationTokenExpires;
-        user = inMemoryUsers[userIndex];
+      if (userIndex === -1) {
+        return res.status(404).json({ message: 'User not found. Please sign up first.' });
       }
+      
+      if (inMemoryUsers[userIndex].isVerified) {
+        return res.status(400).json({ 
+          message: 'Email is already verified. You can log in now.',
+          alreadyVerified: true 
+        });
+      }
+      
+      // Generate new verification token
+      verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      inMemoryUsers[userIndex].verificationToken = verificationToken;
+      inMemoryUsers[userIndex].verificationTokenExpires = verificationTokenExpires;
+      user = inMemoryUsers[userIndex];
     }
     
     if (!user) {
@@ -869,22 +1013,38 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     
     // Send verification email
     const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-    const port = process.env.PORT || 5001;
+    
+    // Always use the deployed URL as the primary verification link
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const verificationLink = `${deployedUrl}/verify-email?token=${user.verificationToken}`;
     
     console.log('=== Resend Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
-    console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', port);
-    console.log('Generated verification links:');
-    serverIPs.forEach((ip, index) => {
-      console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
-    });
-    console.log('Localhost link:', `http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
-    console.log('================================');
+    console.log('Using deployed URL:', deployedUrl);
+    console.log('Generated verification link:', verificationLink);
+    
+    // Create transporter for email sending
+    let currentTransporter = transporter;
+    
+    // If no email configuration, create a test account
+    if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
+      console.warn('Email configuration missing. Setting up a default transporter for development.');
+      // Create a test account with Ethereal for development/testing
+      const testAccount = await nodemailer.createTestAccount();
+      currentTransporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      console.log('Using Ethereal test account:', testAccount.user);
+    }
     
     const mailOptions = {
-      from: process.env.MAIL_FROM,
+      from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
       to: email,
       subject: 'Verify your Slugger account',
       html: `
@@ -893,18 +1053,19 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p style="font-size: 16px; line-height: 1.5; color: #444;">Thank you for signing up. Please verify your email address by clicking the button below:</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://${primaryIP}:${process.env.PORT || 5001}/api/auth/verify-email?token=${user.verificationToken}&email=${email}" 
+            <a href="${verificationLink}" 
                style="background-color: #6c63ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold;">
               Verify Email
             </a>
           </div>
           
-          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
+          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking the link below:</p>
           
-          <ul style="font-size: 14px; color: #666;">
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Local Link (localhost)</a></li>
-          </ul>
+          <p style="text-align: center; margin: 15px 0;">
+            <a href="${verificationLink}" style="color: #6c63ff; text-decoration: underline;">
+              ${verificationLink}
+            </a>
+          </p>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
@@ -917,29 +1078,98 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     };
     
     try {
-      console.log('Attempting to resend verification email to:', email);
-      console.log('Using from address:', process.env.MAIL_FROM);
+      console.log('==== EMAIL SENDING DETAILS ====');
+      console.log('Attempting to send verification email to:', email);
+      console.log('Using from address:', process.env.MAIL_FROM || 'noreply@slugger4health.site');
+      console.log('Using SMTP settings:', {
+        host: process.env.MAIL_HOST || 'smtp.mailgun.org',
+        port: process.env.MAIL_PORT || '587',
+        user: process.env.MAIL_USER || 'postmaster@slugger4health.site',
+        secure: process.env.MAIL_PORT === '465'
+      });
+      console.log('Verification token:', user.verificationToken);
       
-      const info = await transporter.sendMail(mailOptions);
-      console.log('Verification email resent to:', email);
+      // Check if using Mailgun sandbox domain
+      const isSandboxDomain = (process.env.MAIL_FROM || '').includes('sandbox') || 
+                              (process.env.MAIL_USER || '').includes('sandbox');
+      
+      if (isSandboxDomain) {
+        console.log('⚠️ WARNING: Using Mailgun sandbox domain');
+        console.log('Sandbox domains have restrictions: https://help.mailgun.com/hc/en-us/articles/217531258-Authorized-Recipients');
+        console.log('You need to authorize recipient emails in the Mailgun dashboard first');
+      }
+      
+      // Verify transporter configuration before sending
+      try {
+        await currentTransporter.verify();
+        console.log('Transporter verification successful');
+      } catch (verifyError) {
+        console.error('Transporter verification failed:', verifyError);
+        console.error('Mail configuration error details:', verifyError.message);
+      }
+      
+      const info = await currentTransporter.sendMail(mailOptions);
+      console.log('Verification email sent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
+      console.log('==== EMAIL SENDING COMPLETE ====');
       
-      res.status(200).json({ message: 'Verification email sent. Please check your inbox.' });
+      res.status(200).json({
+        message: 'Verification email sent. Please check your inbox.',
+        email: email
+      });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
       console.error('Error details:', emailError.message);
+      
+      // Try using Ethereal as fallback if Mailgun fails
+      try {
+        console.log('Attempting to use Ethereal email service as fallback...');
+        
+        // Create a test account on ethereal.email
+        const testAccount = await nodemailer.createTestAccount();
+        console.log('Created Ethereal test account:', testAccount.user);
+        
+        // Create a new transporter with Ethereal credentials
+        const etherealTransporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+        
+        // Send mail with ethereal transporter
+        const info = await etherealTransporter.sendMail(mailOptions);
+        console.log('Test email sent via Ethereal!');
+        console.log('Message ID:', info.messageId);
+        
+        // Generate preview URL
+        const previewURL = nodemailer.getTestMessageUrl(info);
+        console.log('Preview URL:', previewURL);
+        
+        // Return success with a message to check the preview URL
+        return res.status(200).json({ 
+          message: 'Email sent via test service. Access verification link via preview URL (check server logs).',
+          previewUrl: previewURL,
+          testMode: true
+        });
+      } catch (etherealError) {
+        console.error('Ethereal fallback also failed:', etherealError);
+      }
       
       if (emailError.message.includes('authorized')) {
         console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
         console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
         
         res.status(500).json({ 
-          message: 'Failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients.',
+          message: 'Failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients. Please add your email to authorized recipients in Mailgun.',
           error: 'unauthorized_recipient'
         });
       } else {
-        res.status(500).json({ message: 'Failed to send verification email', error: emailError.message });
+        res.status(500).json({ message: 'Failed to send verification email. Please try again later.', error: emailError.message });
       }
     }
   } catch (error) {
@@ -1228,24 +1458,65 @@ app.post('/api/test/email', async (req, res) => {
       console.error('Error sending test email:', emailError);
       console.error('Error details:', emailError.message);
       
+      // Try using Ethereal as fallback if Mailgun fails
+      try {
+        console.log('Attempting to use Ethereal email service as fallback...');
+        
+        // Create a test account on ethereal.email
+        const testAccount = await nodemailer.createTestAccount();
+        console.log('Created Ethereal test account:', testAccount.user);
+        
+        // Create a new transporter with Ethereal credentials
+        const etherealTransporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+        
+        // Send mail with ethereal transporter
+        const info = await etherealTransporter.sendMail(mailOptions);
+        console.log('Test email sent via Ethereal!');
+        console.log('Message ID:', info.messageId);
+        
+        // Generate preview URL
+        const previewURL = nodemailer.getTestMessageUrl(info);
+        console.log('Preview URL:', previewURL);
+        
+        // Return success with a message to check the preview URL
+        return res.status(200).json({ 
+          message: 'Email sent via test service. Access verification link via preview URL (check server logs).',
+          previewUrl: previewURL,
+          testMode: true
+        });
+      } catch (etherealError) {
+        console.error('Ethereal fallback also failed:', etherealError);
+      }
+      
       if (emailError.message.includes('authorized')) {
-        return res.status(500).json({ 
+        console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
+        console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
+        
+        res.status(500).json({ 
           message: 'Failed to send test email. With Mailgun sandbox domains, you can only send to authorized recipients.',
           error: 'unauthorized_recipient',
           solution: 'Authorize this recipient in your Mailgun dashboard or use a different email service.'
         });
+      } else {
+        res.status(500).json({ 
+          message: 'Failed to send test email', 
+          error: emailError.message,
+          config: {
+            host: process.env.MAIL_HOST,
+            port: process.env.MAIL_PORT,
+            user: process.env.MAIL_USER,
+            from: process.env.MAIL_FROM
+          }
+        });
       }
-      
-      res.status(500).json({ 
-        message: 'Failed to send test email', 
-        error: emailError.message,
-        config: {
-          host: process.env.MAIL_HOST,
-          port: process.env.MAIL_PORT,
-          user: process.env.MAIL_USER,
-          from: process.env.MAIL_FROM
-        }
-      });
     }
   } catch (error) {
     console.error('Test email error:', error);

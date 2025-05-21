@@ -372,15 +372,11 @@ router.get('/verify-email', async (req, res) => {
               color: #4CAF50;
               margin-bottom: 20px;
             }
-            .button {
-              background-color: #6c63ff;
-              color: white;
-              padding: 12px 30px;
-              text-decoration: none;
-              border-radius: 4px;
-              font-weight: bold;
-              display: inline-block;
-              margin-top: 20px;
+            p {
+              font-size: 16px;
+              line-height: 1.6;
+              color: #555;
+              margin-bottom: 10px;
             }
           </style>
         </head>
@@ -389,7 +385,7 @@ router.get('/verify-email', async (req, res) => {
             <div class="success-icon">✓</div>
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your Slugger account.</p>
-            <a href="http://localhost:8081/" class="button">Go to Login</a>
+            <p>Please open the Slugger app on your device to log in.</p>
           </div>
         </body>
       </html>

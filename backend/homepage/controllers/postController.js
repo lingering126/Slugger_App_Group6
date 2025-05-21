@@ -3,13 +3,28 @@ const User = require('../../src/models/user');
 
 // Create new post
 exports.createPost = async (req, res) => {
+  console.log('==== POST /api/homepage/posts (Create Post) START ====');
   try {
     const { content } = req.body;
-    const userId = req.user._id || req.user.id;
+    
+    // Safely extract user ID with validation
+    if (!req.user) {
+      console.error('[createPost] req.user is missing - auth middleware may not be working properly');
+      return res.status(401).json({ message: 'Authentication error: User not identified' });
+    }
+    
+    const userId = req.user.id || req.user.userId || req.user._id;
+    if (!userId) {
+      console.error('[createPost] User ID not found in req.user:', req.user);
+      return res.status(401).json({ message: 'Authentication error: User ID not found' });
+    }
+    
+    console.log(`[createPost] Creating post for user: ${userId}`);
 
     // Get user information first
     const user = await User.findById(userId);
     if (!user) {
+      console.error(`[createPost] User with ID ${userId} not found in database`);
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -31,8 +46,10 @@ exports.createPost = async (req, res) => {
       createdAt: post.createdAt
     };
 
+    console.log('==== POST /api/homepage/posts (Create Post) END - SUCCESS ====');
     res.status(201).json(response);
   } catch (error) {
+    console.error('==== POST /api/homepage/posts (Create Post) END - ERROR ====');
     console.error('Error creating post:', error);
     if (error.name === 'ValidationError') {
       return res.status(400).json({ message: error.message });
@@ -43,7 +60,22 @@ exports.createPost = async (req, res) => {
 
 // Get posts list
 exports.getPosts = async (req, res) => {
+  console.log('==== GET /api/homepage/posts START ====');
   try {
+    // Safely extract user ID with validation for permissions checking if needed
+    if (!req.user) {
+      console.error('[getPosts] req.user is missing - auth middleware may not be working properly');
+      return res.status(401).json({ message: 'Authentication error: User not identified' });
+    }
+    
+    const userId = req.user.id || req.user.userId || req.user._id;
+    if (!userId) {
+      console.error('[getPosts] User ID not found in req.user:', req.user);
+      return res.status(401).json({ message: 'Authentication error: User ID not found' });
+    }
+    
+    console.log(`[getPosts] Retrieving posts for user: ${userId}`);
+    
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
 

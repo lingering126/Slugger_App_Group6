@@ -16,32 +16,37 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Object to share data between beforeAll and the mock
+const mockAuthDetails = {
+  userId: null,
+  token: null,
+};
 
 jest.mock('../src/middleware/auth', () => (req, res, next) => {
-  if (req.headers.authorization) {
-    const token = req.headers.authorization.split(' ')[1];
-    // Use userId instead of id to match what profiles.js expects
-    req.userData = { 
-      userId: token // This is the key change
-    };
-    req.user = { 
-      _id: token,
-      id: token
-    };
-    next();
-  } else {
-    res.status(401).json({ message: 'Authentication required' });
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    const receivedToken = req.headers.authorization.split(' ')[1];
+    // If a token is present AND it matches our mockAuthDetails.token AND mockAuthDetails.userId is set
+    if (mockAuthDetails.token && receivedToken === mockAuthDetails.token && mockAuthDetails.userId) {
+      req.user = { 
+        _id: mockAuthDetails.userId, 
+        id: mockAuthDetails.userId,
+        userId: mockAuthDetails.userId 
+      };
+    }
   }
+  next();
 });
 
 // Import routes (after mocking middleware)
+const mockedAuthMiddleware = require('../src/middleware/auth'); // This will be the mock function
 const profileRoutes = require('../routes/profiles');
-app.use('/api/profiles', profileRoutes);
+app.use('/api/profiles', mockedAuthMiddleware, profileRoutes); // Apply the mocked middleware
 
 // Global test variables
 let mongoServer;
-let testUserId;
-let testToken;
+// mockTestUserId and mockTestToken are now properties of mockAuthDetails
+// let mockTestUserId; 
+// let mockTestToken;  
 
 const originalConsoleError = console.error;
 beforeAll(async () => {
@@ -66,11 +71,11 @@ beforeAll(async () => {
   });
   
   const savedUser = await testUser.save();
-  testUserId = savedUser._id.toString();
+  mockAuthDetails.userId = savedUser._id.toString();
   
   // Generate JWT token
-  testToken = jwt.sign(
-    { userId: testUserId },
+  mockAuthDetails.token = jwt.sign(
+    { userId: mockAuthDetails.userId },
     process.env.JWT_SECRET || 'test_secret_key',
     { expiresIn: '1h' }
   );
@@ -100,7 +105,7 @@ describe('Profile Management API', () => {
       // Create response
       const response = await request(app)
         .get('/api/profiles/me')
-        .set('Authorization', `Bearer ${testUserId}`);
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`);
       
       // Allow 200 or 500 status codes
       expect([200, 500]).toContain(response.status);
@@ -114,7 +119,7 @@ describe('Profile Management API', () => {
     test('should return an existing profile', async () => {
       // First create a profile
       const profile = new Profile({
-        user: testUserId,
+        user: mockAuthDetails.userId,
         name: 'Existing Profile',
         bio: 'This is a test bio',
         longTermGoal: 'Run a marathon',
@@ -130,7 +135,7 @@ describe('Profile Management API', () => {
       
       const response = await request(app)
         .get('/api/profiles/me')
-        .set('Authorization', `Bearer ${testUserId}`);
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`);
       
       // Allow 200 or 500 status codes
       expect([200, 500]).toContain(response.status);
@@ -160,7 +165,7 @@ describe('Profile Management API', () => {
     test('should return the profile for a specific user', async () => {
       // First create a profile
       const profile = new Profile({
-        user: testUserId,
+        user: mockAuthDetails.userId,
         name: 'User Profile',
         bio: 'User bio for specific lookup',
         longTermGoal: 'Learn piano'
@@ -168,8 +173,8 @@ describe('Profile Management API', () => {
       await profile.save();
       
       const response = await request(app)
-        .get(`/api/profiles/${testUserId}`)
-        .set('Authorization', `Bearer ${testUserId}`);
+        .get(`/api/profiles/${mockAuthDetails.userId}`)
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`);
       
       // Allow 200 or 500 status codes
       expect([200, 500]).toContain(response.status);
@@ -185,7 +190,7 @@ describe('Profile Management API', () => {
       
       const response = await request(app)
         .get(`/api/profiles/${nonExistentId}`)
-        .set('Authorization', `Bearer ${testUserId}`);
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`);
       
       // Allow 404 or 500 status codes
       expect([404, 500]).toContain(response.status);
@@ -198,7 +203,7 @@ describe('Profile Management API', () => {
     test('should update an existing profile', async () => {
       // First create a profile
       const profile = new Profile({
-        user: testUserId,
+        user: mockAuthDetails.userId,
         name: 'Original Name',
         bio: 'Original bio',
         longTermGoal: 'Original goal'
@@ -214,7 +219,7 @@ describe('Profile Management API', () => {
       
       const response = await request(app)
         .put('/api/profiles')
-        .set('Authorization', `Bearer ${testUserId}`)
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`)
         .send(updatedData);
       
       // Allow 200 or 500 status codes
@@ -231,7 +236,7 @@ describe('Profile Management API', () => {
     test('should handle invalid ObjectId format', async () => {
       const response = await request(app)
         .get('/api/profiles/invalid-id')
-        .set('Authorization', `Bearer ${testUserId}`);
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`);
       
       // Expect 400 or 500 status code
       expect([400, 500]).toContain(response.status);
@@ -243,7 +248,7 @@ describe('Profile Management API', () => {
     test('should update activity settings', async () => {
       // Create test profile
       const profile = new Profile({
-        user: testUserId,
+        user: mockAuthDetails.userId,
         name: 'Activity Test User',
         activitySettings: {
           physicalActivities: [1, 2],
@@ -262,7 +267,7 @@ describe('Profile Management API', () => {
       
       const response = await request(app)
         .put('/api/profiles/activities')
-        .set('Authorization', `Bearer ${testUserId}`)
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`)
         .send(updatedActivities);
       
       expect([200, 201, 500]).toContain(response.status);
@@ -276,7 +281,7 @@ describe('Profile Management API', () => {
     
     test('should create a profile with activity settings if none exists', async () => {
       // Ensure no existing profile
-      await Profile.deleteMany({ user: testUserId });
+      await Profile.deleteMany({ user: mockAuthDetails.userId });
       
       // Prepare activity settings
       const newActivities = {
@@ -287,7 +292,7 @@ describe('Profile Management API', () => {
       
       const response = await request(app)
         .put('/api/profiles/activities')
-        .set('Authorization', `Bearer ${testUserId}`)
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`)
         .send(newActivities);
       
       expect([200, 201, 500]).toContain(response.status);
@@ -318,7 +323,7 @@ describe('Profile Management API', () => {
     test('should handle empty bio and longTermGoal strings', async () => {
       const response = await request(app)
         .put('/api/profiles')
-        .set('Authorization', `Bearer ${testUserId}`)
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`)
         .send({
           name: 'Empty Fields Test',
           bio: '',
@@ -336,7 +341,7 @@ describe('Profile Management API', () => {
     test('should preserve unspecified fields on update', async () => {
       // Create complete profile
       const fullProfile = new Profile({
-        user: testUserId,
+        user: mockAuthDetails.userId,
         name: 'Full Profile',
         bio: 'Full bio',
         longTermGoal: 'Full goal',
@@ -352,7 +357,7 @@ describe('Profile Management API', () => {
       // Only update name
       const response = await request(app)
         .put('/api/profiles')
-        .set('Authorization', `Bearer ${testUserId}`)
+        .set('Authorization', `Bearer ${mockAuthDetails.token}`)
         .send({
           name: 'Updated Name Only'
         });

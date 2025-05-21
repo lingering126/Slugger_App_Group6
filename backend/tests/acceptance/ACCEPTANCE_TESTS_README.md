@@ -17,7 +17,7 @@ API-driven acceptance tests help ensure that key user flows and feature integrat
 -   **File:** `onboarding.acceptance.test.js`
 -   **Description:** This test simulates the complete onboarding process for a new user.
 -   **Steps:**
-    1.  **Register New User:** A POST request is made to `/api/auth/register` with unique user credentials.
+    1.  **Register New User:** A POST request is made to `/api/auth/signup` with unique user credentials (including `name`, email, and password).
         -   *Verification:* Checks for a 201 status and valid user data in the response.
     2.  **Simulate Email Verification:**
         -   The user's `verificationToken` is retrieved directly from the database (as email sending is not part of this automated test).

@@ -22,6 +22,8 @@ export default function SignupScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const router = useRouter();
 
   // Check if the server is reachable
@@ -111,7 +113,12 @@ export default function SignupScreen() {
       }, 15000);
       
       try {
-        const response = await fetch(`${apiUrl}/auth/signup`, {
+        // Fix API endpoint - apiUrl already contains /api, so just append the specific route
+        // Ensure we're calling the correct backend endpoint
+        const fullUrl = `${apiUrl}/auth/signup`; // Corrected path
+        console.log('Using full signup URL:', fullUrl);
+        
+        const response = await fetch(fullUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -131,6 +138,7 @@ export default function SignupScreen() {
         
         // Check if response might be HTML instead of JSON
         const contentType = response.headers.get('content-type');
+        console.log('Response content type:', contentType);
         
         if (contentType && contentType.includes('text/html')) {
           console.error('Server returned HTML instead of JSON');
@@ -141,12 +149,32 @@ export default function SignupScreen() {
         
         try {
           const data = await response.json();
+          console.log('Signup response data:', data);
           
           if (!response.ok) {
             console.log('Signup error data:', data);
+            
+            // Check if the email exists but is not verified
+            if (response.status === 409 && data.requiresVerification) {
+              setVerificationEmail(email);
+              setNeedsVerification(true);
+              setLoading(false);
+              return;
+            }
+            
             setError(data.message || 'Signup failed');
             setLoading(false);
             return;
+          }
+          
+          // If the server returned a test mode URL, show it
+          if (data.testMode && data.previewUrl) {
+            console.log('Test mode email preview URL:', data.previewUrl);
+            Alert.alert(
+              'Verification Email',
+              'A test verification email has been generated. Please check the console log for the preview URL.',
+              [{ text: 'OK' }]
+            );
           }
           
           console.log('Signup successful');
@@ -183,6 +211,91 @@ export default function SignupScreen() {
       }
       
       console.log('Error details:', error);
+    }
+  };
+
+  const resendVerificationEmail = async () => {
+    try {
+      setResendingEmail(true);
+      
+      // Use the working URL if available, otherwise try all URLs
+      const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
+      
+      // Fix API endpoint - ensure we're using the correct API path
+      const fullUrl = `${apiUrl}/api/auth/resend-verification`;
+      console.log('Using full resend verification URL:', fullUrl);
+      
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: verificationEmail
+        })
+      });
+      
+      console.log('Resend verification response status:', response.status);
+      
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      console.log('Response content type:', contentType);
+      
+      if (contentType && contentType.includes('text/html')) {
+        console.error('Server returned HTML instead of JSON');
+        Alert.alert(
+          'Error',
+          'Server returned an unexpected response. Please try again later.',
+          [{ text: 'OK' }]
+        );
+        setResendingEmail(false);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('Resend verification response data:', data);
+      
+      if (response.ok) {
+        // Handle test mode where we need to show preview URL
+        if (data.testMode && data.previewUrl) {
+          console.log('Test mode email preview URL:', data.previewUrl);
+          Alert.alert(
+            'Test Email Sent',
+            'The email service is in test mode. Please check the server logs for the verification link preview URL.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Verification Email Sent',
+            'Please check your inbox for the verification link.',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        // Special handling for Mailgun sandbox domains
+        if (data.error === 'unauthorized_recipient') {
+          Alert.alert(
+            'Email Authorization Required',
+            'The email service requires you to authorize your email address first. Please contact the administrator.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Error',
+            data.message || 'Failed to resend verification email',
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error resending verification email:', error);
+      Alert.alert(
+        'Error',
+        'Failed to resend verification email. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -242,6 +355,58 @@ export default function SignupScreen() {
               onPress={navigateToLogin}
             >
               <Text style={styles.loginButtonText}>Go to Login</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // If email exists but is not verified
+  if (needsVerification) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.contentContainer}>
+          <Text style={styles.title}>Email Verification Required</Text>
+          
+          <View style={styles.verificationContainer}>
+            <Text style={styles.verificationText}>
+              This email is already registered but not verified yet.
+            </Text>
+            
+            <Text style={styles.emailText}>{verificationEmail}</Text>
+            
+            <Text style={styles.verificationText}>
+              We'll send a new verification link to this email address.
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.resendButton} 
+              onPress={resendVerificationEmail}
+              disabled={resendingEmail}
+            >
+              {resendingEmail ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.resendButtonText}>Resend Verification Email</Text>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => {
+                setNeedsVerification(false);
+                setVerificationEmail('');
+              }}
+            >
+              <Text style={styles.backButtonText}>Use a different email</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.loginLinkContainer} 
+              onPress={navigateToLogin}
+            >
+              <Text style={styles.loginLinkText}>Go to Login</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -489,4 +654,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-}); 
+  resendButton: {
+    backgroundColor: '#6c63ff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  resendButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  backButton: {
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  backButtonText: {
+    color: '#666',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  loginLinkContainer: {
+    backgroundColor: '#6c63ff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  loginLinkText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

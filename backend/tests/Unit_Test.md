@@ -5,11 +5,11 @@ This document outlines the unit test coverage for the core user authentication f
 
 ### Covered Features and Scenarios:
 
-#### 1. User Registration (`POST /api/auth/register`)
--   **Successful Registration**: Verifies that a new user can be registered successfully, receiving a token and user details. Confirms the user is marked as `isVerified: false` by default.
--   **Email Uniqueness**: Ensures that registration fails if the provided email address is already in use by an existing user (returns HTTP 400).
--   **Username Uniqueness (Current Behavior)**: Tests registration with a username that already exists but with a different email. (Currently, this is allowed, and the test verifies this behavior).
--   **Missing Required Fields**: Validates that registration attempts fail appropriately (e.g., returns HTTP 500/400 via Mongoose validation) if essential fields like email or password are not provided.
+#### 1. User Registration (`POST /api/auth/signup`)
+-   **Successful Registration**: Verifies that a new user can be registered successfully, receiving a success message and user details (name, email, ID). Confirms the user is marked as `isVerified: false` by default and a verification email process is initiated.
+-   **Email Uniqueness**: Ensures that registration fails if the provided email address is already in use. If the existing user is unverified, it returns HTTP 409 and indicates a new verification email has been sent. If the existing user is verified, it returns HTTP 409 with a message that the email is already registered and verified.
+-   **Name Uniqueness (Current Behavior)**: Tests registration with a `name` that may already exist for another user but with a different email. This is allowed as email is the primary unique identifier for new user creation.
+-   **Missing Required Fields**: Validates that registration attempts fail appropriately (e.g., returns HTTP 500 via Mongoose validation) if essential fields like `name`, email, or password are not provided.
 
 #### 2. User Login (`POST /api/auth/login`)
 -   **Successful Login (Verified User)**: Confirms that a registered and verified user can log in successfully with correct credentials, receiving a token and user details.

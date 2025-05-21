@@ -29,18 +29,57 @@ export default function EditProfile() {
   });
   // State for avatar image
   const [avatarSource, setAvatarSource] = useState(null);
+  // State to track if we're in offline mode
+  const [offlineMode, setOfflineMode] = useState(false);
 
   // Load user data when component mounts
   useEffect(() => {
-    const loadUserData = async () => {
+    const checkLoginAndLoadData = async () => {
       try {
         setLoading(true);
+        
+        // Check if user is logged in
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) {
+          Alert.alert(
+            'Login Required', 
+            'You need to log in to edit your profile.',
+            [{ 
+              text: 'Login', 
+              onPress: () => router.push('/login')
+            }]
+          );
+          return;
+        }
+        
+        // Try to refresh token if needed
+        try {
+          // This will import the refreshAuthToken function from the api service
+          const { refreshAuthToken } = require('../../../services/api');
+          const refreshResult = await refreshAuthToken();
+          console.log('Token refresh result:', refreshResult);
+          
+          // Check if we still have a token after refresh attempt
+          const currentToken = await AsyncStorage.getItem('userToken');
+          if (!currentToken) {
+            throw new Error('Token is missing after refresh attempt');
+          }
+        } catch (refreshError) {
+          console.warn('Failed to refresh token:', refreshError);
+          // Might be offline
+          setOfflineMode(true);
+        }
         
         // Get user data using the API service
         const user = await userService.getUserProfile();
         
         if (!user) {
           throw new Error('User data not found');
+        }
+        
+        // Check if this was loaded from local storage only
+        if (user.loadedFromLocalOnly) {
+          setOfflineMode(true);
         }
         
         setUserData(user);
@@ -57,13 +96,35 @@ export default function EditProfile() {
         }
       } catch (err) {
         console.error('Error loading user data:', err);
-        Alert.alert('Error', 'Failed to load profile data');
+        
+        // Try to get any user data from local storage as a fallback
+        try {
+          const userJson = await AsyncStorage.getItem('user');
+          if (userJson) {
+            const user = JSON.parse(userJson);
+            setUserData(user);
+            setFormData({
+              name: user.name || '',
+              email: user.email || '',
+              bio: user.bio || '',
+              longTermGoal: user.longTermGoal || '',
+            });
+            if (user.avatarUrl) {
+              setAvatarSource(user.avatarUrl);
+            }
+            setOfflineMode(true);
+          } else {
+            Alert.alert('Error', 'Failed to load profile data');
+          }
+        } catch (localError) {
+          Alert.alert('Error', 'Failed to load profile data');
+        }
       } finally {
         setLoading(false);
       }
     };
     
-    loadUserData();
+    checkLoginAndLoadData();
   }, []);
 
   // Handle form input changes
@@ -232,8 +293,9 @@ export default function EditProfile() {
     }
   };
 
-  // Handle form submission - UPDATED to use API
+  // Handle form submission - UPDATED to use API and handle fallback success
   const handleSubmit = async () => {
+    console.log("handleSubmit triggered"); // Add this log
     try {
       setSaving(true);
       
@@ -245,19 +307,47 @@ export default function EditProfile() {
       }
       
       // Add debug logs
-      console.log("Avatar source before saving:", avatarSource);
-      console.log("Avatar source type:", typeof avatarSource);
-      if (avatarSource) {
-        console.log("Avatar source starts with:", avatarSource.substring(0, 50) + '...');
+      console.log("Avatar source before saving:", typeof avatarSource === 'string' ? 
+        (avatarSource.length > 50 ? avatarSource.substring(0, 50) + '...' : avatarSource) : 'null');
+      
+      // Check token first - if we're in offline mode but have a token, try online update
+      const token = await AsyncStorage.getItem('userToken');
+      let forcedOfflineMode = false;
+      
+      if (!token) {
+        if (!offlineMode) {
+          // We thought we were online but don't have a token - prompt login
+          Alert.alert(
+            'Login Required', 
+            'Your session has expired. Please log in again to update your profile.',
+            [{ 
+              text: 'Login', 
+              onPress: () => router.push('/login')
+            }]
+          );
+          setSaving(false);
+          return;
+        }
+        // If we already know we're offline, force offline mode
+        forcedOfflineMode = true;
+      }
+      
+      // Ensure userData has an ID field
+      if (!userData || (!userData.id && !userData._id)) {
+        console.error("User data is missing ID field:", userData);
+        Alert.alert('Error', 'User data is incomplete. Please try logging in again.');
+        setSaving(false);
+        return;
       }
       
       // Update user data with new values including avatar and longTermGoal
       const updatedUserData = {
-        ...userData,
+        ...userData, // Keep all original fields
+        id: userData.id || userData._id, // Ensure ID is preserved
         name: formData.name,
-        email: formData.email,
+        email: formData.email || userData.email,
         bio: formData.bio,
-        longTermGoal: formData.longTermGoal, // Added longTermGoal
+        longTermGoal: formData.longTermGoal,
         avatarUrl: avatarSource
       };
       
@@ -267,19 +357,178 @@ export default function EditProfile() {
         avatarUrl: updatedUserData.avatarUrl ? '[AVATAR DATA PRESENT]' : null
       }));
       
-      console.log("Calling API to update profile...");
-      await userService.updateUserProfile(updatedUserData); // This will throw on network or server error >= 400
-      console.log("API call completed successfully");
+      // If we're in forced offline mode, skip the API call and go straight to local storage
+      if (forcedOfflineMode) {
+        console.log("Forced offline mode - skipping API call");
+        throw new Error("No authentication token available");
+      }
       
-      // Show success message and navigate back ONLY if API call was successful
-      Alert.alert(
-        'Success', 
-        'Profile updated successfully',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    } catch (error) { // This outer catch will now handle errors from userService.updateUserProfile
+      console.log("Calling API to update profile...");
+      let result = null;
+      let isOnlineUpdate = false;
+
+      try {
+        // Get token again to ensure it's still there
+        const currentToken = await AsyncStorage.getItem('userToken');
+        if (!currentToken && !offlineMode) {
+          // If token disappeared, handle like other auth errors
+          Alert.alert(
+            'Session Expired', 
+            'Your login session has expired. Please log in again to update your profile.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Login', 
+                onPress: () => {
+                  // Navigate to login screen
+                  router.push('/login');
+                }
+              }
+            ]
+          );
+          setSaving(false);
+          return;
+        }
+        
+        result = await userService.updateUserProfile(updatedUserData);
+        isOnlineUpdate = true;
+        console.log("API call completed successfully", JSON.stringify({
+          id: result.id,
+          name: result.name,
+          email: result.email
+        }));
+        
+        // Show success message that indicates whether it was saved to server or just locally
+        if (result.fallbackOnly) {
+          Alert.alert(
+            'Profile Updated Locally', 
+            'Your profile has been updated on this device only. The server could not be reached or returned an error. Your changes will be visible on this device but not synchronized with the server.',
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+        } else {
+          Alert.alert(
+            'Success', 
+            'Profile updated successfully on the server and locally',
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+        }
+      } catch (apiError) {
+        if (apiError.fallbackSuccess && apiError.data) {
+          console.log("API error, but local storage fallback succeeded");
+          result = apiError.data;
+          
+          // Show success message with fallback note
+          Alert.alert(
+            'Profile Updated Locally', 
+            'Your profile has been updated on this device. Changes may not be visible to other users until you reconnect to the server.',
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+        } else {
+          console.error('API error during profile update:', apiError);
+          
+          // Check if we need to refresh login
+          if (apiError.message && (
+            apiError.message.includes('Authentication required') || 
+            apiError.message.includes('Authentication error') ||
+            apiError.message.includes('token') ||
+            apiError.message.includes('Token')
+          )) {
+            Alert.alert(
+              'Session Expired', 
+              'Your login session has expired. Please log in again to update your profile.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                  text: 'Login', 
+                  onPress: () => {
+                    // Navigate to login screen
+                    router.push('/login');
+                  }
+                }
+              ]
+            );
+          } else {
+            // Attempt local save as fallback
+            try {
+              // Get current user data first
+              const userJson = await AsyncStorage.getItem('user');
+              const currentUser = userJson ? JSON.parse(userJson) : {};
+              
+              // Merge with new data and add updatedAt timestamp
+              const updatedLocalData = {
+                ...currentUser,
+                ...updatedUserData,
+                updatedAt: new Date().toISOString()
+              };
+              
+              // Save to AsyncStorage
+              await AsyncStorage.setItem('user', JSON.stringify(updatedLocalData));
+              
+              Alert.alert(
+                'Profile Updated Locally Only', 
+                'There was an error communicating with the server, but your profile has been updated on this device.',
+                [{ text: 'OK', onPress: () => router.back() }]
+              );
+              
+              // Successfully used the fallback
+              return;
+              
+            } catch (localSaveError) {
+              // General error
+              Alert.alert('Error', apiError.message || 'Failed to save profile changes. Please try again.');
+            }
+          }
+        }
+      }
+    } catch (error) {
       console.error('Error saving profile:', error);
-      Alert.alert('Error', error.message || 'Failed to save profile changes. Please try again.');
+      
+      // Try to save locally if any other error occurs
+      try {
+        // Get current user data first
+        const userJson = await AsyncStorage.getItem('user');
+        const currentUser = userJson ? JSON.parse(userJson) : {};
+        
+        // Make sure we have a base user object to work with
+        if (!currentUser || Object.keys(currentUser).length === 0) {
+          const fallbackUser = {
+            id: userData?.id || 'local-user',
+            name: formData.name,
+            email: formData.email || '',
+            updatedAt: new Date().toISOString()
+          };
+          await AsyncStorage.setItem('user', JSON.stringify(fallbackUser));
+          
+          Alert.alert(
+            'Profile Saved Locally', 
+            'Your profile has been saved on this device only. Server connection was not available.',
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+          return;
+        }
+        
+        // Merge with new data and add updatedAt timestamp
+        const updatedUserData = {
+          ...currentUser,
+          name: formData.name,
+          email: formData.email || currentUser.email,
+          bio: formData.bio,
+          longTermGoal: formData.longTermGoal,
+          avatarUrl: avatarSource,
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Save to AsyncStorage
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
+        
+        Alert.alert(
+          'Profile Saved Locally', 
+          'Your profile has been saved on this device only. Server connection was not available.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } catch (localError) {
+        Alert.alert('Error', error.message || 'Failed to save profile changes. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -299,6 +548,11 @@ export default function EditProfile() {
       {/* Header with back button */}
       <View style={styles.headerContainer}>
         <Text style={styles.headerText}>Edit Profile</Text>
+        {offlineMode && (
+          <View style={styles.offlineBadge}>
+            <Text style={styles.offlineBadgeText}>Offline Mode</Text>
+          </View>
+        )}
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => router.push('/screens/(tabs)/profile')}
@@ -526,6 +780,19 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  offlineBadge: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: '#FF3B30',
+    padding: 5,
+    borderRadius: 5,
+  },
+  offlineBadgeText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });
