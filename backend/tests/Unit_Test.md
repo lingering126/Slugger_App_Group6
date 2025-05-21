@@ -128,6 +128,32 @@ This section outlines the unit test coverage for the profile management function
 -   **UX Consistency**: Helps maintain a consistent user experience by verifying expected API behaviors.
 -   **Regression Prevention**: Protects against unintended changes to profile functionality during ongoing development.
   
+## Team Management Features
+
+### Purpose
+This section outlines the unit test coverage for the team management functionalities, located in `teamController.test.js`. These tests ensure the correct handling of team creation, management, and member operations.
+
+### Covered Features and Scenarios:
+
+#### 1. Team Creation (`POST /api/teams`)
+- **Successful Team Creation**: Verifies that a new team can be created with required fields and optional fields.
+- **Member Assignment**: Confirms that the team creator is automatically added as a member.
+
+#### 2. Team Retrieval
+- **Get User's Teams (`GET /api/teams`)**: Verifies that all teams a user is a member of can be retrieved successfully.
+- **Get All Teams (`GET /api/teams/all`)**: Confirms that all teams in the system can be retrieved.
+- **Get Specific Team (`GET /api/teams/:teamId`)**: Validates that a specific team's details can be retrieved by ID.
+
+#### 3. Team Management
+- **Update Team Information (`PUT /api/teams/:teamId`)**: Tests updating team details like name and description.
+- **Join/Leave Team**: Verifies that users can join and leave teams successfully.
+- **Delete Team (`DELETE /api/teams/:teamId`)**: Ensures that teams can be deleted by authorized members.
+
+### Benefits
+- **Feature Reliability**: Ensures the team management system works correctly across various scenarios.
+- **Data Integrity**: Confirms that team data is stored and retrieved accurately.
+- **API Consistency**: Helps maintain consistent API behavior for team-related operations.
+
 ## Running the Tests
 
 To execute these unit tests:
