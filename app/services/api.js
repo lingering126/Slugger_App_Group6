@@ -203,7 +203,8 @@ const userService = {
               id: userId,
               _id: userId, // Include both formats for compatibility
               username: username || 'User', // Fallback name if username is not available
-              name: username || 'User' // Use username as name if no dedicated name is available
+              name: username || 'User', // Use username as name if no dedicated name is available
+              loadedFromLocalOnly: true // Flag to indicate this was built locally
             };
             
             // Save this basic profile for future use
@@ -218,7 +219,10 @@ const userService = {
         return null;
       }
       
-      return JSON.parse(userJson);
+      const parsedUser = JSON.parse(userJson);
+      // Add flag to indicate this was loaded from local storage
+      parsedUser.loadedFromLocalOnly = true;
+      return parsedUser;
     } catch (error) {
       console.error('Error fetching user profile:', error);
       throw error;
@@ -265,6 +269,19 @@ const userService = {
       
       // Try the profile API endpoint
       try {
+        // Attempt to refresh token explicitly before making the request
+        try {
+          await refreshAuthToken();
+        } catch (refreshError) {
+          console.warn('Token refresh attempt failed, will try with existing token:', refreshError);
+        }
+        
+        // Re-get the token after potential refresh
+        const currentToken = await AsyncStorage.getItem('userToken');
+        if (!currentToken) {
+          throw new Error('Authentication required: No valid token available');
+        }
+        
         const apiUrl = await getApiUrl();
         console.log(`Sending PUT request to ${apiUrl}/profiles`);
         
@@ -370,13 +387,8 @@ const userService = {
         
         console.log('===== END updateUserProfile - FALLBACK SUCCESS =====');
         
-        // Create a custom error with fallback data
-        const fallbackError = new Error(error.message || 'Server error with local fallback');
-        fallbackError.fallbackSuccess = true;
-        fallbackError.data = updatedUserData;
-        
-        // Return the data directly instead of throwing an error
-        // This makes the API behave like it succeeded but with local data
+        // Add flag to indicate this was a local-only update
+        updatedUserData.fallbackOnly = true;
         return updatedUserData;
       } catch (fallbackError) {
         console.error('Fallback error:', fallbackError);
@@ -499,7 +511,10 @@ const userService = {
         throw error; // Throw original error
       }
     }
-  }
+  },
+  
+  // Add refreshAuthToken to the user service object
+  refreshAuthToken: refreshAuthToken
 };
 
 // Other services remain unchanged
@@ -701,4 +716,4 @@ const profileService = {
   }
 };
 
-export { userService, groupService, profileService };
+export { userService, groupService, profileService, refreshAuthToken };

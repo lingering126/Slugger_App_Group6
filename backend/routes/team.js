@@ -109,7 +109,7 @@ router.post('/join-by-id', authMiddleware, async (req, res) => {
 });
 
 // Get all teams the user is a member of
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   console.log('==== GET /api/teams START ====');
   try {
     // Safely extract user ID with validation

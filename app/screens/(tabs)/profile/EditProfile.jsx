@@ -29,6 +29,8 @@ export default function EditProfile() {
   });
   // State for avatar image
   const [avatarSource, setAvatarSource] = useState(null);
+  // State to track if we're in offline mode
+  const [offlineMode, setOfflineMode] = useState(false);
 
   // Load user data when component mounts
   useEffect(() => {
@@ -50,11 +52,27 @@ export default function EditProfile() {
           return;
         }
         
+        // Try to refresh token if needed
+        try {
+          // This will import the refreshAuthToken function from the api service
+          const { userService } = require('../../../services/api');
+          await userService.refreshAuthToken();
+        } catch (refreshError) {
+          console.warn('Failed to refresh token:', refreshError);
+          // Might be offline
+          setOfflineMode(true);
+        }
+        
         // Get user data using the API service
         const user = await userService.getUserProfile();
         
         if (!user) {
           throw new Error('User data not found');
+        }
+        
+        // Check if this was loaded from local storage only
+        if (user.loadedFromLocalOnly) {
+          setOfflineMode(true);
         }
         
         setUserData(user);
@@ -301,12 +319,20 @@ export default function EditProfile() {
           email: result.email
         }));
         
-        // Show success message and navigate back
-        Alert.alert(
-          'Success', 
-          'Profile updated successfully',
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
+        // Show success message that indicates whether it was saved to server or just locally
+        if (result.fallbackOnly) {
+          Alert.alert(
+            'Profile Updated Locally', 
+            'Your profile has been updated on this device only. The server could not be reached or returned an error. Your changes will be visible on this device but not synchronized with the server.',
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+        } else {
+          Alert.alert(
+            'Success', 
+            'Profile updated successfully on the server and locally',
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+        }
       } catch (apiError) {
         if (apiError.fallbackSuccess && apiError.data) {
           console.log("API error, but local storage fallback succeeded");
@@ -370,6 +396,11 @@ export default function EditProfile() {
       {/* Header with back button */}
       <View style={styles.headerContainer}>
         <Text style={styles.headerText}>Edit Profile</Text>
+        {offlineMode && (
+          <View style={styles.offlineBadge}>
+            <Text style={styles.offlineBadgeText}>Offline Mode</Text>
+          </View>
+        )}
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => router.push('/screens/(tabs)/profile')}
@@ -597,6 +628,19 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  offlineBadge: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: '#FF3B30',
+    padding: 5,
+    borderRadius: 5,
+  },
+  offlineBadgeText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });
