@@ -224,6 +224,270 @@ app.use('/api/profiles', profileRoutes);
 app.use('/api/user-team-targets', userTeamTargetRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRouter); // Mount the analytics router, ensure authMiddleware if all routes under it are protected
 
+// Add web route handler for email verification that redirects to the app
+app.get('/verify-email', async (req, res) => {
+  try {
+    const { token, email } = req.query;
+    
+    if (!token) {
+      return res.status(400).send(`
+        <html>
+          <head>
+            <title>Verification Failed</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+              h1 { color: #e74c3c; }
+              p { font-size: 18px; line-height: 1.6; color: #555; }
+              .button { 
+                display: inline-block; 
+                background-color: #6c63ff; 
+                color: white; 
+                padding: 12px 30px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                margin-top: 20px; 
+                font-size: 16px;
+                font-weight: bold;
+                transition: background-color 0.3s;
+              }
+              .button:hover {
+                background-color: #5a52d5;
+              }
+              .error-icon {
+                font-size: 64px;
+                color: #e74c3c;
+                margin-bottom: 20px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="error-icon">✗</div>
+              <h1>Verification Failed</h1>
+              <p>The verification link is missing required parameters.</p>
+              <p>
+                <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
+              </p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+    
+    // Find user with matching token and email
+    let user = null;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      user = await User.findOne({ 
+        email,
+        verificationToken: token,
+        verificationTokenExpires: { $gt: new Date() } // Token not expired
+      });
+      
+      if (!user) {
+        return res.status(400).send(`
+          <html>
+            <head>
+              <title>Verification Failed</title>
+              <style>
+                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+                .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                h1 { color: #e74c3c; }
+                p { font-size: 18px; line-height: 1.6; color: #555; }
+                .button { 
+                  display: inline-block; 
+                  background-color: #6c63ff; 
+                  color: white; 
+                  padding: 12px 30px; 
+                  text-decoration: none; 
+                  border-radius: 4px; 
+                  margin-top: 20px; 
+                  font-size: 16px;
+                  font-weight: bold;
+                  transition: background-color 0.3s;
+                }
+                .button:hover {
+                  background-color: #5a52d5;
+                }
+                .error-icon {
+                  font-size: 64px;
+                  color: #e74c3c;
+                  margin-bottom: 20px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="error-icon">✗</div>
+                <h1>Verification Failed</h1>
+                <p>The verification link is invalid or has expired. Please request a new verification email.</p>
+                <p>
+                  <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
+                </p>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+      
+      // Update user to verified status
+      user.isVerified = true;
+      user.verificationToken = undefined;
+      user.verificationTokenExpires = undefined;
+      await user.save();
+    } else {
+      // Fallback to in-memory storage
+      const userIndex = inMemoryUsers.findIndex(u => u.email === email && u.verificationToken === token);
+      
+      if (userIndex === -1 || inMemoryUsers[userIndex].verificationTokenExpires < new Date()) {
+        return res.status(400).send(`
+          <html>
+            <head>
+              <title>Verification Failed</title>
+              <style>
+                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+                .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                h1 { color: #e74c3c; }
+                p { font-size: 18px; line-height: 1.6; color: #555; }
+                .button { 
+                  display: inline-block; 
+                  background-color: #6c63ff; 
+                  color: white; 
+                  padding: 12px 30px; 
+                  text-decoration: none; 
+                  border-radius: 4px; 
+                  margin-top: 20px; 
+                  font-size: 16px;
+                  font-weight: bold;
+                  transition: background-color 0.3s;
+                }
+                .button:hover {
+                  background-color: #5a52d5;
+                }
+                .error-icon {
+                  font-size: 64px;
+                  color: #e74c3c;
+                  margin-bottom: 20px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="error-icon">✗</div>
+                <h1>Verification Failed</h1>
+                <p>The verification link is invalid or has expired. Please request a new verification email.</p>
+                <p>
+                  <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
+                </p>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+      
+      // Update in-memory user to verified status
+      inMemoryUsers[userIndex].isVerified = true;
+      inMemoryUsers[userIndex].verificationToken = undefined;
+      inMemoryUsers[userIndex].verificationTokenExpires = undefined;
+    }
+    
+    // Send HTML response with success message and redirect button
+    res.status(200).send(`
+      <html>
+        <head>
+          <title>Email Verified</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #2ecc71; }
+            p { font-size: 18px; line-height: 1.6; color: #555; }
+            .button { 
+              display: inline-block; 
+              background-color: #6c63ff; 
+              color: white; 
+              padding: 12px 30px; 
+              text-decoration: none; 
+              border-radius: 4px; 
+              margin-top: 20px; 
+              font-size: 16px;
+              font-weight: bold;
+              transition: background-color 0.3s;
+            }
+            .button:hover {
+              background-color: #5a52d5;
+            }
+            .success-icon {
+              font-size: 64px;
+              color: #2ecc71;
+              margin-bottom: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">✓</div>
+            <h1>Email Verified Successfully!</h1>
+            <p>Your email has been verified. You can now log in to your account.</p>
+            <p>
+              <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
+            </p>
+            <p>
+              <a href="slugger://login" class="button">Open Slugger App</a>
+            </p>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).send(`
+      <html>
+        <head>
+          <title>Verification Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #e74c3c; }
+            p { font-size: 18px; line-height: 1.6; color: #555; }
+            .button { 
+              display: inline-block; 
+              background-color: #6c63ff; 
+              color: white; 
+              padding: 12px 30px; 
+              text-decoration: none; 
+              border-radius: 4px; 
+              margin-top: 20px; 
+              font-size: 16px;
+              font-weight: bold;
+              transition: background-color 0.3s;
+            }
+            .button:hover {
+              background-color: #5a52d5;
+            }
+            .error-icon {
+              font-size: 64px;
+              color: #e74c3c;
+              margin-bottom: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="error-icon">✗</div>
+            <h1>Verification Error</h1>
+            <p>An error occurred during email verification. Please try again later or contact support.</p>
+            <p>
+              <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
+            </p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+});
+
 // ADD THIS NEW ENDPOINT: GET user profile - Updated to include longTermGoal
 app.get('/api/user/profile', authMiddleware, async (req, res) => {
   try {
@@ -718,258 +982,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/auth/verify-email', async (req, res) => {
-  try {
-    const { token, email } = req.query;
-    
-    if (!token || !email) {
-      return res.status(400).send(`
-        <html>
-          <head>
-            <title>Verification Failed</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-              h1 { color: #e74c3c; }
-              p { font-size: 18px; line-height: 1.6; color: #555; }
-              .error-details { font-size: 16px; background-color: #f8f8f8; padding: 15px; border-radius: 4px; text-align: left; margin: 20px 0; }
-              .button { 
-                display: inline-block; 
-                background-color: #6c63ff; 
-                color: white; 
-                padding: 12px 30px; 
-                text-decoration: none; 
-                border-radius: 4px; 
-                margin-top: 20px; 
-                font-size: 16px;
-                font-weight: bold;
-                transition: background-color 0.3s;
-              }
-              .button:hover {
-                background-color: #5a52d5;
-              }
-              .steps {
-                text-align: left;
-                margin: 20px 0;
-              }
-              .steps li {
-                margin-bottom: 10px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>Verification Failed</h1>
-              <p>The verification link is invalid or has expired.</p>
-              <div class="error-details">
-                If you're trying to verify your email, please follow these steps:
-                <ol class="steps">
-                  <li>Go to the Slugger app and try to log in with your email</li>
-                  <li>When prompted that your email needs verification, click "Resend Verification Email"</li>
-                  <li>Check your inbox for a new verification link</li>
-                </ol>
-                
-                Or you can try signing up again with the same email to get a new verification link.
-              </div>
-              
-              <p>
-                <a href="${deployedUrl}" class="button">Go to Slugger App</a>
-              </p>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-    
-    // Get server IP addresses for building App links
-    const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost';
-    
-    let user;
-    
-    // Check if MongoDB is connected
-    if (mongoose.connection.readyState === 1) {
-      // Find user in MongoDB
-      user = await User.findOne({ 
-        email, 
-        verificationToken: token,
-        verificationTokenExpires: { $gt: new Date() }
-      });
-      
-      if (user) {
-        user.isVerified = true;
-        user.verificationToken = null;
-        user.verificationTokenExpires = null;
-        await user.save();
-      }
-    } else {
-      // Fallback to in-memory storage
-      const userIndex = inMemoryUsers.findIndex(u => 
-        u.email === email && 
-        u.verificationToken === token && 
-        new Date(u.verificationTokenExpires) > new Date()
-      );
-      
-      if (userIndex !== -1) {
-        inMemoryUsers[userIndex].isVerified = true;
-        inMemoryUsers[userIndex].verificationToken = null;
-        inMemoryUsers[userIndex].verificationTokenExpires = null;
-        user = inMemoryUsers[userIndex];
-      }
-    }
-    
-    if (!user) {
-      return res.status(400).send(`
-        <html>
-          <head>
-            <title>Verification Failed</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-              .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-              h1 { color: #e74c3c; }
-              p { font-size: 18px; line-height: 1.6; color: #555; }
-              .error-details { font-size: 16px; background-color: #f8f8f8; padding: 15px; border-radius: 4px; text-align: left; margin: 20px 0; }
-              .button { 
-                display: inline-block; 
-                background-color: #6c63ff; 
-                color: white; 
-                padding: 12px 30px; 
-                text-decoration: none; 
-                border-radius: 4px; 
-                margin-top: 20px; 
-                font-size: 16px;
-                font-weight: bold;
-                transition: background-color 0.3s;
-              }
-              .button:hover {
-                background-color: #5a52d5;
-              }
-              .steps {
-                text-align: left;
-                margin: 20px 0;
-              }
-              .steps li {
-                margin-bottom: 10px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>Verification Failed</h1>
-              <p>The verification link is invalid or has expired.</p>
-              <div class="error-details">
-                If you're trying to verify your email, please follow these steps:
-                <ol class="steps">
-                  <li>Go to the Slugger app and try to log in with your email</li>
-                  <li>When prompted that your email needs verification, click "Resend Verification Email"</li>
-                  <li>Check your inbox for a new verification link</li>
-                </ol>
-                
-                Or you can try signing up again with the same email to get a new verification link.
-              </div>
-              
-              <p>
-                <a href="${deployedUrl}" class="button">Go to Slugger App</a>
-              </p>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-    
-    // Send HTML response with success message and redirect button
-    res.status(200).send(`
-      <html>
-        <head>
-          <title>Email Verified</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { color: #2ecc71; }
-            p { font-size: 18px; line-height: 1.6; color: #555; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
-            .success-icon {
-              font-size: 64px;
-              color: #2ecc71;
-              margin-bottom: 20px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="success-icon">✓</div>
-            <h1>Email Verified Successfully!</h1>
-            <p>Your email has been verified. You can now log in to your account.</p>
-            <p>
-              <a href="slugger://login" class="button">Open Slugger App</a>
-            </p>
-          </div>
-        </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error('Verification error:', error);
-    res.status(500).send(`
-      <html>
-        <head>
-          <title>Verification Error</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
-            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { color: #e74c3c; }
-            p { font-size: 18px; line-height: 1.6; color: #555; }
-            .error-details { font-size: 16px; background-color: #f8f8f8; padding: 15px; border-radius: 4px; text-align: left; margin: 20px 0; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>Verification Error</h1>
-            <p>An error occurred during the verification process.</p>
-            <div class="error-details">
-              ${error.message}
-            </div>
-            
-            <p>Please try using the Resend Verification option from the login screen.</p>
-            
-            <p>
-              <a href="slugger://login" class="button">Open Slugger App</a>
-            </p>
-          </div>
-        </body>
-      </html>
-    `);
-  }
-});
-
 app.post('/api/auth/resend-verification', async (req, res) => {
   try {
     const { email } = req.body;
@@ -1036,19 +1048,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     // Send verification email
     const serverIPs = getServerIPs();
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-    const port = process.env.PORT || 5001;
-    
-    // Always use the deployed URL as the primary verification link
-    const deployedUrl = 'https://slugger-app-group6.onrender.com';
-    const verificationLink = `${deployedUrl}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`;
-    
-    console.log('=== Resend Email Link Details ===');
-    console.log('Available server IPs:', serverIPs);
-    console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', port);
-    console.log('Deployed URL:', deployedUrl);
-    console.log('Generated verification links:');
-    console.log(`Deployed link: ${verificationLink}`);
+        const port = process.env.PORT || 5001;        // Always use the deployed URL as the primary verification link    const deployedUrl = 'https://slugger-app-group6.onrender.com';    const verificationLink = `${deployedUrl}/verify-email?token=${user.verificationToken}&email=${email}`;        console.log('=== Resend Email Link Details ===');    console.log('Available server IPs:', serverIPs);    console.log('Primary IP being used:', primaryIP);    console.log('Port being used:', port);    console.log('Deployed URL:', deployedUrl);    console.log('Generated verification links:');    console.log(`Deployed link: ${verificationLink}`);
     serverIPs.forEach((ip, index) => {
       console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
     });
