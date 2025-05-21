@@ -113,7 +113,11 @@ export default function SignupScreen() {
       }, 15000);
       
       try {
-        const response = await fetch(`${apiUrl}/auth/signup`, {
+        // Fix API endpoint - use proper path that includes '/api' if it's not already in the URL
+        const fullUrl = apiUrl.includes('/api') ? `${apiUrl}/auth/signup` : `${apiUrl}/api/auth/signup`;
+        console.log('Using full signup URL:', fullUrl);
+        
+        const response = await fetch(fullUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -204,7 +208,11 @@ export default function SignupScreen() {
       // Use the working URL if available, otherwise try all URLs
       const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
       
-      const response = await fetch(`${apiUrl}/auth/resend-verification`, {
+      // Fix API endpoint - use proper path that includes '/api' if it's not already in the URL
+      const fullUrl = apiUrl.includes('/api') ? `${apiUrl}/auth/resend-verification` : `${apiUrl}/api/auth/resend-verification`;
+      console.log('Using full resend verification URL:', fullUrl);
+      
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
