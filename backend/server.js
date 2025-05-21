@@ -239,21 +239,6 @@ app.get('/verify-email', async (req, res) => {
               .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
               h1 { color: #e74c3c; }
               p { font-size: 18px; line-height: 1.6; color: #555; }
-              .button { 
-                display: inline-block; 
-                background-color: #6c63ff; 
-                color: white; 
-                padding: 12px 30px; 
-                text-decoration: none; 
-                border-radius: 4px; 
-                margin-top: 20px; 
-                font-size: 16px;
-                font-weight: bold;
-                transition: background-color 0.3s;
-              }
-              .button:hover {
-                background-color: #5a52d5;
-              }
               .error-icon {
                 font-size: 64px;
                 color: #e74c3c;
@@ -266,25 +251,33 @@ app.get('/verify-email', async (req, res) => {
               <div class="error-icon">✗</div>
               <h1>Verification Failed</h1>
               <p>The verification link is missing required parameters.</p>
-              <p>
-                <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
-              </p>
             </div>
           </body>
         </html>
       `);
     }
     
-    // Find user with matching token and email
+    // Find user with matching token (no longer requiring email parameter)
     let user = null;
     
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
-      user = await User.findOne({ 
-        email,
-        verificationToken: token,
-        verificationTokenExpires: { $gt: new Date() } // Token not expired
-      });
+      // First try to find by token and email if provided
+      if (email) {
+        user = await User.findOne({ 
+          email,
+          verificationToken: token,
+          verificationTokenExpires: { $gt: new Date() } // Token not expired
+        });
+      }
+      
+      // If not found and email was provided, try just by token
+      if (!user) {
+        user = await User.findOne({ 
+          verificationToken: token,
+          verificationTokenExpires: { $gt: new Date() } // Token not expired
+        });
+      }
       
       if (!user) {
         return res.status(400).send(`
@@ -296,21 +289,6 @@ app.get('/verify-email', async (req, res) => {
                 .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
                 h1 { color: #e74c3c; }
                 p { font-size: 18px; line-height: 1.6; color: #555; }
-                .button { 
-                  display: inline-block; 
-                  background-color: #6c63ff; 
-                  color: white; 
-                  padding: 12px 30px; 
-                  text-decoration: none; 
-                  border-radius: 4px; 
-                  margin-top: 20px; 
-                  font-size: 16px;
-                  font-weight: bold;
-                  transition: background-color 0.3s;
-                }
-                .button:hover {
-                  background-color: #5a52d5;
-                }
                 .error-icon {
                   font-size: 64px;
                   color: #e74c3c;
@@ -323,9 +301,6 @@ app.get('/verify-email', async (req, res) => {
                 <div class="error-icon">✗</div>
                 <h1>Verification Failed</h1>
                 <p>The verification link is invalid or has expired. Please request a new verification email.</p>
-                <p>
-                  <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
-                </p>
               </div>
             </body>
           </html>
@@ -339,7 +314,17 @@ app.get('/verify-email', async (req, res) => {
       await user.save();
     } else {
       // Fallback to in-memory storage
-      const userIndex = inMemoryUsers.findIndex(u => u.email === email && u.verificationToken === token);
+      // First try with email if provided
+      let userIndex = -1;
+      
+      if (email) {
+        userIndex = inMemoryUsers.findIndex(u => u.email === email && u.verificationToken === token);
+      }
+      
+      // If not found, try just by token
+      if (userIndex === -1) {
+        userIndex = inMemoryUsers.findIndex(u => u.verificationToken === token);
+      }
       
       if (userIndex === -1 || inMemoryUsers[userIndex].verificationTokenExpires < new Date()) {
         return res.status(400).send(`
@@ -351,21 +336,6 @@ app.get('/verify-email', async (req, res) => {
                 .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
                 h1 { color: #e74c3c; }
                 p { font-size: 18px; line-height: 1.6; color: #555; }
-                .button { 
-                  display: inline-block; 
-                  background-color: #6c63ff; 
-                  color: white; 
-                  padding: 12px 30px; 
-                  text-decoration: none; 
-                  border-radius: 4px; 
-                  margin-top: 20px; 
-                  font-size: 16px;
-                  font-weight: bold;
-                  transition: background-color 0.3s;
-                }
-                .button:hover {
-                  background-color: #5a52d5;
-                }
                 .error-icon {
                   font-size: 64px;
                   color: #e74c3c;
@@ -378,9 +348,6 @@ app.get('/verify-email', async (req, res) => {
                 <div class="error-icon">✗</div>
                 <h1>Verification Failed</h1>
                 <p>The verification link is invalid or has expired. Please request a new verification email.</p>
-                <p>
-                  <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
-                </p>
               </div>
             </body>
           </html>
@@ -391,6 +358,7 @@ app.get('/verify-email', async (req, res) => {
       inMemoryUsers[userIndex].isVerified = true;
       inMemoryUsers[userIndex].verificationToken = undefined;
       inMemoryUsers[userIndex].verificationTokenExpires = undefined;
+      user = inMemoryUsers[userIndex];
     }
     
     // Send HTML response with success message and redirect button
@@ -431,9 +399,6 @@ app.get('/verify-email', async (req, res) => {
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your account.</p>
             <p>
-              <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
-            </p>
-            <p>
               <a href="slugger://login" class="button">Open Slugger App</a>
             </p>
           </div>
@@ -451,21 +416,6 @@ app.get('/verify-email', async (req, res) => {
             .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             h1 { color: #e74c3c; }
             p { font-size: 18px; line-height: 1.6; color: #555; }
-            .button { 
-              display: inline-block; 
-              background-color: #6c63ff; 
-              color: white; 
-              padding: 12px 30px; 
-              text-decoration: none; 
-              border-radius: 4px; 
-              margin-top: 20px; 
-              font-size: 16px;
-              font-weight: bold;
-              transition: background-color 0.3s;
-            }
-            .button:hover {
-              background-color: #5a52d5;
-            }
             .error-icon {
               font-size: 64px;
               color: #e74c3c;
@@ -478,9 +428,6 @@ app.get('/verify-email', async (req, res) => {
             <div class="error-icon">✗</div>
             <h1>Verification Error</h1>
             <p>An error occurred during email verification. Please try again later or contact support.</p>
-            <p>
-              <a href="https://slugger-app-group6.onrender.com" class="button">Go to Slugger App</a>
-            </p>
           </div>
         </body>
       </html>
@@ -731,9 +678,7 @@ app.post('/api/auth/signup', async (req, res) => {
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
     const port = process.env.PORT || 5001;
     
-    // Always use the deployed URL as the primary verification link
-    const deployedUrl = 'https://slugger-app-group6.onrender.com';
-    const verificationLink = `${deployedUrl}/api/auth/verify-email?token=${verificationToken}&email=${email}`;
+        // Always use the deployed URL as the primary verification link    const deployedUrl = 'https://slugger-app-group6.onrender.com';    const verificationLink = `${deployedUrl}/verify-email?token=${verificationToken}`;
     
     console.log('=== Signup Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
@@ -742,10 +687,7 @@ app.post('/api/auth/signup', async (req, res) => {
     console.log('Deployed URL:', deployedUrl);
     console.log('Generated verification links:');
     console.log(`Deployed link: ${verificationLink}`);
-    serverIPs.forEach((ip, index) => {
-      console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
-    });
-    console.log('Localhost link:', `http://localhost:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}`);
+        serverIPs.forEach((ip, index) => {      console.log(`Link ${index + 1}: http://${ip}:${port}/verify-email?token=${verificationToken}`);    });    console.log('Localhost link:', `http://localhost:${port}/verify-email?token=${verificationToken}`);
     console.log('===============================');
     
     // 确保有邮件发送配置
@@ -783,11 +725,7 @@ app.post('/api/auth/signup', async (req, res) => {
           
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
-          <ul style="font-size: 14px; color: #666;">
-            <li><a href="${verificationLink}">Cloud Server Link</a></li>
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${port}/api/auth/verify-email?token=${verificationToken}&email=${email}">Local Link (localhost)</a></li>
-          </ul>
+                    <ul style="font-size: 14px; color: #666;">            <li><a href="${verificationLink}">Cloud Server Link</a></li>            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/verify-email?token=${verificationToken}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}            <li><a href="http://localhost:${port}/verify-email?token=${verificationToken}">Local Link (localhost)</a></li>          </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
@@ -1048,11 +986,8 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     // Send verification email
     const serverIPs = getServerIPs();
     const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-        const port = process.env.PORT || 5001;        // Always use the deployed URL as the primary verification link    const deployedUrl = 'https://slugger-app-group6.onrender.com';    const verificationLink = `${deployedUrl}/verify-email?token=${user.verificationToken}&email=${email}`;        console.log('=== Resend Email Link Details ===');    console.log('Available server IPs:', serverIPs);    console.log('Primary IP being used:', primaryIP);    console.log('Port being used:', port);    console.log('Deployed URL:', deployedUrl);    console.log('Generated verification links:');    console.log(`Deployed link: ${verificationLink}`);
-    serverIPs.forEach((ip, index) => {
-      console.log(`Link ${index + 1}: http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
-    });
-    console.log('Localhost link:', `http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}`);
+        const port = process.env.PORT || 5001;                // Always use the deployed URL as the primary verification link        const deployedUrl = 'https://slugger-app-group6.onrender.com';        const verificationLink = `${deployedUrl}/verify-email?token=${user.verificationToken}`;                console.log('=== Resend Email Link Details ===');        console.log('Available server IPs:', serverIPs);        console.log('Primary IP being used:', primaryIP);        console.log('Port being used:', port);        console.log('Deployed URL:', deployedUrl);        console.log('Generated verification links:');        console.log(`Deployed link: ${verificationLink}`);
+          serverIPs.forEach((ip, index) => {        console.log(`Link ${index + 1}: http://${ip}:${port}/verify-email?token=${user.verificationToken}`);      });      console.log('Localhost link:', `http://localhost:${port}/verify-email?token=${user.verificationToken}`);
     console.log('================================');
     
     const mailOptions = {
@@ -1073,11 +1008,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           
           <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
           
-          <ul style="font-size: 14px; color: #666;">
-            <li><a href="${verificationLink}">Cloud Server Link</a></li>
-            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}
-            <li><a href="http://localhost:${port}/api/auth/verify-email?token=${user.verificationToken}&email=${email}">Local Link (localhost)</a></li>
-          </ul>
+                    <ul style="font-size: 14px; color: #666;">            <li><a href="${verificationLink}">Cloud Server Link</a></li>            ${serverIPs.map((ip, index) => `<li><a href="http://${ip}:${port}/verify-email?token=${user.verificationToken}">Alternative Link ${index + 1} (${ip})</a></li>`).join('')}            <li><a href="http://localhost:${port}/verify-email?token=${user.verificationToken}">Local Link (localhost)</a></li>          </ul>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
