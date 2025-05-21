@@ -1,7 +1,7 @@
 // VerifyEmail.js
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native'; // Added useNavigation
+import { useNavigation, useLocalSearchParams } from 'expo-router'; // Use expo-router instead of @react-navigation/native
 import axios from 'axios';
 import { getApiUrl, checkServerConnection } from '../utils'; // Import utilities
 
@@ -9,15 +9,16 @@ import { getApiUrl, checkServerConnection } from '../utils'; // Import utilities
 const API_URLS = getApiUrl();
 let WORKING_URL = global.workingApiUrl || null; // Use globally stored working URL if available
 
-export default function VerifyEmail() { // Removed navigation prop, will use useNavigation
+export default function VerifyEmail() {
   const navigation = useNavigation(); // Hook for navigation
   const [loading, setLoading] = useState(true);
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState('');
   const [serverStatus, setServerStatus] = useState(WORKING_URL ? 'online' : 'checking');
   
-  const route = useRoute();
-  const { token } = route.params || {}; // Added default empty object for params
+  // Get token from params
+  const params = useLocalSearchParams();
+  const tokenFromParams = params.token;
 
   useEffect(() => {
     const initialize = async () => {
@@ -47,16 +48,16 @@ export default function VerifyEmail() { // Removed navigation prop, will use use
         setServerStatus('online');
       }
 
-      if (!token) {
+      if (!tokenFromParams) {
         setError('Verification token is missing. Please click the link from your email again.');
         setLoading(false);
         return;
       }
       
-      verifyUserEmail();
+      verifyUserEmail(tokenFromParams);
     };
 
-    const verifyUserEmail = async () => {
+    const verifyUserEmail = async (token) => {
       if (!WORKING_URL) {
         setError('Server URL not available. Cannot verify email.');
         setLoading(false);
@@ -76,12 +77,8 @@ export default function VerifyEmail() { // Removed navigation prop, will use use
         Alert.alert(
           "Email Verified!",
           "Your email has been successfully verified. You will be redirected to login.",
-          [{ text: "OK", onPress: () => navigation.navigate('Login') }]
+          [{ text: "OK", onPress: () => navigation.push('/screens/login') }]
         );
-        // Automatically navigate to login after 3 seconds
-        // setTimeout(() => {
-        //   navigation.navigate('Login');
-        // }, 3000); // Alert provides user control
       } catch (err) {
         setLoading(false);
         if (err.response) {
@@ -98,7 +95,7 @@ export default function VerifyEmail() { // Removed navigation prop, will use use
     };
     
     initialize();
-  }, [token, navigation]); // Removed API_URLS from dependency array as it's constant after init
+  }, [tokenFromParams]); // Only re-run if tokenFromParams changes
   
   if (serverStatus === 'checking' && loading) {
     return (
