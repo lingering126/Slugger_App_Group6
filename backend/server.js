@@ -398,9 +398,7 @@ app.get('/verify-email', async (req, res) => {
             <div class="success-icon">✓</div>
             <h1>Email Verified Successfully!</h1>
             <p>Your email has been verified. You can now log in to your account.</p>
-            <p>
-              <a href="slugger://login" class="button">Open Slugger App</a>
-            </p>
+            <p>Please open the Slugger app on your device to log in.</p>
           </div>
         </body>
       </html>
