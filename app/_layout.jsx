@@ -14,6 +14,7 @@ const RootLayout = () => {
       }}
     >
       <Stack.Screen name="index" />
+      <Stack.Screen name="verify-email" />
       <Stack.Screen 
         name="team-stats" 
         options={{
