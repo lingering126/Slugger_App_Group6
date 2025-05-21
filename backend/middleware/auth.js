@@ -60,7 +60,7 @@ const authMiddleware = async (req, res, next) => {
 
     // Explicitly ensure string format for Mongoose
     if (mongoose.Types.ObjectId.isValid(userId)) {
-      req.user.mongoId = mongoose.Types.ObjectId(userId);
+      req.user.mongoId = new mongoose.Types.ObjectId(userId);
     } else {
       console.warn('User ID is not a valid MongoDB ObjectId:', userId);
     }

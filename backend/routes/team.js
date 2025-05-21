@@ -109,12 +109,31 @@ router.post('/join-by-id', authMiddleware, async (req, res) => {
 });
 
 // Get all teams the user is a member of
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
+  console.log('==== GET /api/teams START ====');
   try {
-    const userId = req.user.id; // Changed from req.user.userId to req.user.id
-    const teams = await Team.find({ members: userId }).populate('members', 'email username name'); // Added username
+    // Safely extract user ID with validation
+    if (!req.user) {
+      console.error('[GET /teams] req.user is missing - auth middleware may not be working properly');
+      return res.status(401).json({ message: 'Authentication error: User not identified' });
+    }
+    
+    const userId = req.user.id || req.user.userId || req.user._id;
+    if (!userId) {
+      console.error('[GET /teams] User ID not found in req.user:', req.user);
+      return res.status(401).json({ message: 'Authentication error: User ID not found' });
+    }
+    
+    console.log(`[GET /teams] Finding teams for user: ${userId}`);
+    
+    const teams = await Team.find({ members: userId }).populate('members', 'email username name');
+    console.log(`[GET /teams] Found ${teams.length} teams for user ${userId}`);
+    
+    console.log('==== GET /api/teams END - SUCCESS ====');
     res.status(200).json(teams);
   } catch (error) {
+    console.error('==== GET /api/teams END - ERROR ====');
+    console.error('[GET /teams] Error:', error);
     res.status(500).json({ message: 'Failed to get teams', error: error.message });
   }
 });
