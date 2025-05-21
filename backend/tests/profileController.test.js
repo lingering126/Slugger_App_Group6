@@ -38,8 +38,9 @@ jest.mock('../src/middleware/auth', () => (req, res, next) => {
 });
 
 // Import routes (after mocking middleware)
+const mockedAuthMiddleware = require('../src/middleware/auth'); // This will be the mock function
 const profileRoutes = require('../routes/profiles');
-app.use('/api/profiles', profileRoutes);
+app.use('/api/profiles', mockedAuthMiddleware, profileRoutes); // Apply the mocked middleware
 
 // Global test variables
 let mongoServer;
