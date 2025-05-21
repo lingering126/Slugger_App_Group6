@@ -333,11 +333,20 @@ router.post('/resend-verification', async (req, res, next) => {
         const mailOptions = {
           from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
           to: user.email,
-          subject: 'Verify Your Email Address',
+          subject: 'Welcome to Slugger! Please Verify Your Email',
           html: `
-            <p>Please verify your email address by clicking the link below:</p>
-            <p><a href="${verificationUrl}">Verify Email</a></p>
-            <p>This link will expire in 24 hours.</p>
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+              <h1 style="font-size: 24px; color: #6c63ff; text-align: center;">Welcome to Slugger!</h1>
+              <p>Thank you for signing up. Please verify your email address by clicking the button below:</p>
+              <div style="text-align: center; margin: 20px 0;">
+                <a href="${verificationUrl}" style="background-color: #6c63ff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; font-size: 16px; display: inline-block;">Verify Email</a>
+              </div>
+              <p>If the button above doesn't work, you can try clicking this alternative link:</p>
+              <p style="text-align: center;"><a href="${verificationUrl}" style="color: #6c63ff;">${verificationUrl}</a></p>
+              <p style="font-size: 0.9em; color: #777;">This link will expire in 24 hours.</p>
+              <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+              <p style="font-size: 0.8em; color: #aaa;">If you did not sign up for Slugger, please ignore this email.</p>
+            </div>
           `,
         };
 
