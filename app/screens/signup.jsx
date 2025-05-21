@@ -113,9 +113,9 @@ export default function SignupScreen() {
       }, 15000);
       
       try {
-        // Fix API endpoint - use proper path that includes '/api' if it's not already in the URL
+        // Fix API endpoint - apiUrl already contains /api, so just append the specific route
         // Ensure we're calling the correct backend endpoint
-        const fullUrl = `${apiUrl}/api/auth/signup`;
+        const fullUrl = `${apiUrl}/auth/signup`; // Corrected path
         console.log('Using full signup URL:', fullUrl);
         
         const response = await fetch(fullUrl, {
@@ -687,4 +687,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-}); 
+});
