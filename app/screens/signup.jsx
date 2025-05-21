@@ -114,7 +114,8 @@ export default function SignupScreen() {
       
       try {
         // Fix API endpoint - use proper path that includes '/api' if it's not already in the URL
-        const fullUrl = apiUrl.includes('/api') ? `${apiUrl}/auth/signup` : `${apiUrl}/api/auth/signup`;
+        // Ensure we're calling the correct backend endpoint
+        const fullUrl = `${apiUrl}/api/auth/signup`;
         console.log('Using full signup URL:', fullUrl);
         
         const response = await fetch(fullUrl, {
@@ -220,8 +221,8 @@ export default function SignupScreen() {
       // Use the working URL if available, otherwise try all URLs
       const apiUrl = WORKING_URL || global.workingApiUrl || API_URLS[0];
       
-      // Fix API endpoint - use proper path that includes '/api' if it's not already in the URL
-      const fullUrl = apiUrl.includes('/api') ? `${apiUrl}/auth/resend-verification` : `${apiUrl}/api/auth/resend-verification`;
+      // Fix API endpoint - ensure we're using the correct API path
+      const fullUrl = `${apiUrl}/api/auth/resend-verification`;
       console.log('Using full resend verification URL:', fullUrl);
       
       const response = await fetch(fullUrl, {
