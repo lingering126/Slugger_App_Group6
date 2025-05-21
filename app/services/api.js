@@ -29,7 +29,9 @@ const refreshAuthToken = async () => {
     
     if (!refreshToken || !currentToken) {
       console.warn('Cannot refresh token: missing refresh token or current token');
-      return false;
+      // If we have a token but no refresh token, we should still allow 
+      // the request to proceed with the current token
+      return !!currentToken;
     }
     
     // Check if token is expired
@@ -73,16 +75,23 @@ const refreshAuthToken = async () => {
       const data = await response.json();
       if (data.token) {
         await AsyncStorage.setItem('userToken', data.token);
+        // If server also returns a new refresh token, store that too
+        if (data.refreshToken) {
+          await AsyncStorage.setItem('refreshToken', data.refreshToken);
+        }
         console.log('Auth token refreshed successfully');
         return true;
       }
     }
     
-    console.warn('Token refresh failed');
-    return false;
+    console.warn('Token refresh failed, but continuing with existing token');
+    // Still return true since we have an existing token that could work
+    return true;
   } catch (error) {
     console.error('Error refreshing auth token:', error);
-    return false;
+    // Don't fail the entire operation - return true if we have a token
+    const hasToken = !!(await AsyncStorage.getItem('userToken'));
+    return hasToken;
   }
 };
 
@@ -242,9 +251,6 @@ const userService = {
         throw new Error('Authentication required');
       }
       
-      // Attempt to refresh token if needed
-      await refreshAuthToken();
-      
       // Validate input
       if (!userData) {
         throw new Error('No user data provided for update');
@@ -255,8 +261,15 @@ const userService = {
         throw new Error('User ID is required for profile update');
       }
       
+      // Attempt to refresh token if needed
+      const refreshResult = await refreshAuthToken();
+      console.log('Token refresh attempt result:', refreshResult);
+      
       // Re-get the token in case it was refreshed
       const currentToken = await AsyncStorage.getItem('userToken');
+      if (!currentToken) {
+        throw new Error('Authentication token is missing after refresh attempt');
+      }
       
       // Ensure userData has proper ID format
       const userDataToSend = {
@@ -269,19 +282,6 @@ const userService = {
       
       // Try the profile API endpoint
       try {
-        // Attempt to refresh token explicitly before making the request
-        try {
-          await refreshAuthToken();
-        } catch (refreshError) {
-          console.warn('Token refresh attempt failed, will try with existing token:', refreshError);
-        }
-        
-        // Re-get the token after potential refresh
-        const currentToken = await AsyncStorage.getItem('userToken');
-        if (!currentToken) {
-          throw new Error('Authentication required: No valid token available');
-        }
-        
         const apiUrl = await getApiUrl();
         console.log(`Sending PUT request to ${apiUrl}/profiles`);
         
@@ -347,6 +347,16 @@ const userService = {
           console.log('===== END updateUserProfile - SUCCESS =====');
           return updatedUser;
         } else {
+          // For authentication errors, try fallback to local storage right away
+          if (response.status === 401 || response.status === 403) {
+            console.warn('Authentication error from server, will fall back to local update');
+            // Don't throw yet - try fallback first
+            throw { 
+              message: responseData?.message || 'Authentication error',
+              fallbackToLocal: true
+            };
+          }
+          
           // If the primary /api/profiles endpoint fails, parse the error and throw it.
           const errorMessage = responseData && responseData.message 
             ? responseData.message 
@@ -360,6 +370,11 @@ const userService = {
           throw new Error(errorMessage);
         }
       } catch (profileUpdateAttemptError) {
+        // If explicitly marked for fallback, throw to outer catch
+        if (profileUpdateAttemptError.fallbackToLocal) {
+          throw profileUpdateAttemptError;
+        }
+        
         // This catch handles errors from the fetch call itself (network error) 
         // or from parsing the JSON if the primary call failed.
         console.error('Error during primary profile update attempt (/api/profiles):', profileUpdateAttemptError);

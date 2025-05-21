@@ -55,8 +55,15 @@ export default function EditProfile() {
         // Try to refresh token if needed
         try {
           // This will import the refreshAuthToken function from the api service
-          const { userService } = require('../../../services/api');
-          await userService.refreshAuthToken();
+          const { refreshAuthToken } = require('../../../services/api');
+          const refreshResult = await refreshAuthToken();
+          console.log('Token refresh result:', refreshResult);
+          
+          // Check if we still have a token after refresh attempt
+          const currentToken = await AsyncStorage.getItem('userToken');
+          if (!currentToken) {
+            throw new Error('Token is missing after refresh attempt');
+          }
         } catch (refreshError) {
           console.warn('Failed to refresh token:', refreshError);
           // Might be offline
@@ -89,7 +96,29 @@ export default function EditProfile() {
         }
       } catch (err) {
         console.error('Error loading user data:', err);
-        Alert.alert('Error', 'Failed to load profile data');
+        
+        // Try to get any user data from local storage as a fallback
+        try {
+          const userJson = await AsyncStorage.getItem('user');
+          if (userJson) {
+            const user = JSON.parse(userJson);
+            setUserData(user);
+            setFormData({
+              name: user.name || '',
+              email: user.email || '',
+              bio: user.bio || '',
+              longTermGoal: user.longTermGoal || '',
+            });
+            if (user.avatarUrl) {
+              setAvatarSource(user.avatarUrl);
+            }
+            setOfflineMode(true);
+          } else {
+            Alert.alert('Error', 'Failed to load profile data');
+          }
+        } catch (localError) {
+          Alert.alert('Error', 'Failed to load profile data');
+        }
       } finally {
         setLoading(false);
       }
@@ -281,6 +310,28 @@ export default function EditProfile() {
       console.log("Avatar source before saving:", typeof avatarSource === 'string' ? 
         (avatarSource.length > 50 ? avatarSource.substring(0, 50) + '...' : avatarSource) : 'null');
       
+      // Check token first - if we're in offline mode but have a token, try online update
+      const token = await AsyncStorage.getItem('userToken');
+      let forcedOfflineMode = false;
+      
+      if (!token) {
+        if (!offlineMode) {
+          // We thought we were online but don't have a token - prompt login
+          Alert.alert(
+            'Login Required', 
+            'Your session has expired. Please log in again to update your profile.',
+            [{ 
+              text: 'Login', 
+              onPress: () => router.push('/login')
+            }]
+          );
+          setSaving(false);
+          return;
+        }
+        // If we already know we're offline, force offline mode
+        forcedOfflineMode = true;
+      }
+      
       // Ensure userData has an ID field
       if (!userData || (!userData.id && !userData._id)) {
         console.error("User data is missing ID field:", userData);
@@ -306,11 +357,39 @@ export default function EditProfile() {
         avatarUrl: updatedUserData.avatarUrl ? '[AVATAR DATA PRESENT]' : null
       }));
       
+      // If we're in forced offline mode, skip the API call and go straight to local storage
+      if (forcedOfflineMode) {
+        console.log("Forced offline mode - skipping API call");
+        throw new Error("No authentication token available");
+      }
+      
       console.log("Calling API to update profile...");
       let result = null;
       let isOnlineUpdate = false;
 
       try {
+        // Get token again to ensure it's still there
+        const currentToken = await AsyncStorage.getItem('userToken');
+        if (!currentToken && !offlineMode) {
+          // If token disappeared, handle like other auth errors
+          Alert.alert(
+            'Session Expired', 
+            'Your login session has expired. Please log in again to update your profile.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Login', 
+                onPress: () => {
+                  // Navigate to login screen
+                  router.push('/login');
+                }
+              }
+            ]
+          );
+          setSaving(false);
+          return;
+        }
+        
         result = await userService.updateUserProfile(updatedUserData);
         isOnlineUpdate = true;
         console.log("API call completed successfully", JSON.stringify({
@@ -369,14 +448,87 @@ export default function EditProfile() {
               ]
             );
           } else {
-            // General error
-            Alert.alert('Error', apiError.message || 'Failed to save profile changes. Please try again.');
+            // Attempt local save as fallback
+            try {
+              // Get current user data first
+              const userJson = await AsyncStorage.getItem('user');
+              const currentUser = userJson ? JSON.parse(userJson) : {};
+              
+              // Merge with new data and add updatedAt timestamp
+              const updatedLocalData = {
+                ...currentUser,
+                ...updatedUserData,
+                updatedAt: new Date().toISOString()
+              };
+              
+              // Save to AsyncStorage
+              await AsyncStorage.setItem('user', JSON.stringify(updatedLocalData));
+              
+              Alert.alert(
+                'Profile Updated Locally Only', 
+                'There was an error communicating with the server, but your profile has been updated on this device.',
+                [{ text: 'OK', onPress: () => router.back() }]
+              );
+              
+              // Successfully used the fallback
+              return;
+              
+            } catch (localSaveError) {
+              // General error
+              Alert.alert('Error', apiError.message || 'Failed to save profile changes. Please try again.');
+            }
           }
         }
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      Alert.alert('Error', error.message || 'Failed to save profile changes. Please try again.');
+      
+      // Try to save locally if any other error occurs
+      try {
+        // Get current user data first
+        const userJson = await AsyncStorage.getItem('user');
+        const currentUser = userJson ? JSON.parse(userJson) : {};
+        
+        // Make sure we have a base user object to work with
+        if (!currentUser || Object.keys(currentUser).length === 0) {
+          const fallbackUser = {
+            id: userData?.id || 'local-user',
+            name: formData.name,
+            email: formData.email || '',
+            updatedAt: new Date().toISOString()
+          };
+          await AsyncStorage.setItem('user', JSON.stringify(fallbackUser));
+          
+          Alert.alert(
+            'Profile Saved Locally', 
+            'Your profile has been saved on this device only. Server connection was not available.',
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+          return;
+        }
+        
+        // Merge with new data and add updatedAt timestamp
+        const updatedUserData = {
+          ...currentUser,
+          name: formData.name,
+          email: formData.email || currentUser.email,
+          bio: formData.bio,
+          longTermGoal: formData.longTermGoal,
+          avatarUrl: avatarSource,
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Save to AsyncStorage
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
+        
+        Alert.alert(
+          'Profile Saved Locally', 
+          'Your profile has been saved on this device only. Server connection was not available.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } catch (localError) {
+        Alert.alert('Error', error.message || 'Failed to save profile changes. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
