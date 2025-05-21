@@ -215,13 +215,13 @@ app.use((err, req, res, next) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/teams', teamRoutes);
+app.use('/api/teams', authMiddleware, teamRoutes);
 app.use('/api/posts', authMiddleware, postsRouter);
 app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
 // Add this line to register the profiles routes
-app.use('/api/profiles', profileRoutes);
-app.use('/api/user-team-targets', userTeamTargetRoutes);
+app.use('/api/profiles', authMiddleware, profileRoutes);
+app.use('/api/user-team-targets', authMiddleware, userTeamTargetRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRouter); // Mount the analytics router, ensure authMiddleware if all routes under it are protected
 
 // Add web route handler for email verification that redirects to the app
