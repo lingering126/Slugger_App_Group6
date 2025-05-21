@@ -91,16 +91,15 @@ const app = express();
 
 // Configure Nodemailer based on environment
 const emailConfig = {
-  host: process.env.MAIL_HOST,
-  port: parseInt(process.env.MAIL_PORT),
+  host: process.env.MAIL_HOST || 'smtp.mailgun.org',
+  port: parseInt(process.env.MAIL_PORT || '587'),
   auth: {
-    user: process.env.MAIL_USER,
+    user: process.env.MAIL_USER || 'postmaster@slugger4health.site',
     pass: process.env.MAIL_PASS
   },
   // Add secure option for TLS connections
   secure: process.env.MAIL_PORT === '465',
   // Add additional options for better deliverability
-  
   tls: {
     // Do not fail on invalid certs
     rejectUnauthorized: false
@@ -118,7 +117,19 @@ transporter.verify()
   .then(() => console.log('Email service is ready to send emails'))
   .catch(err => {
     console.error('Error with email configuration:', err);
+    console.error('Error message:', err.message);
     console.error('Please check your email credentials and settings in .env file');
+    
+    // Print detailed error information
+    if (err.code) {
+      console.error('Error code:', err.code);
+    }
+    if (err.command) {
+      console.error('SMTP command:', err.command);
+    }
+    if (err.response) {
+      console.error('SMTP response:', err.response);
+    }
   });
 
 // CORS configuration - 合并了第二个文件中的更完整配置
@@ -491,7 +502,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
     
     const mailOptions = {
-      from: process.env.MAIL_FROM || 'test@example.com',
+      from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
       to: email,
       subject: 'Verify your Slugger account',
       html: `
@@ -525,38 +536,99 @@ app.post('/api/auth/signup', async (req, res) => {
     };
     
     try {
-      console.log('Attempting to send verification email to:', email);
-      console.log('Using from address:', mailOptions.from);
+      console.log('==== EMAIL SENDING DETAILS ====');
+      console.log('Attempting to resend verification email to:', email);
+      console.log('Using from address:', process.env.MAIL_FROM || 'noreply@slugger4health.site');
+      console.log('Using SMTP settings:', {
+        host: process.env.MAIL_HOST || 'smtp.mailgun.org',
+        port: process.env.MAIL_PORT || '587',
+        user: process.env.MAIL_USER || 'postmaster@slugger4health.site',
+        secure: process.env.MAIL_PORT === '465'
+      });
+      console.log('Verification token:', verificationToken);
+      
+      // Check if using Mailgun sandbox domain
+      const isSandboxDomain = (process.env.MAIL_FROM || '').includes('sandbox') || 
+                              (process.env.MAIL_USER || '').includes('sandbox');
+      
+      if (isSandboxDomain) {
+        console.log('⚠️ WARNING: Using Mailgun sandbox domain');
+        console.log('Sandbox domains have restrictions: https://help.mailgun.com/hc/en-us/articles/217531258-Authorized-Recipients');
+        console.log('You need to authorize recipient emails in the Mailgun dashboard first');
+      }
+      
+      // Verify transporter configuration before sending
+      try {
+        await transporter.verify();
+        console.log('Transporter verification successful');
+      } catch (verifyError) {
+        console.error('Transporter verification failed:', verifyError);
+        console.error('Mail configuration error details:', verifyError.message);
+      }
       
       const info = await transporter.sendMail(mailOptions);
-      console.log('Verification email sent to:', email);
+      console.log('Verification email resent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
+      console.log('==== EMAIL SENDING COMPLETE ====');
       
-      // 如果使用了Ethereal测试账户，提供预览链接
-      if (info.messageId && info.messageId.includes('ethereal')) {
-        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
-        console.log('IMPORTANT: This is a test email. Check the preview URL above to view it.');
-      }
+      res.status(200).json({ message: 'Verification email sent. Please check your inbox.' });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
       console.error('Error details:', emailError.message);
       
+      // Try using Ethereal as fallback if Mailgun fails
+      try {
+        console.log('Attempting to use Ethereal email service as fallback...');
+        
+        // Create a test account on ethereal.email
+        const testAccount = await nodemailer.createTestAccount();
+        console.log('Created Ethereal test account:', testAccount.user);
+        
+        // Create a new transporter with Ethereal credentials
+        const etherealTransporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+        
+        // Send mail with ethereal transporter
+        const info = await etherealTransporter.sendMail(mailOptions);
+        console.log('Test email sent via Ethereal!');
+        console.log('Message ID:', info.messageId);
+        
+        // Generate preview URL
+        const previewURL = nodemailer.getTestMessageUrl(info);
+        console.log('Preview URL:', previewURL);
+        
+        // Return success with a message to check the preview URL
+        return res.status(200).json({ 
+          message: 'Email sent via test service. Access verification link via preview URL (check server logs).',
+          previewUrl: previewURL,
+          testMode: true
+        });
+      } catch (etherealError) {
+        console.error('Ethereal fallback also failed:', etherealError);
+      }
+      
       if (emailError.message.includes('authorized')) {
         console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
         console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
+        
+        res.status(500).json({ 
+          message: 'Failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients. Please add your email to authorized recipients in Mailgun.',
+          error: 'unauthorized_recipient'
+        });
+      } else {
+        res.status(500).json({ message: 'Failed to send verification email. Please try again later.', error: emailError.message });
       }
-      
-      // Continue with registration even if email fails
     }
-    
-    console.log('Signup successful for:', email);
-    res.status(201).json({ 
-      message: 'User registered successfully. Please check your email to verify your account.',
-      requiresVerification: true
-    });
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('Resend verification error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -984,7 +1056,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     console.log('================================');
     
     const mailOptions = {
-      from: process.env.MAIL_FROM,
+      from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
       to: email,
       subject: 'Verify your Slugger account',
       html: `
@@ -1018,29 +1090,95 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     };
     
     try {
+      console.log('==== EMAIL SENDING DETAILS ====');
       console.log('Attempting to resend verification email to:', email);
-      console.log('Using from address:', process.env.MAIL_FROM);
+      console.log('Using from address:', process.env.MAIL_FROM || 'noreply@slugger4health.site');
+      console.log('Using SMTP settings:', {
+        host: process.env.MAIL_HOST || 'smtp.mailgun.org',
+        port: process.env.MAIL_PORT || '587',
+        user: process.env.MAIL_USER || 'postmaster@slugger4health.site',
+        secure: process.env.MAIL_PORT === '465'
+      });
+      console.log('Verification token:', user.verificationToken);
+      
+      // Check if using Mailgun sandbox domain
+      const isSandboxDomain = (process.env.MAIL_FROM || '').includes('sandbox') || 
+                              (process.env.MAIL_USER || '').includes('sandbox');
+      
+      if (isSandboxDomain) {
+        console.log('⚠️ WARNING: Using Mailgun sandbox domain');
+        console.log('Sandbox domains have restrictions: https://help.mailgun.com/hc/en-us/articles/217531258-Authorized-Recipients');
+        console.log('You need to authorize recipient emails in the Mailgun dashboard first');
+      }
+      
+      // Verify transporter configuration before sending
+      try {
+        await transporter.verify();
+        console.log('Transporter verification successful');
+      } catch (verifyError) {
+        console.error('Transporter verification failed:', verifyError);
+        console.error('Mail configuration error details:', verifyError.message);
+      }
       
       const info = await transporter.sendMail(mailOptions);
       console.log('Verification email resent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
+      console.log('==== EMAIL SENDING COMPLETE ====');
       
       res.status(200).json({ message: 'Verification email sent. Please check your inbox.' });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
       console.error('Error details:', emailError.message);
       
+      // Try using Ethereal as fallback if Mailgun fails
+      try {
+        console.log('Attempting to use Ethereal email service as fallback...');
+        
+        // Create a test account on ethereal.email
+        const testAccount = await nodemailer.createTestAccount();
+        console.log('Created Ethereal test account:', testAccount.user);
+        
+        // Create a new transporter with Ethereal credentials
+        const etherealTransporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+        
+        // Send mail with ethereal transporter
+        const info = await etherealTransporter.sendMail(mailOptions);
+        console.log('Test email sent via Ethereal!');
+        console.log('Message ID:', info.messageId);
+        
+        // Generate preview URL
+        const previewURL = nodemailer.getTestMessageUrl(info);
+        console.log('Preview URL:', previewURL);
+        
+        // Return success with a message to check the preview URL
+        return res.status(200).json({ 
+          message: 'Email sent via test service. Access verification link via preview URL (check server logs).',
+          previewUrl: previewURL,
+          testMode: true
+        });
+      } catch (etherealError) {
+        console.error('Ethereal fallback also failed:', etherealError);
+      }
+      
       if (emailError.message.includes('authorized')) {
         console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
         console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
         
         res.status(500).json({ 
-          message: 'Failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients.',
+          message: 'Failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients. Please add your email to authorized recipients in Mailgun.',
           error: 'unauthorized_recipient'
         });
       } else {
-        res.status(500).json({ message: 'Failed to send verification email', error: emailError.message });
+        res.status(500).json({ message: 'Failed to send verification email. Please try again later.', error: emailError.message });
       }
     }
   } catch (error) {
@@ -1329,24 +1467,65 @@ app.post('/api/test/email', async (req, res) => {
       console.error('Error sending test email:', emailError);
       console.error('Error details:', emailError.message);
       
+      // Try using Ethereal as fallback if Mailgun fails
+      try {
+        console.log('Attempting to use Ethereal email service as fallback...');
+        
+        // Create a test account on ethereal.email
+        const testAccount = await nodemailer.createTestAccount();
+        console.log('Created Ethereal test account:', testAccount.user);
+        
+        // Create a new transporter with Ethereal credentials
+        const etherealTransporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+        
+        // Send mail with ethereal transporter
+        const info = await etherealTransporter.sendMail(mailOptions);
+        console.log('Test email sent via Ethereal!');
+        console.log('Message ID:', info.messageId);
+        
+        // Generate preview URL
+        const previewURL = nodemailer.getTestMessageUrl(info);
+        console.log('Preview URL:', previewURL);
+        
+        // Return success with a message to check the preview URL
+        return res.status(200).json({ 
+          message: 'Email sent via test service. Access verification link via preview URL (check server logs).',
+          previewUrl: previewURL,
+          testMode: true
+        });
+      } catch (etherealError) {
+        console.error('Ethereal fallback also failed:', etherealError);
+      }
+      
       if (emailError.message.includes('authorized')) {
-        return res.status(500).json({ 
+        console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
+        console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
+        
+        res.status(500).json({ 
           message: 'Failed to send test email. With Mailgun sandbox domains, you can only send to authorized recipients.',
           error: 'unauthorized_recipient',
           solution: 'Authorize this recipient in your Mailgun dashboard or use a different email service.'
         });
+      } else {
+        res.status(500).json({ 
+          message: 'Failed to send test email', 
+          error: emailError.message,
+          config: {
+            host: process.env.MAIL_HOST,
+            port: process.env.MAIL_PORT,
+            user: process.env.MAIL_USER,
+            from: process.env.MAIL_FROM
+          }
+        });
       }
-      
-      res.status(500).json({ 
-        message: 'Failed to send test email', 
-        error: emailError.message,
-        config: {
-          host: process.env.MAIL_HOST,
-          port: process.env.MAIL_PORT,
-          user: process.env.MAIL_USER,
-          from: process.env.MAIL_FROM
-        }
-      });
     }
   } catch (error) {
     console.error('Test email error:', error);

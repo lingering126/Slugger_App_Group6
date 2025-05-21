@@ -285,17 +285,35 @@ export default function LoginScreen() {
       const data = await response.json();
       
       if (response.ok) {
-        Alert.alert(
-          'Verification Email Sent',
-          'Please check your inbox for the verification link.',
-          [{ text: 'OK' }]
-        );
+        // Handle test mode where we need to show preview URL
+        if (data.testMode && data.previewUrl) {
+          Alert.alert(
+            'Test Email Sent',
+            'The email service is in test mode. Please check the server logs for the verification link preview URL.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Verification Email Sent',
+            'Please check your inbox for the verification link.',
+            [{ text: 'OK' }]
+          );
+        }
       } else {
-        Alert.alert(
-          'Error',
-          data.message || 'Failed to resend verification email',
-          [{ text: 'OK' }]
-        );
+        // Special handling for Mailgun sandbox domains
+        if (data.error === 'unauthorized_recipient') {
+          Alert.alert(
+            'Email Authorization Required',
+            'The email service requires you to authorize your email address first. Please contact the administrator.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Error',
+            data.message || 'Failed to resend verification email',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
       console.error('Error resending verification email:', error);
@@ -463,19 +481,39 @@ export default function LoginScreen() {
       const data = await response.json();
       
       if (response.ok) {
-        Alert.alert(
-          'Verification Email Sent',
-          'Please check your inbox for the verification link.',
-          [{ text: 'OK' }]
-        );
-        setShowVerificationPrompt(false);
-        setVerificationPromptEmail('');
+        // Handle test mode where we need to show preview URL
+        if (data.testMode && data.previewUrl) {
+          Alert.alert(
+            'Test Email Sent',
+            'The email service is in test mode. Please check the server logs for the verification link preview URL.',
+            [{ text: 'OK' }]
+          );
+          setShowVerificationPrompt(false);
+          setVerificationPromptEmail('');
+        } else {
+          Alert.alert(
+            'Verification Email Sent',
+            'Please check your inbox for the verification link.',
+            [{ text: 'OK' }]
+          );
+          setShowVerificationPrompt(false);
+          setVerificationPromptEmail('');
+        }
       } else {
-        Alert.alert(
-          'Error',
-          data.message || 'Failed to resend verification email',
-          [{ text: 'OK' }]
-        );
+        // Special handling for Mailgun sandbox domains
+        if (data.error === 'unauthorized_recipient') {
+          Alert.alert(
+            'Email Authorization Required',
+            'The email service requires you to authorize your email address first. Please contact the administrator.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Error',
+            data.message || 'Failed to resend verification email',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
       console.error('Error resending verification email:', error);
