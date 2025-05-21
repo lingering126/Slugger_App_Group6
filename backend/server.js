@@ -592,6 +592,10 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ message: 'Password must contain at least one letter' });
     }
     
+    // Generate verification token - do this BEFORE user creation to ensure it's available in all branches
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
       // Check if user already exists in MongoDB
@@ -609,10 +613,6 @@ app.post('/api/auth/signup', async (req, res) => {
         console.log('Email already in use');
         return res.status(400).json({ message: 'Email already in use' });
       }
-      
-      // Generate verification token
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-      const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
       
       // Hash the password
       const salt = await bcrypt.genSalt(10);
@@ -648,10 +648,6 @@ app.post('/api/auth/signup', async (req, res) => {
         return res.status(400).json({ message: 'Email already in use' });
       }
       
-      // Generate verification token
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-      const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-      
       // Hash the password
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
@@ -673,25 +669,25 @@ app.post('/api/auth/signup', async (req, res) => {
     
     // Send verification email
     const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-    const port = process.env.PORT || 5001;
     
-    const verificationLink = `${primaryIP}:${port}/verify-email?token=${verificationToken}`;
+    // Always use the deployed URL as the primary verification link
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const verificationLink = `${deployedUrl}/verify-email?token=${verificationToken}`;
     
     console.log('=== Signup Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
-    console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', port);
-    console.log('Deployed URL:', primaryIP);
-    console.log('Generated verification links:');
-    console.log(`Deployed link: ${verificationLink}`);
+    console.log('Using deployed URL:', deployedUrl);
+    console.log('Generated verification link:', verificationLink);
     
-    // 确保有邮件发送配置
+    // Create transporter for email sending
+    let currentTransporter = transporter;
+    
+    // If no email configuration, create a test account
     if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
       console.warn('Email configuration missing. Setting up a default transporter for development.');
-      // 如果没有配置邮件服务，创建一个测试用的transporter
+      // Create a test account with Ethereal for development/testing
       const testAccount = await nodemailer.createTestAccount();
-      transporter = nodemailer.createTransport({
+      currentTransporter = nodemailer.createTransport({
         host: 'smtp.ethereal.email',
         port: 587,
         secure: false,
@@ -719,11 +715,13 @@ app.post('/api/auth/signup', async (req, res) => {
             </a>
           </div>
           
-          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
+          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking the link below:</p>
           
-          <ul style="font-size: 14px; color: #666;">
-            <li><a href="${verificationLink}">Cloud Server Link</a></li>
-          </ul>
+          <p style="text-align: center; margin: 15px 0;">
+            <a href="${verificationLink}" style="color: #6c63ff; text-decoration: underline;">
+              ${verificationLink}
+            </a>
+          </p>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
@@ -759,19 +757,37 @@ app.post('/api/auth/signup', async (req, res) => {
       
       // Verify transporter configuration before sending
       try {
-        await transporter.verify();
+        await currentTransporter.verify();
         console.log('Transporter verification successful');
       } catch (verifyError) {
         console.error('Transporter verification failed:', verifyError);
         console.error('Mail configuration error details:', verifyError.message);
       }
       
-      const info = await transporter.sendMail(mailOptions);
+      const info = await currentTransporter.sendMail(mailOptions);
       console.log('Verification email sent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
+      
+      // Check if we're using Ethereal for testing
+      if (currentTransporter !== transporter) {
+        const previewURL = nodemailer.getTestMessageUrl(info);
+        console.log('Ethereal Email Preview URL:', previewURL);
+        
+        console.log('==== EMAIL SENDING COMPLETE ====');
+        
+        // Return success with preview URL for testing
+        return res.status(201).json({
+          message: 'User registered successfully. Please check the preview URL for verification.',
+          previewUrl: previewURL,
+          testMode: true,
+          email: email
+        });
+      }
+      
       console.log('==== EMAIL SENDING COMPLETE ====');
       
+      // Standard success response
       res.status(201).json({
         message: 'User registered successfully. Please check your email to verify your account.',
         requiresVerification: true,
@@ -810,10 +826,11 @@ app.post('/api/auth/signup', async (req, res) => {
         console.log('Preview URL:', previewURL);
         
         // Return success with a message to check the preview URL
-        return res.status(200).json({ 
+        return res.status(201).json({ 
           message: 'Email sent via test service. Access verification link via preview URL (check server logs).',
           previewUrl: previewURL,
-          testMode: true
+          testMode: true,
+          email: email
         });
       } catch (etherealError) {
         console.error('Ethereal fallback also failed:', etherealError);
@@ -823,12 +840,20 @@ app.post('/api/auth/signup', async (req, res) => {
         console.error('IMPORTANT: With Mailgun sandbox domains, you can only send to authorized recipients.');
         console.error('Please authorize the recipient email in your Mailgun dashboard or use a different email service.');
         
-        res.status(500).json({ 
-          message: 'Failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients. Please add your email to authorized recipients in Mailgun.',
-          error: 'unauthorized_recipient'
+        res.status(201).json({ 
+          message: 'User registered, but failed to send verification email. With Mailgun sandbox domains, you can only send to authorized recipients. Please add your email to authorized recipients in Mailgun.',
+          error: 'unauthorized_recipient',
+          requiresVerification: true,
+          email: email
         });
       } else {
-        res.status(500).json({ message: 'Failed to send verification email. Please try again later.', error: emailError.message });
+        // Still return success for the user creation part, but indicate email sending failed
+        res.status(201).json({ 
+          message: 'User registered, but failed to send verification email. Please try using the resend verification option.',
+          requiresVerification: true, 
+          email: email,
+          error: emailError.message
+        });
       }
     }
   } catch (error) {
@@ -931,6 +956,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
     
     let user;
+    let verificationToken;
     
     // Check if MongoDB is connected
     if (mongoose.connection.readyState === 1) {
@@ -950,7 +976,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       
       if (user && !user.isVerified) {
         // Generate new verification token
-        const verificationToken = crypto.randomBytes(32).toString('hex');
+        verificationToken = crypto.randomBytes(32).toString('hex');
         const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
         
         user.verificationToken = verificationToken;
@@ -973,7 +999,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       }
       
       // Generate new verification token
-      const verificationToken = crypto.randomBytes(32).toString('hex');
+      verificationToken = crypto.randomBytes(32).toString('hex');
       const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
       
       inMemoryUsers[userIndex].verificationToken = verificationToken;
@@ -987,18 +1013,35 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     
     // Send verification email
     const serverIPs = getServerIPs();
-    const primaryIP = serverIPs.length > 0 ? serverIPs[0] : 'localhost'; // Use first IP, or localhost as fallback
-    const port = process.env.PORT || 5001;
     
-    const verificationLink = `${primaryIP}:${port}/verify-email?token=${user.verificationToken}`;
+    // Always use the deployed URL as the primary verification link
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const verificationLink = `${deployedUrl}/verify-email?token=${user.verificationToken}`;
     
     console.log('=== Resend Email Link Details ===');
     console.log('Available server IPs:', serverIPs);
-    console.log('Primary IP being used:', primaryIP);
-    console.log('Port being used:', port);
-    console.log('Deployed URL:', primaryIP);
-    console.log('Generated verification links:');
-    console.log(`Deployed link: ${verificationLink}`);
+    console.log('Using deployed URL:', deployedUrl);
+    console.log('Generated verification link:', verificationLink);
+    
+    // Create transporter for email sending
+    let currentTransporter = transporter;
+    
+    // If no email configuration, create a test account
+    if (!process.env.MAIL_FROM || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
+      console.warn('Email configuration missing. Setting up a default transporter for development.');
+      // Create a test account with Ethereal for development/testing
+      const testAccount = await nodemailer.createTestAccount();
+      currentTransporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      console.log('Using Ethereal test account:', testAccount.user);
+    }
     
     const mailOptions = {
       from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
@@ -1016,11 +1059,13 @@ app.post('/api/auth/resend-verification', async (req, res) => {
             </a>
           </div>
           
-          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking one of these alternative links:</p>
+          <p style="font-size: 14px; color: #666;">If the button above doesn't work, you can try clicking the link below:</p>
           
-          <ul style="font-size: 14px; color: #666;">
-            <li><a href="${verificationLink}">Cloud Server Link</a></li>
-          </ul>
+          <p style="text-align: center; margin: 15px 0;">
+            <a href="${verificationLink}" style="color: #6c63ff; text-decoration: underline;">
+              ${verificationLink}
+            </a>
+          </p>
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">This link will expire in 24 hours.</p>
           <p style="font-size: 14px; color: #666;">If you did not sign up for Slugger, please ignore this email.</p>
@@ -1056,22 +1101,21 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       
       // Verify transporter configuration before sending
       try {
-        await transporter.verify();
+        await currentTransporter.verify();
         console.log('Transporter verification successful');
       } catch (verifyError) {
         console.error('Transporter verification failed:', verifyError);
         console.error('Mail configuration error details:', verifyError.message);
       }
       
-      const info = await transporter.sendMail(mailOptions);
+      const info = await currentTransporter.sendMail(mailOptions);
       console.log('Verification email sent to:', email);
       console.log('Email response:', info.response);
       console.log('Message ID:', info.messageId);
       console.log('==== EMAIL SENDING COMPLETE ====');
       
-      res.status(201).json({
-        message: 'User registered successfully. Please check your email to verify your account.',
-        requiresVerification: true,
+      res.status(200).json({
+        message: 'Verification email sent. Please check your inbox.',
         email: email
       });
     } catch (emailError) {
@@ -1129,7 +1173,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       }
     }
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('Resend verification error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

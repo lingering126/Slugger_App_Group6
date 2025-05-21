@@ -137,6 +137,7 @@ export default function SignupScreen() {
         
         // Check if response might be HTML instead of JSON
         const contentType = response.headers.get('content-type');
+        console.log('Response content type:', contentType);
         
         if (contentType && contentType.includes('text/html')) {
           console.error('Server returned HTML instead of JSON');
@@ -147,6 +148,7 @@ export default function SignupScreen() {
         
         try {
           const data = await response.json();
+          console.log('Signup response data:', data);
           
           if (!response.ok) {
             console.log('Signup error data:', data);
@@ -162,6 +164,16 @@ export default function SignupScreen() {
             setError(data.message || 'Signup failed');
             setLoading(false);
             return;
+          }
+          
+          // If the server returned a test mode URL, show it
+          if (data.testMode && data.previewUrl) {
+            console.log('Test mode email preview URL:', data.previewUrl);
+            Alert.alert(
+              'Verification Email',
+              'A test verification email has been generated. Please check the console log for the preview URL.',
+              [{ text: 'OK' }]
+            );
           }
           
           console.log('Signup successful');
@@ -222,11 +234,30 @@ export default function SignupScreen() {
         })
       });
       
+      console.log('Resend verification response status:', response.status);
+      
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      console.log('Response content type:', contentType);
+      
+      if (contentType && contentType.includes('text/html')) {
+        console.error('Server returned HTML instead of JSON');
+        Alert.alert(
+          'Error',
+          'Server returned an unexpected response. Please try again later.',
+          [{ text: 'OK' }]
+        );
+        setResendingEmail(false);
+        return;
+      }
+      
       const data = await response.json();
+      console.log('Resend verification response data:', data);
       
       if (response.ok) {
         // Handle test mode where we need to show preview URL
         if (data.testMode && data.previewUrl) {
+          console.log('Test mode email preview URL:', data.previewUrl);
           Alert.alert(
             'Test Email Sent',
             'The email service is in test mode. Please check the server logs for the verification link preview URL.',
