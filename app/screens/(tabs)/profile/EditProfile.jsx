@@ -32,9 +32,23 @@ export default function EditProfile() {
 
   // Load user data when component mounts
   useEffect(() => {
-    const loadUserData = async () => {
+    const checkLoginAndLoadData = async () => {
       try {
         setLoading(true);
+        
+        // Check if user is logged in
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) {
+          Alert.alert(
+            'Login Required', 
+            'You need to log in to edit your profile.',
+            [{ 
+              text: 'Login', 
+              onPress: () => router.push('/login')
+            }]
+          );
+          return;
+        }
         
         // Get user data using the API service
         const user = await userService.getUserProfile();
@@ -63,7 +77,7 @@ export default function EditProfile() {
       }
     };
     
-    loadUserData();
+    checkLoginAndLoadData();
   }, []);
 
   // Handle form input changes
@@ -276,8 +290,11 @@ export default function EditProfile() {
       
       console.log("Calling API to update profile...");
       let result = null;
+      let isOnlineUpdate = false;
+
       try {
         result = await userService.updateUserProfile(updatedUserData);
+        isOnlineUpdate = true;
         console.log("API call completed successfully", JSON.stringify({
           id: result.id,
           name: result.name,
@@ -291,20 +308,44 @@ export default function EditProfile() {
           [{ text: 'OK', onPress: () => router.back() }]
         );
       } catch (apiError) {
-        // Check if we got a result despite the API error (from local storage fallback)
         if (apiError.fallbackSuccess && apiError.data) {
           console.log("API error, but local storage fallback succeeded");
           result = apiError.data;
           
           // Show success message with fallback note
           Alert.alert(
-            'Profile Updated', 
-            'Your profile has been updated locally. Some changes may not be visible to other users until you reconnect to the server.',
+            'Profile Updated Locally', 
+            'Your profile has been updated on this device. Changes may not be visible to other users until you reconnect to the server.',
             [{ text: 'OK', onPress: () => router.back() }]
           );
         } else {
           console.error('API error during profile update:', apiError);
-          Alert.alert('Error', apiError.message || 'Failed to save profile changes. Please try again.');
+          
+          // Check if we need to refresh login
+          if (apiError.message && (
+            apiError.message.includes('Authentication required') || 
+            apiError.message.includes('Authentication error') ||
+            apiError.message.includes('token') ||
+            apiError.message.includes('Token')
+          )) {
+            Alert.alert(
+              'Session Expired', 
+              'Your login session has expired. Please log in again to update your profile.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                  text: 'Login', 
+                  onPress: () => {
+                    // Navigate to login screen
+                    router.push('/login');
+                  }
+                }
+              ]
+            );
+          } else {
+            // General error
+            Alert.alert('Error', apiError.message || 'Failed to save profile changes. Please try again.');
+          }
         }
       }
     } catch (error) {
