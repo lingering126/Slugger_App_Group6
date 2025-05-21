@@ -23,6 +23,15 @@ const activitySchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'User ID is required']
   },
+  teamId: { // To associate activity with a specific team for weekly limits
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team',
+    required: false // Optional, as bonus activities might not be team-specific or for users not in a team
+  },
+  teamsId: [{ // Array of all teams the user was part of when creating this activity
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team'
+  }],
   type: {
     type: String,
     required: [true, 'Activity type is required'],
@@ -179,6 +188,8 @@ activitySchema.methods.toResponseFormat = function() {
     points: this.points,
     status: this.status,
     userId: this.userId,
+    teamId: this.teamId,
+    teamsId: this.teamsId,
     icon: this.icon,
     likes: this.likes,
     comments: this.comments.map(comment => ({
@@ -262,4 +273,4 @@ activitySchema.methods.getCommentsData = async function() {
 
 const Activity = mongoose.model('Activity', activitySchema);
 
-module.exports = Activity; 
+module.exports = Activity;

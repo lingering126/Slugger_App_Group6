@@ -64,10 +64,10 @@ describe('Stats Controller Tests', () => {
     authToken = mockData.token;
   });
 
-  describe('GET /api/user', () => {
+  describe('GET /api/stats/user', () => {
     it('should return user stats', async () => {
       const response = await request(app)
-        .get('/api/user')
+        .get('/api/stats/user')
         .set('Authorization', `Bearer ${mockUser._id}`);
 
       expect(response.status).toBe(200);
@@ -78,14 +78,14 @@ describe('Stats Controller Tests', () => {
     }, 60000);
   });
 
-  describe('PUT /api/user/target', () => {
+  describe('PUT /api/stats/user/target', () => {
     it('should update user target', async () => {
       const targetData = {
         targetPoints: 100
       };
 
       const response = await request(app)
-        .put('/api/user/target')
+        .put('/api/stats/user/target')
         .set('Authorization', `Bearer ${mockUser._id}`)
         .send(targetData);
 
@@ -95,4 +95,4 @@ describe('Stats Controller Tests', () => {
       expect(response.body.data).toHaveProperty('progress', 0);
     }, 60000);
   });
-}); 
+});

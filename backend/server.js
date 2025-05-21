@@ -16,6 +16,8 @@ const statsRoutes = require('./homepage/routes/index');
 const teamRoutes = require('./routes/team');
 // Add this line to import the new profiles routes
 const profileRoutes = require('./routes/profiles');
+const userTeamTargetRoutes = require('./routes/userTeamTarget');
+const { analyticsRouter } = require('./routes/analytics'); // Import the analytics router
 
 
 // Function to get all server IP addresses
@@ -205,6 +207,8 @@ app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/stats', authMiddleware, statsRoutes);
 // Add this line to register the profiles routes
 app.use('/api/profiles', profileRoutes);
+app.use('/api/user-team-targets', userTeamTargetRoutes);
+app.use('/api/analytics', authMiddleware, analyticsRouter); // Mount the analytics router, ensure authMiddleware if all routes under it are protected
 
 // ADD THIS NEW ENDPOINT: GET user profile - Updated to include longTermGoal
 app.get('/api/user/profile', authMiddleware, async (req, res) => {
@@ -516,6 +520,9 @@ app.post('/api/auth/signup', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    // Set proper content type header to ensure JSON response
+    res.setHeader('Content-Type', 'application/json');
+    
     const { email, password } = req.body;
     
     console.log('Login attempt for:', email);
@@ -578,6 +585,7 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id || user._id,
         email: user.email,
         name: user.name,
+        username: user.name, // Adding username for backward compatibility
         avatarUrl: user.avatarUrl,
         bio: user.bio,
         longTermGoal: user.longTermGoal || '', // Added longTermGoal
@@ -1245,12 +1253,14 @@ app.post('/api/test/email', async (req, res) => {
   }
 });
 
-// Start server
 // Note: PORT is set to 5001 in the .env file, which overrides this default
 const PORT = process.env.PORT || 5001;
+
+// Listen on all available network interfaces
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api`);
+  console.log(`Access the server at http://localhost:${PORT}`);
+  console.log('Available on your network at:');
   
   // Print out all available IP addresses
   const networkInterfaces = require('os').networkInterfaces();
@@ -1274,4 +1284,234 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`- ${ip}`);
   });
   console.log("================================\n");
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    // Extract the token from the Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key');
+    
+    // Get user from database
+    let user;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState === 1) {
+      // Find user in MongoDB
+      user = await User.findById(decoded.userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+    } else {
+      // Fallback to in-memory storage
+      user = inMemoryUsers.find(u => u.id === decoded.userId || u._id === decoded.userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+    }
+    
+    // Return user data (excluding password)
+    res.status(200).json({
+      id: user.id || user._id,
+      email: user.email,
+      name: user.name,
+      username: user.name, // Using name as username for backward compatibility
+      avatarUrl: user.avatarUrl,
+      bio: user.bio,
+      longTermGoal: user.longTermGoal || '',
+      activitySettings: user.activitySettings || {
+        physicalActivities: [],
+        mentalActivities: [],
+        bonusActivities: []
+      },
+      status: user.status || 'Active'
+    });
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+    
+    console.error('Error in /api/auth/me endpoint:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Add middleware to ensure all API responses have the correct Content-Type
+app.use('/api', (req, res, next) => {
+  res.setHeader('Content-Type', 'application/json');
+  next();
+});
+
+// Global error handler to ensure JSON responses for API routes
+app.use((err, req, res, next) => {
+  console.error('Global error:', err);
+  
+  // Only handle API routes
+  if (req.path.startsWith('/api')) {
+    res.setHeader('Content-Type', 'application/json');
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
+      message: err.message || 'Internal Server Error',
+      error: process.env.NODE_ENV === 'production' ? {} : err
+    });
+  }
+  
+  next(err);
+});
+
+// Add a route for handling web-based password reset
+app.get('/reset-password', (req, res) => {
+  const token = req.query.token;
+  if (!token) {
+    return res.status(400).send('Missing reset token');
+  }
+  
+  // Serve a simple HTML form for resetting password
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Reset Password - Slugger App</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          max-width: 500px;
+          margin: 0 auto;
+          padding: 20px;
+        }
+        h1 {
+          color: #6c63ff;
+          text-align: center;
+        }
+        .container {
+          background: #f9f9f9;
+          border-radius: 8px;
+          padding: 20px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input {
+          width: 100%;
+          padding: 10px;
+          margin-bottom: 15px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          box-sizing: border-box;
+        }
+        button {
+          background: #6c63ff;
+          color: white;
+          border: none;
+          padding: 12px 20px;
+          border-radius: 25px;
+          cursor: pointer;
+          width: 100%;
+          font-size: 16px;
+        }
+        .error {
+          color: red;
+          margin-bottom: 15px;
+        }
+        .success {
+          color: green;
+          margin-bottom: 15px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Reset Your Password</h1>
+        <div id="errorMessage" class="error" style="display: none;"></div>
+        <div id="successMessage" class="success" style="display: none;"></div>
+        
+        <div id="resetForm">
+          <div>
+            <label for="password">New Password</label>
+            <input type="password" id="password" placeholder="Enter new password" minlength="6" required>
+          </div>
+          
+          <div>
+            <label for="confirmPassword">Confirm Password</label>
+            <input type="password" id="confirmPassword" placeholder="Confirm new password" minlength="6" required>
+          </div>
+          
+          <button type="button" onclick="resetPassword()">Reset Password</button>
+        </div>
+        
+        <div id="successScreen" style="display: none; text-align: center;">
+          <p>Your password has been reset successfully.</p>
+          <p style="margin-top: 15px; color: #666;">You can now close this window and login to the app with your new password.</p>
+        </div>
+      </div>
+      
+      <script>
+        const token = "${token}";
+        
+        async function resetPassword() {
+          const password = document.getElementById('password').value;
+          const confirmPassword = document.getElementById('confirmPassword').value;
+          const errorMessage = document.getElementById('errorMessage');
+          
+          errorMessage.style.display = 'none';
+          
+          if (!password || password.length < 6) {
+            errorMessage.textContent = 'Password must be at least 6 characters long';
+            errorMessage.style.display = 'block';
+            return;
+          }
+          
+          if (password !== confirmPassword) {
+            errorMessage.textContent = 'Passwords do not match';
+            errorMessage.style.display = 'block';
+            return;
+          }
+          
+          try {
+            const response = await fetch('/api/auth/reset-password', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                token: token,
+                password: password
+              })
+            });
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+              throw new Error('Server returned non-JSON response. Please try again later.');
+            }
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+              throw new Error(data.message || 'Failed to reset password');
+            }
+            
+            // Show success screen
+            document.getElementById('resetForm').style.display = 'none';
+            document.getElementById('successMessage').textContent = data.message;
+            document.getElementById('successMessage').style.display = 'block';
+            document.getElementById('successScreen').style.display = 'block';
+          } catch (error) {
+            console.error('Password reset error:', error);
+            errorMessage.textContent = error.message || 'An unexpected error occurred. Please try again.';
+            errorMessage.style.display = 'block';
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
 });

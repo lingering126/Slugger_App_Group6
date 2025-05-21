@@ -7,26 +7,44 @@ export default function MoreScreen() {
   const router = useRouter();
 
   const handleSignOut = async () => {
+    const performSignOut = async () => {
+      try {
+        console.log('Signing out and clearing user data...');
+        // Keys to remove that were set during login or are user-specific
+        const keysToRemove = [
+          'userToken', 
+          'userId', 
+          'username', 
+          'user', 
+          'userTeam',         // If you store team info per user
+          'savedPassword',    // Clearing saved password for security
+          'userIsNew',        // Clear the new user flag
+          // 'savedEmail'    // Decide if you want to keep savedEmail for convenience
+          // 'welcomeCompleted' is intentionally not cleared to prevent welcome screen on next login
+        ];
+        await AsyncStorage.multiRemove(keysToRemove);
+        
+        // Clear any cached global variables if necessary
+        global.workingApiUrl = null; 
+        console.log('User data cleared from AsyncStorage.');
+        
+        router.replace('/screens/login');
+      } catch (e) {
+        console.error('Error during sign out process:', e);
+        if (Platform.OS === 'web') {
+          alert('Failed to sign out completely. Please try again.');
+        } else {
+          Alert.alert('Error', 'Failed to sign out completely. Please try again.');
+        }
+      }
+    };
+
     try {
-      // Different handling for web vs native platforms
       if (Platform.OS === 'web') {
-        // Use standard web alert for web platform
         if (confirm("Are you sure you want to sign out?")) {
-          // Clear authentication tokens
-          await AsyncStorage.removeItem('token');
-          await AsyncStorage.removeItem('user');
-          
-          // Optionally keep saved email for convenience but clear password
-          await AsyncStorage.removeItem('savedPassword');
-          
-          // Clear any cached connection URLs (optional)
-          global.workingApiUrl = null;
-          
-          // Navigate to login screen
-          router.replace('/screens/login');
+          await performSignOut();
         }
       } else {
-        // Show confirmation alert before signing out (for native platforms)
         Alert.alert(
           "Sign Out",
           "Are you sure you want to sign out?",
@@ -37,30 +55,18 @@ export default function MoreScreen() {
             },
             {
               text: "Sign Out",
-              onPress: async () => {
-                // Clear authentication tokens
-                await AsyncStorage.removeItem('token');
-                await AsyncStorage.removeItem('user');
-                
-                // Optionally keep saved email for convenience but clear password
-                await AsyncStorage.removeItem('savedPassword');
-                
-                // Clear any cached connection URLs (optional)
-                global.workingApiUrl = null;
-                
-                // Navigate to login screen
-                router.replace('/screens/login');
-              }
+              onPress: performSignOut
             }
           ]
         );
       }
     } catch (error) {
-      console.error('Error signing out:', error);
+      // This top-level catch is mostly for unexpected errors in Alert/confirm logic itself
+      console.error('Error initiating sign out:', error);
       if (Platform.OS === 'web') {
-        alert('Failed to sign out. Please try again.');
+        alert('An unexpected error occurred while trying to sign out.');
       } else {
-        Alert.alert('Error', 'Failed to sign out. Please try again.');
+        Alert.alert('Error', 'An unexpected error occurred while trying to sign out.');
       }
     }
   };

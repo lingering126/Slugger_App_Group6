@@ -22,10 +22,41 @@ export default function CreateGroupScreen() {
   const [groupDescription, setGroupDescription] = useState(''); // Group description entered by the user
   const [targetName, setTargetName] = useState(''); // Selected target category
   const [personalTargetValue, setPersonalTargetValue] = useState(3); // Personal target value (1-7)
-  const [dailyLimitPhysical, setDailyLimitPhysical] = useState(7); // Daily physical limit
-  const [dailyLimitMental, setDailyLimitMental] = useState(7); // Daily mental limit
+  const [weeklyLimitPhysical, setWeeklyLimitPhysical] = useState(7); // Default weekly physical limit
+  const [weeklyLimitMental, setWeeklyLimitMental] = useState(7); // Default weekly mental limit
   const [loading, setLoading] = useState(false); // Loading state for the "Create Team" button
   const router = useRouter(); // Router for navigation
+  const [currentLocalTime, setCurrentLocalTime] = useState('');
+
+  // Function to calculate and display the cycle end date
+  const calculateCycleEndDate = () => {
+    // Get current date
+    const now = new Date();
+    
+    // Set to UTC midnight of the current date
+    const cycleStartDate = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    
+    // Calculate the end date (7 days later at UTC 00:00)
+    const cycleEndDate = new Date(cycleStartDate);
+    cycleEndDate.setUTCDate(cycleStartDate.getUTCDate() + 7);
+    
+    // Return formatted date in local time
+    return cycleEndDate.toLocaleString();
+  };
+
+  useEffect(() => {
+    const updateLocalTime = () => {
+      setCurrentLocalTime(new Date().toLocaleString());
+    };
+    updateLocalTime();
+    const intervalId = setInterval(updateLocalTime, 1000); // Update every second
+    return () => clearInterval(intervalId); // Cleanup interval on component unmount
+  }, []);
 
   // Define dropdown menu data
   const targetData = [
@@ -100,42 +131,19 @@ export default function CreateGroupScreen() {
       const apiUrl = global.workingApiUrl || 'http://localhost:5001/api';
       console.log('Using API URL:', apiUrl);
 
-      // First, update the user's personal target
-      try {
-        const userTargetResponse = await fetch(`${apiUrl}/user-target`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            targetValue: personalTargetValue
-          }),
-        });
-
-        if (!userTargetResponse.ok) {
-          console.warn('Failed to update personal target, but continuing with team creation');
-        } else {
-          console.log('Personal target updated successfully');
-        }
-      } catch (targetError) {
-        console.error('Error updating personal target:', targetError);
-        // Continue with team creation even if setting personal target fails
-      }
-
       // Send a POST request to create the group
       const response = await fetch(`${apiUrl}/teams`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: groupName,
           description: groupDescription,
           targetName,
-          dailyLimitPhysical,
-          dailyLimitMental,
+          weeklyLimitPhysical, // Changed from dailyLimitPhysical
+          weeklyLimitMental,   // Changed from dailyLimitMental
         }),
       });
 
@@ -147,7 +155,32 @@ export default function CreateGroupScreen() {
 
       // Check if the response is successful
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to create group');
+        // Try to get a more specific error message from backend
+        const errorMsg = data.error || data.message || 'Failed to create group (unknown server error)';
+        throw new Error(errorMsg);
+      }
+
+      // Now we have the team data with ID, we can set the user's personal target for this team
+      const teamId = data._id;
+      try {
+        const userTeamTargetResponse = await fetch(`${apiUrl}/user-team-targets/${teamId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            targetValue: personalTargetValue
+          }),
+        });
+
+        if (!userTeamTargetResponse.ok) {
+          console.warn('Failed to set team-specific personal target');
+        } else {
+          console.log('Team-specific personal target set successfully:', personalTargetValue);
+        }
+      } catch (targetError) {
+        console.error('Error setting team-specific personal target:', targetError);
       }
 
       // Store the newly created team data in AsyncStorage 
@@ -173,7 +206,7 @@ export default function CreateGroupScreen() {
         Alert.alert('Success', `Team "${groupName}" created successfully!`, [
           {
             text: 'OK',
-            onPress: () => router.replace('/screens/(tabs)/team'),
+            onPress: () => router.replace('/screens/(tabs)/team')
           },
         ]);
       }
@@ -196,6 +229,11 @@ export default function CreateGroupScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <Text style={styles.title}>Create a New Team</Text>
+          <Text style={styles.localTimeText}>Current Local Time: {currentLocalTime}</Text>
+          <Text style={styles.localTimeText}>Current 7-days cycle will end at: {calculateCycleEndDate()}</Text>
+          <Text style={styles.infoText}>
+            Team cycle starts at UTC 00:00 on the day of creation and lasts for 7 days.
+          </Text>
 
           {/* Input for the group name */}
           <View style={styles.formGroup}>
@@ -237,45 +275,59 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-          {/* Dropdown for personal target value */}
+          {/* Personal target input */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Your Personal Target</Text>
-            <Dropdown
-              style={styles.dropdown}
-              data={personalTargetData}
-              labelField="label"
-              valueField="value"
-              placeholder="Select your personal target"
-              value={personalTargetValue}
-              onChange={(item) => setPersonalTargetValue(item.value)}
+            <TextInput
+              style={styles.input}
+              value={String(personalTargetValue)}
+              onChangeText={(text) => {
+                const numValue = parseInt(text) || 0;
+                if (numValue < 99) {
+                  setPersonalTargetValue(numValue);
+                }
+              }}
+              keyboardType="numeric"
+              placeholder="Enter your target (0-99)"
+              maxLength={2}
             />
           </View>
 
-          {/* Limits section */}
-          <View style={[styles.formGroup, styles.row]}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Mental Limit</Text>
+          {/* Dropdowns for weekly limits */}
+          <View style={styles.formGroup}>
+            <Text style={styles.sectionHeader}>Activity Limits</Text>
+            <Text style={styles.infoText}>
+              Daily limit: Users can only log 1 point per day for mental and physical activities (globally).
+            </Text>
+            <Text style={styles.infoText}>
+              Weekly limit: The following limits apply per team. When both mental and physical limits are reached, the weekly limits are removed and users can log additional activities (though daily limits still apply).
+            </Text>
+          </View>
+
+          <View style={styles.row}>
+            <View style={styles.halfColumn}>
+              <Text style={styles.label}>Weekly Mental Limit</Text>
               <Dropdown
                 style={styles.dropdown}
                 data={limitData}
                 labelField="label"
                 valueField="value"
-                placeholder="Select limit"
-                value={dailyLimitMental}
-                onChange={(item) => setDailyLimitMental(item.value)}
+                placeholder="Select a limit"
+                value={weeklyLimitMental}
+                onChange={(item) => setWeeklyLimitMental(item.value)}
               />
             </View>
-
-            <View style={styles.halfWidth}>
-              <Text style={styles.label}>Daily Physical Limit</Text>
+            
+            <View style={styles.halfColumn}>
+              <Text style={styles.label}>Weekly Physical Limit</Text>
               <Dropdown
                 style={styles.dropdown}
                 data={limitData}
                 labelField="label"
                 valueField="value"
-                placeholder="Select limit"
-                value={dailyLimitPhysical}
-                onChange={(item) => setDailyLimitPhysical(item.value)}
+                placeholder="Select a limit"
+                value={weeklyLimitPhysical}
+                onChange={(item) => setWeeklyLimitPhysical(item.value)}
               />
             </View>
           </View>
@@ -324,6 +376,24 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
     color: '#0E5E6F',
+  },
+  localTimeText: {
+    fontSize: 14,
+    color: '#777',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 10,
+    paddingHorizontal: 5,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 10,
+    marginBottom: 5,
   },
   formGroup: {
     marginBottom: 20,
@@ -381,11 +451,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 15,
   },
-  halfWidth: {
-    flex: 1,
-    marginHorizontal: 5,
+  halfColumn: {
+    width: '48%',
   },
   dropdown: {
     backgroundColor: '#FFFFFF',

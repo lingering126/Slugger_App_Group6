@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
+import CustomTextInput from '../components/CustomTextInput';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
@@ -47,7 +48,7 @@ export default function SignupScreen() {
       } catch (error) {
         console.error('Server check failed:', error.message);
         setServerStatus('offline');
-        setError('Cannot connect to server. Please check your network connection and server status.');
+        setError('Cannot connect to server. Please check your network connection and server status.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
       }
     };
     
@@ -105,7 +106,7 @@ export default function SignupScreen() {
       const timeoutId = setTimeout(() => {
         controller.abort();
         console.log('Signup request timed out after 15 seconds');
-        setError('Request timed out. Server might be unavailable.');
+        setError('Request timed out. Server might be unavailable.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         setLoading(false);
       }, 15000);
       
@@ -128,19 +129,35 @@ export default function SignupScreen() {
         
         console.log('Signup response status:', response.status);
         
-        const data = await response.json();
+        // Check if response might be HTML instead of JSON
+        const contentType = response.headers.get('content-type');
         
-        if (!response.ok) {
-          console.log('Signup error data:', data);
-          setError(data.message || 'Signup failed');
+        if (contentType && contentType.includes('text/html')) {
+          console.error('Server returned HTML instead of JSON');
+          setError('Server error. Please try again later.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
           setLoading(false);
           return;
         }
         
-        console.log('Signup successful');
-        setVerificationEmail(email);
-        setSignupSuccess(true);
-        setLoading(false);
+        try {
+          const data = await response.json();
+          
+          if (!response.ok) {
+            console.log('Signup error data:', data);
+            setError(data.message || 'Signup failed');
+            setLoading(false);
+            return;
+          }
+          
+          console.log('Signup successful');
+          setVerificationEmail(email);
+          setSignupSuccess(true);
+          setLoading(false);
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError);
+          setError('Error processing server response. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
+          setLoading(false);
+        }
       } catch (fetchError) {
         clearTimeout(timeoutId);
         throw fetchError;
@@ -150,9 +167,9 @@ export default function SignupScreen() {
       setLoading(false);
       
       if (error.name === 'AbortError') {
-        setError('Request timed out. Please try again.');
+        setError('Request timed out. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
       } else if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
-        setError('Network error. Please check your connection and try again.');
+        setError('Network error. Please check your connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         // Try to find another working URL
         const connectionStatus = await checkServerConnection(API_URLS);
         if (connectionStatus.status === 'online' && connectionStatus.url) {
@@ -162,7 +179,7 @@ export default function SignupScreen() {
           setServerStatus('offline');
         }
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        setError('An unexpected error occurred. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
       }
       
       console.log('Error details:', error);
@@ -202,11 +219,7 @@ export default function SignupScreen() {
   if (signupSuccess) {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.contentContainer} 
-          onPress={Keyboard.dismiss}
-        >
+        <View style={styles.contentContainer}>
           <Text style={styles.title}>Email Verification Required</Text>
           
           <View style={styles.verificationContainer}>
@@ -231,7 +244,7 @@ export default function SignupScreen() {
               <Text style={styles.loginButtonText}>Go to Login</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -243,11 +256,7 @@ export default function SignupScreen() {
         style={styles.keyboardAvoidingView}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
       >
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.contentContainer} 
-          onPress={Keyboard.dismiss}
-        >
+        <View style={styles.contentContainer} onStartShouldSetResponder={() => false}>
           <Text style={styles.title}>Create your account</Text>
           
           {serverStatus === 'offline' && (
@@ -261,7 +270,7 @@ export default function SignupScreen() {
           )}
           
           <View style={styles.inputContainer}>
-            <TextInput
+            <CustomTextInput
               style={styles.input}
               placeholder="Name"
               value={name}
@@ -269,7 +278,7 @@ export default function SignupScreen() {
               autoCapitalize="words"
             />
             
-            <TextInput
+            <CustomTextInput
               style={styles.input}
               placeholder="Email"
               value={email}
@@ -279,7 +288,7 @@ export default function SignupScreen() {
             />
             
             <View style={styles.passwordContainer}>
-              <TextInput
+              <CustomTextInput
                 style={styles.passwordInput}
                 placeholder="Password"
                 value={password}
@@ -299,7 +308,7 @@ export default function SignupScreen() {
             </View>
             
             <View style={styles.passwordContainer}>
-              <TextInput
+              <CustomTextInput
                 style={styles.passwordInput}
                 placeholder="Confirm Password"
                 value={confirmPassword}
@@ -339,7 +348,7 @@ export default function SignupScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -389,34 +398,22 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 25,
     marginBottom: 15,
+    position: 'relative',
   },
   passwordInput: {
     flex: 1,
     height: '100%',
     paddingHorizontal: 20,
-    fontSize: 16,
-  },
-
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 25,
-    marginBottom: 15,
-  },
-  passwordInput: {
-    flex: 1,
-    height: '100%',
-    paddingHorizontal: 20,
+    paddingRight: 40,
     fontSize: 16,
   },
   
   eyeIcon: {
     padding: 10,
-    marginRight: 5,
+    position: 'absolute',
+    right: 5,
+    height: '100%',
+    justifyContent: 'center',
   },
   buttonContainer: {
     width: '100%',

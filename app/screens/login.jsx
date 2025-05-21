@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getApiUrl, checkServerConnection } from '../utils';
 import { FontAwesome } from '@expo/vector-icons';
+import CustomTextInput from '../components/CustomTextInput';
 
 // Get the appropriate API URL based on the environment
 const API_URLS = getApiUrl();
@@ -81,7 +82,7 @@ export default function LoginScreen() {
       } catch (error) {
         console.error('Server check failed:', error.message);
         setServerStatus('offline');
-        setError('Cannot connect to server. Please check your network connection and server status.');
+        setError('Cannot connect to server. Please check your network connection and server status.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
       }
     };
     
@@ -115,7 +116,7 @@ export default function LoginScreen() {
       const timeoutId = setTimeout(() => {
         controller.abort();
         console.log('Login request timed out after 15 seconds');
-        setError('Request timed out. Server might be unavailable.');
+        setError('Request timed out. Server might be unavailable.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         setLoading(false);
       }, 15000);
       
@@ -137,29 +138,42 @@ export default function LoginScreen() {
         // Clear the timeout since we got a response
         clearTimeout(timeoutId);
         
-        // Start with assumption that bad credentials were entered
-        // This is a safe fallback for any authentication error
-        setError('Invalid email or password');
+        // Check if response might be HTML instead of JSON
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('text/html')) {
+          console.error('Server returned HTML instead of JSON');
+          setError('Server error. Please try again later.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
+          setLoading(false);
+          return;
+        }
         
         try {
+          // Now try to parse JSON
           data = await response.json();
           console.log('Login response:', {
             status: response.status,
             data: data
           });
           
-          if (response.status === 403 && data.requiresVerification) {
-            setNeedsVerification(true);
-            setVerificationEmail(data.email || email);
-            setError('');
-          } else if (!response.ok) {
-            // Keep "Invalid email or password" for 400/401 errors
-            if (response.status !== 400 && response.status !== 401) {
-              setError(data.message || 'An error occurred during login. Please try again.');
+          // Default error message for auth failures
+          if (!response.ok) {
+            if (response.status === 403 && data.requiresVerification) {
+              setNeedsVerification(true);
+              setVerificationEmail(data.email || email);
+              setError('');
+            } else if (response.status === 400 || response.status === 401) {
+              // Authentication error
+              setError('Invalid email or password');
+            } else {
+              setError(data.message || 'An error occurred during login. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
             }
             setLoading(false);
             return;
           }
+          
+          // Clear any error message on success
+          setError('');
           
           // Process successful login
           console.log('Login successful');
@@ -177,9 +191,16 @@ export default function LoginScreen() {
           // Store user data
           await AsyncStorage.setItem('userToken', data.token);
           await AsyncStorage.setItem('userId', data.user.id);
-          await AsyncStorage.setItem('username', data.user.username);
+          
+          // Only store username if it exists in the response
+          if (data.user.username) {
+            await AsyncStorage.setItem('username', data.user.username);
+          } else if (data.user.name) {
+            // Use name as fallback for username if username is not provided
+            await AsyncStorage.setItem('username', data.user.name);
+          }
+          
           await AsyncStorage.setItem('user', JSON.stringify(data.user));
-
           
           console.log('User data stored in AsyncStorage');
           
@@ -187,17 +208,21 @@ export default function LoginScreen() {
           const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
           console.log('Welcome completed status:', welcomeCompleted);
           
-          // If the user is logging in for the first time, redirect to welcome page
-          if (!welcomeCompleted) {
+          // If the user is logging in for the first time or welcomeCompleted is not set, redirect to welcome page
+          if (welcomeCompleted !== 'true') {
             console.log('First time login detected, redirecting to welcome page');
             
+            // Set a userIsNew flag in AsyncStorage to mark this as a new user
+            await AsyncStorage.setItem('userIsNew', 'true');
+            
             try {
-              // Verify that the welcome route exists
+              // Verify that the welcome route exists and navigate to it
               router.replace('/screens/welcome');
               console.log('Navigation to welcome page initiated');
             } catch (navError) {
               console.error('Error navigating to welcome page:', navError);
               // Fallback to home if welcome page navigation fails
+              await AsyncStorage.setItem('welcomeCompleted', 'true'); // Mark as completed if we can't show welcome page
               router.replace('/screens/(tabs)/home');
             }
           } else {
@@ -207,11 +232,7 @@ export default function LoginScreen() {
           }
         } catch (parseError) {
           console.error('Error parsing response:', parseError);
-          if (response.status === 400 || response.status === 401) {
-            // Keep the default "Invalid email or password" for auth errors
-          } else {
-            setError('An error occurred during login. Please try again.');
-          }
+          setError('Error processing server response. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
           setLoading(false);
         }
       } catch (fetchError) {
@@ -220,11 +241,11 @@ export default function LoginScreen() {
         
         // Only show connection errors for actual network issues
         if (fetchError.name === 'AbortError') {
-          setError('Connection timed out. Please check your internet connection and try again.');
+          setError('Connection timed out. Please check your internet connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         } else if (fetchError.name === 'TypeError' && fetchError.message.includes('Network request failed')) {
-          setError('Network error. Please check your connection and try again.');
+          setError('Network error. Please check your connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         } else {
-          setError('An error occurred during login. Please try again.');
+          setError('An error occurred during login. Please try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         }
         
         setLoading(false);
@@ -238,7 +259,7 @@ export default function LoginScreen() {
       });
       setLoading(false);
       // Only show this message if all other error handlers failed
-      setError('An unexpected error occurred. Please try again later.');
+      setError('An unexpected error occurred. Please try again later.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
     }
   };
 
@@ -324,11 +345,7 @@ export default function LoginScreen() {
   if (needsVerification) {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.contentContainer} 
-          onPress={Keyboard.dismiss}
-        >
+        <View style={styles.contentContainer}>
           <Text style={styles.title}>Email Verification Required</Text>
           
           <View style={styles.verificationContainer}>
@@ -361,7 +378,7 @@ export default function LoginScreen() {
               <Text style={styles.backButtonText}>Back to Login</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -373,11 +390,7 @@ export default function LoginScreen() {
         style={styles.keyboardAvoidingView}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
       >
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.contentContainer} 
-          onPress={Keyboard.dismiss}
-        >
+        <View style={styles.contentContainer} onStartShouldSetResponder={() => false}>
           <Text style={styles.title}>Log in with your email</Text>
           
           {serverStatus === 'offline' && (
@@ -397,7 +410,7 @@ export default function LoginScreen() {
           )}
           
           <View style={styles.inputContainer}>
-            <TextInput
+            <CustomTextInput
               style={styles.input}
               placeholder="Email"
               value={email}
@@ -407,12 +420,13 @@ export default function LoginScreen() {
             />
             
             <View style={styles.passwordContainer}>
-              <TextInput
+              <CustomTextInput
                 style={styles.passwordInput}
                 placeholder="Password"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                showPassword={showPassword}
               />
               <TouchableOpacity 
                 style={styles.eyeIcon} 
@@ -437,6 +451,13 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.rememberText}>Remember password</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.forgotPasswordContainer}
+              onPress={() => router.push('/screens/forgot-password')}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.buttonContainer}>
@@ -459,7 +480,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -508,16 +529,21 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 25,
     marginBottom: 15,
+    position: 'relative',
   },
   passwordInput: {
     flex: 1,
     height: '100%',
     paddingHorizontal: 20,
     fontSize: 16,
+    paddingRight: 40,
   },
   eyeIcon: {
     padding: 10,
-    marginRight: 5,
+    position: 'absolute',
+    right: 5,
+    height: '100%',
+    justifyContent: 'center',
   },
   rememberContainer: {
     flexDirection: 'row',
@@ -630,6 +656,14 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: '#666',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  forgotPasswordContainer: {
+    paddingVertical: 10,
+  },
+  forgotPasswordText: {
+    color: '#6c63ff',
     fontSize: 16,
     textDecorationLine: 'underline',
   }

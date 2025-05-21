@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, SafeAreaView, ImageBackground, Image, TextInput, Alert, Linking, Animated, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, SafeAreaView, ImageBackground, Image, TextInput, Alert, Linking, Animated, ActivityIndicator, Platform, RefreshControl } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { StatusBar } from 'expo-status-bar';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SocialButtons } from '../../components/SocialButtons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import API_CONFIG from '../../config/api';
 import ActivityCard from '../../components/ActivityCard';
 
@@ -159,7 +158,26 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
   const [selectedTime, setSelectedTime] = useState('1');
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [userTeam, setUserTeam] = useState(null);
   const activities = category ? activityData[category] || [] : [];
+
+  // Fetch user's team on component mount
+  useEffect(() => {
+    const fetchUserTeam = async () => {
+      try {
+        const teamData = await AsyncStorage.getItem('userTeam');
+        if (teamData) {
+          setUserTeam(JSON.parse(teamData));
+        }
+      } catch (error) {
+        console.error('Error fetching user team:', error);
+      }
+    };
+
+    if (visible) {
+      fetchUserTeam();
+    }
+  }, [visible]);
 
   const getActivityIcon = (type, name) => {
     switch (type) {
@@ -254,8 +272,22 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
-      // Convert hours to minutes
-      const durationInMinutes = parseInt(selectedTime) * 60;
+      // Convert time value to minutes
+      // Format: "0.25" = 15 mins, "0.5" = 30 mins, "0.75" = 45 mins, "1" = 1 hour, etc.
+      const durationInMinutes = parseFloat(selectedTime) * 60;
+      
+      // Create request body
+      const requestBody = {
+        type: category,
+        name: selectedActivity,
+        duration: durationInMinutes,
+        icon: getActivityIcon(category, selectedActivity)
+      };
+      
+      // Add teamId to the request if the user is in a team
+      if (userTeam && userTeam._id) {
+        requestBody.teamId = userTeam._id;
+      }
       
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.CREATE}`, {
         method: 'POST',
@@ -263,12 +295,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          type: category,
-          name: selectedActivity,
-          duration: durationInMinutes,
-          icon: getActivityIcon(category, selectedActivity)
-        })
+        body: JSON.stringify(requestBody)
       });
 
       console.log('Activity creation response:', response.status);
@@ -277,7 +304,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
         const data = await response.json();
         console.log('Activity created:', data);
 
-        // 构建完整的活动数据，使用 Anonymous 作为默认用户名
+        // Build complete activity data with Anonymous as default username
         const activityData = {
           ...data.data,
           type: category,
@@ -285,17 +312,17 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
           duration: durationInMinutes,
           icon: getActivityIcon(category, selectedActivity),
           createdAt: new Date().toISOString(),
-          author: 'Anonymous',  // 使用 Anonymous 作为默认用户名
-          userId: 'anonymous'   // 使用小写的 anonymous 作为默认用户ID
+          author: 'Anonymous',  // Use Anonymous as default username
+          userId: 'anonymous'   // Use lowercase anonymous as default userID
         };
 
-        // 调用父组件的回调函数
+        // Call parent component callback function
         onActivityCreated && onActivityCreated(activityData);
         onClose();
       } else {
-        const error = await response.text();
-        console.error('Failed to create activity:', error);
-        Alert.alert('Error', 'Failed to create activity');
+        const errorData = await response.json();
+        console.error('Failed to create activity:', errorData);
+        Alert.alert('Error', errorData.message || 'Failed to create activity');
       }
     } catch (error) {
       console.error('Error creating activity:', error);
@@ -328,11 +355,14 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             style={styles.picker} 
               onValueChange={(itemValue) => {
                 setSelectedTime(itemValue);
-                console.log('Selected time:', itemValue); // Changed from Chinese to English
+                console.log('Selected time:', itemValue);
               }}
           >
-            {[...Array(24).keys()].map((num) => (
-              <Picker.Item key={num + 1} label={`${num + 1} hour`} value={`${num + 1}`} />
+            <Picker.Item key="0.25" label="15 minutes" value="0.25" />
+            <Picker.Item key="0.5" label="30 minutes" value="0.5" />
+            <Picker.Item key="0.75" label="45 minutes" value="0.75" />
+            {[...Array(8).keys()].map((num) => (
+              <Picker.Item key={num + 1} label={`${num + 1} hour${num > 0 ? 's' : ''}`} value={`${num + 1}`} />
             ))}
           </Picker>
           </View>
@@ -349,7 +379,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
                 ]}
                   onPress={() => {
                     setSelectedActivity(activity);
-                    console.log('Selected activity:', activity); // Changed from Chinese to English
+                    console.log('Selected activity:', activity);
                   }}
               >
                 <Text style={[
@@ -861,117 +891,408 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
 };
 
 const HomeScreen = () => {
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [showNewPostModal, setShowNewPostModal] = useState(false);
-  const [postType, setPostType] = useState(null);
-  const [contentType, setContentType] = useState(null);
-  const [postContent, setPostContent] = useState('');
-  const [posts, setPosts] = useState([]);
-  const [userStats, setUserStats] = useState({
-    totalPoints: 0,
-    totalActivities: 0,
-    currentStreak: 0,
-    monthlyProgress: 0
-  });
+  const [selectedFeed, setSelectedFeed] = useState('all');
+  const [userStats, setUserStats] = useState(null);
   const [activities, setActivities] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [showContentModal, setShowContentModal] = useState(false);
+  const [currentUtcTime, setCurrentUtcTime] = useState('');
+  const [checkingCategoryLimit, setCheckingCategoryLimit] = useState(null);
+  const [weeklyLimitsUnlocked, setWeeklyLimitsUnlocked] = useState(false);
+  const [weekCycleEndTime, setWeekCycleEndTime] = useState('');
+  const [timeUntilReset, setTimeUntilReset] = useState('');
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
   const router = useRouter();
 
-  // 合并并排序所有内容
-  const getSortedFeed = () => {
-    const allItems = [
-      ...activities.map(activity => ({
-        ...activity,
-        itemType: 'activity',
-        createdAt: new Date(activity.createdAt)
-      })),
-      ...posts.map(post => ({
-        ...post,
-        itemType: 'post',
-        createdAt: new Date(post.createdAt)
-      }))
-    ];
-
-    return allItems.sort((a, b) => b.createdAt - a.createdAt);
+  // Calculate UTC week cycle (starts on Monday 00:00 UTC)
+  const calculateWeekCycle = () => {
+    const now = new Date();
+    const currentUtcDay = now.getUTCDay(); // 0 (Sunday) to 6 (Saturday)
+    const daysUntilNextMonday = currentUtcDay === 0 ? 1 : 8 - currentUtcDay; // If Sunday (0), next Monday is 1 day away
+    
+    // Calculate next Monday at 00:00 UTC
+    const nextMonday = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + daysUntilNextMonday,
+      0, 0, 0, 0
+    ));
+    
+    // Convert UTC time to local time for display
+    const nextMondayLocal = new Date(nextMonday);
+    
+    // Format the date and time in user's local timezone (without weekday)
+    const options = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    };
+    
+    const formattedEndTime = nextMondayLocal.toLocaleDateString(undefined, options);
+    setWeekCycleEndTime(formattedEndTime);
+    
+    // Calculate time remaining until reset
+    const msUntilReset = nextMonday.getTime() - now.getTime();
+    const daysLeft = Math.floor(msUntilReset / (1000 * 60 * 60 * 24));
+    const hoursLeft = Math.floor((msUntilReset % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutesLeft = Math.floor((msUntilReset % (1000 * 60 * 60)) / (1000 * 60));
+    
+    setTimeUntilReset(`${daysLeft}d ${hoursLeft}h ${minutesLeft}m`);
+    
+    return { nextMonday, msUntilReset };
+  };
+  
+  // Check if weekly reset is needed
+  const checkWeeklyReset = async () => {
+    try {
+      // Get the last reset time from AsyncStorage
+      const lastResetTimeStr = await AsyncStorage.getItem('lastWeeklyReset');
+      const now = new Date();
+      
+      // If no last reset time, store current time and return
+      if (!lastResetTimeStr) {
+        await AsyncStorage.setItem('lastWeeklyReset', now.toISOString());
+        return false;
+      }
+      
+      const lastResetTime = new Date(lastResetTimeStr);
+      
+      // Check if we're in a new UTC week cycle since the last reset
+      // UTC week starts on Monday 00:00
+      const lastResetDay = lastResetTime.getUTCDay();
+      const lastResetDateNum = lastResetTime.getUTCDate();
+      
+      const currentDay = now.getUTCDay();
+      const currentDateNum = now.getUTCDate();
+      
+      // Determine if we've crossed a Monday 00:00 UTC boundary since last reset
+      const isNewWeekCycle = 
+        // If current day is Monday (1) or later in the week, and last reset was before this week's Monday
+        (currentDay >= 1 && lastResetDay >= currentDay && lastResetDateNum < currentDateNum) ||
+        // If current day is early in the week, and last reset was in previous week
+        (currentDay < lastResetDay) ||
+        // If it's been more than 7 days since last reset
+        (now.getTime() - lastResetTime.getTime() > 7 * 24 * 60 * 60 * 1000);
+      
+      if (isNewWeekCycle) {
+        console.log("New week cycle detected, resetting stats...");
+        
+        // Reset stats and store new reset time
+        await AsyncStorage.setItem('lastWeeklyReset', now.toISOString());
+        
+        // Reset user stats by calling backend endpoint
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+          const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.USER.RESET_WEEKLY_STATS}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (response.ok) {
+            console.log("Weekly stats reset successfully");
+            // After reset, fetch updated stats
+            await fetchUserStats();
+            return true;
+          } else {
+            console.error("Failed to reset weekly stats:", await response.text());
+          }
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Error checking weekly reset:", error);
+      return false;
+    }
   };
 
-  // 在组件加载时获取数据
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // 并行获取数据以提高加载速度
-        await Promise.all([
-          fetchActivities(),
-          fetchPosts()
-        ]);
-      } catch (error) {
-        console.error('Error loading initial data:', error);
+  // Check if weekly limits are unlocked
+  const checkWeeklyLimits = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const userTeam = await AsyncStorage.getItem('userTeam');
+      
+      if (!token || !userTeam) return;
+      
+      const team = JSON.parse(userTeam);
+      
+      // Get today's date at UTC midnight
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      
+      // Calculate cycle start date based on team creation date
+      const creationDate = new Date(team.createdAt);
+      const cycleStartDate = new Date(Date.UTC(
+        creationDate.getUTCFullYear(),
+        creationDate.getUTCMonth(),
+        creationDate.getUTCDate(),
+        0, 0, 0, 0
+      ));
+      
+      // Calculate days since creation
+      const msSinceCreation = todayStart.getTime() - cycleStartDate.getTime();
+      const daysSinceCreation = Math.floor(msSinceCreation / (1000 * 60 * 60 * 24));
+      
+      // Calculate current cycle index (0-based)
+      const currentCycleIndex = Math.floor(daysSinceCreation / 7);
+      
+      // Calculate current cycle start date
+      const currentCycleStart = new Date(cycleStartDate);
+      currentCycleStart.setUTCDate(cycleStartDate.getUTCDate() + currentCycleIndex * 7);
+      
+      // Calculate current cycle end date
+      const currentCycleEnd = new Date(currentCycleStart);
+      currentCycleEnd.setUTCDate(currentCycleStart.getUTCDate() + 7);
+      
+      // Get activities for the current week cycle
+      const response = await fetch(
+        `${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIST}?startDate=${currentCycleStart.toISOString()}&endDate=${currentCycleEnd.toISOString()}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data && data.data.activities) {
+          // Count mental and physical activities
+          let mentalCount = 0;
+          let physicalCount = 0;
+          
+          data.data.activities.forEach(activity => {
+            if (activity.type === 'Mental') mentalCount++;
+            if (activity.type === 'Physical') physicalCount++;
+          });
+          
+          // Check if both limits are reached
+          const mentalLimitReached = mentalCount >= team.weeklyLimitMental;
+          const physicalLimitReached = physicalCount >= team.weeklyLimitPhysical;
+          
+          setWeeklyLimitsUnlocked(mentalLimitReached && physicalLimitReached);
+        }
       }
+    } catch (error) {
+      console.error('Error checking weekly limits:', error);
+    }
+  };
+
+  useEffect(() => {
+    // Update UTC time and week cycle end time every minute
+    const updateTimes = () => {
+      setCurrentUtcTime(new Date().toUTCString());
+      calculateWeekCycle();
     };
-    loadData();
+    
+    updateTimes();
+    const intervalId = setInterval(updateTimes, 60000); // Update every minute
+    
+    // Check for weekly reset on component mount
+    checkWeeklyReset();
+    
+    return () => clearInterval(intervalId);
   }, []);
+
+  const handleCategorySelect = async (category) => {
+    if (category === 'Physical' || category === 'Mental') {
+      setCheckingCategoryLimit(category);
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        console.log(`[handleCategorySelect] User B - Token from AsyncStorage: ${token ? 'TOKEN_EXISTS' : 'NO_TOKEN'}`); // Check token for User B
+        const todayStart = new Date();
+        todayStart.setUTCHours(0, 0, 0, 0);
+        const todayEnd = new Date(todayStart);
+        todayEnd.setUTCDate(todayStart.getUTCDate() + 1);
+        
+        const fetchUrl = `${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIST}?type=${category}&startDate=${todayStart.toISOString()}&endDate=${todayEnd.toISOString()}`;
+        console.log(`[handleCategorySelect] User B - Fetching URL: ${fetchUrl}`);
+
+        const response = await fetch(fetchUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const responseText = await response.text(); // Get text first to avoid parsing error if not JSON
+        console.log(`[handleCategorySelect] User B - Response status: ${response.status}, Response text: ${responseText}`);
+
+        if (response.ok) {
+          let responseData;
+          try {
+            responseData = JSON.parse(responseText); // Manually parse after logging text
+          } catch (e) {
+            console.error('[handleCategorySelect] User B - JSON.parse error:', e, 'Raw response text was:', responseText);
+            const errMessage = 'Error parsing server response for daily limit check.';
+            if (Platform.OS === 'web') { alert(errMessage); } else { Alert.alert('Error', errMessage); }
+            return;
+          }
+
+          console.log('[handleCategorySelect] User B - Parsed responseData:', JSON.stringify(responseData));
+          
+          // THIS IS THE CRITICAL CHECK - We need to verify activities are from current day
+          if (responseData.success && responseData.data && responseData.data.activities && responseData.data.activities.length > 0) {
+            // Verify activities are from current UTC day
+            const activitiesFromToday = responseData.data.activities.filter(activity => {
+              const activityDate = new Date(activity.createdAt);
+              return activityDate >= todayStart && activityDate < todayEnd;
+            });
+            
+            if (activitiesFromToday.length > 0) {
+              console.log('[handleCategorySelect] User B - Daily limit IS REACHED based on frontend check. Activities found in today\'s date range:', activitiesFromToday.length);
+              const message = `You can only log 1 point for ${category.toLowerCase()} activities per day.`;
+              if (Platform.OS === 'web') {
+                alert(message);
+              } else {
+                Alert.alert('Daily Limit Reached', message, [{ text: 'OK' }]);
+              }
+              return;
+            } else {
+              console.log('[handleCategorySelect] User B - No activities found in today\'s date range. Activities array exists but all from different days.');
+            }
+          } else {
+            console.log('[handleCategorySelect] User B - Daily limit NOT reached based on frontend check. Activities array:', responseData.data?.activities);
+          }
+          setSelectedCategory(category);
+          setShowActivityModal(true);
+        } else {
+          console.error(`[handleCategorySelect] User B - Server responded with ${response.status}. Raw response text: ${responseText}`);
+          const errorData = responseText ? JSON.parse(responseText) : { message: 'Could not verify daily limit. Please try again.' };
+          const errorMessage = errorData.message || 'Could not verify daily limit. Please try again.';
+          if (Platform.OS === 'web') {
+            alert(errorMessage);
+          } else {
+            Alert.alert('Error', errorMessage);
+          }
+          return; 
+        }
+      } catch (error) {
+        const errorMessage = 'An error occurred while checking your daily limits. Please try again.';
+        console.error(`[handleCategorySelect] User B - Catch block error:`, error);
+        if (Platform.OS === 'web') {
+          alert(errorMessage);
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
+        return; 
+      } finally {
+        setCheckingCategoryLimit(null); 
+      }
+    } else {
+      setSelectedCategory(category);
+      setShowActivityModal(true);
+    }
+  };
+
+  const handleActivityCreated = async (newActivity) => {
+    try {
+      await fetchActivities();
+      
+      // Show a success message
+      Alert.alert('Success', `Logged ${newActivity.type} activity: ${newActivity.name}`);
+    } catch (error) {
+      console.error('Error refreshing activities after creation:', error);
+    }
+  };
+
+  const getSortedFeed = () => {
+    const currentActivities = Array.isArray(activities) ? activities : [];
+    const currentPosts = Array.isArray(posts) ? posts : [];
+
+    const allItems = [
+      ...currentActivities.map(activity => ({ ...activity, itemType: 'activity', createdAt: new Date(activity.createdAt) })),
+      ...currentPosts.map(post => ({ ...post, itemType: 'post', createdAt: new Date(post.createdAt) }))
+    ];
+    return allItems.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadDataForCurrentUser = async () => {
+        setLoading(true);
+        console.log("HomeScreen focused, reloading data for current user...");
+        try {
+          const token = await AsyncStorage.getItem('userToken');
+          if (!token) {
+            console.log("No token found on focus, user might be logged out.");
+            setActivities([]);
+            setPosts([]);
+            setUserStats(null);
+            setLoading(false);
+            return;
+          }
+          await Promise.all([fetchActivities(), fetchPosts(), fetchUserStats()]);
+          // Check weekly limits after data is loaded
+          checkWeeklyLimits();
+        } catch (error) {
+          console.error('Error loading data on focus:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadDataForCurrentUser();
+
+      return () => {
+        console.log("HomeScreen out of focus");
+      };
+    }, [])
+  );
 
   const fetchPosts = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const userId = await AsyncStorage.getItem('userId');
       if (!token) {
-        console.error('No token found');
+        console.log('No token found for fetchPosts');
+        setPosts([]);
         return;
       }
-
-      console.log('Fetching posts...');
+      console.log('Fetching posts with token...');
       const response = await fetch(`${API_CONFIG.API_URL}/posts`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
-      
       if (response.ok) {
         const data = await response.json();
-        console.log('Fetched posts:', data);
-        // 确保每个帖子都有正确的点赞信息
-        const postsWithLikeInfo = data.map(post => ({
-          ...post,
-          isLikedByUser: post.isLikedByUser || false,
-          likesCount: post.likesCount || 0
-        }));
+        const postsWithLikeInfo = data.map(post => ({ ...post, isLikedByUser: post.isLikedByUser || false, likesCount: post.likesCount || 0 }));
         setPosts(postsWithLikeInfo);
       } else {
         console.error('Failed to fetch posts:', await response.text());
+        setPosts([]);
       }
     } catch (error) {
       console.error('Error fetching posts:', error);
+      setPosts([]);
     }
   };
 
   const fetchUserStats = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      console.log('Fetching user stats...');
+      if (!token) {
+        console.log('No token found for fetchUserStats');
+        setUserStats(null);
+        return;
+      }
+      console.log('Fetching user stats with token...');
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.USER.STATS}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      console.log('User stats response:', data);
-
       if (response.ok) {
-        // 确保我们使用正确的数据更新状态
-        setUserStats(prevStats => ({
-          ...prevStats,
-          totalPoints: data.totalPoints || 0,
-          totalActivities: data.totalActivities || 0,
-          currentStreak: data.currentStreak || 0,
-          monthlyProgress: data.monthlyProgress || 0
-        }));
+        setUserStats(prevStats => ({ ...prevStats, totalPoints: data.totalPoints || 0, totalActivities: data.totalActivities || 0, currentStreak: data.currentStreak || 0, monthlyProgress: data.monthlyProgress || 0 }));
       } else {
         console.error('Failed to fetch user stats:', data);
+        setUserStats(null);
       }
     } catch (error) {
       console.error('Error fetching user stats:', error);
+      setUserStats(null);
     }
   };
 
@@ -979,45 +1300,31 @@ const HomeScreen = () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
-        throw new Error('No authentication token found');
+        console.log('No token found for fetchActivities');
+        setActivities([]);
+        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        return;
       }
-
-      console.log('Fetching activities...');
+      console.log('Fetching activities with token...');
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIST}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
       const data = await response.json();
-      
       if (response.ok && data.success) {
         setActivities(data.data?.activities || []);
-        
-        // 使用 pagination.total 作为活动总数，stats.totalPoints 作为总积分
-        setUserStats(prevStats => ({
-          ...prevStats,
-          totalPoints: data.data?.stats?.totalPoints || 0,
-          totalActivities: data.data?.pagination?.total || 0
-        }));
+        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: data.data?.stats?.totalPoints || 0, totalActivities: data.data?.pagination?.total || 0 }));
+      } else {
+        console.error('Failed to fetch activities:', data.message || 'Unknown error');
+        setActivities([]);
+        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
       }
     } catch (error) {
       console.error('Error fetching activities:', error);
+      setActivities([]);
+      setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
     }
   };
 
-  const handleActivityCreated = async (newActivity) => {
-    try {
-      // 更新活动列表
-      setActivities(prevActivities => [newActivity, ...prevActivities]);
-      // 重新获取最新数据
-      await fetchActivities();
-    } catch (error) {
-      console.error('Error handling new activity:', error);
-    }
-  };
-
-  // 在创建新帖子后刷新数据
   const handlePostCreated = async () => {
     try {
       await Promise.all([
@@ -1029,17 +1336,72 @@ const HomeScreen = () => {
     }
   };
 
+  const renderActionButtons = () => {
+    const isLoadingPhysical = checkingCategoryLimit === 'Physical';
+    const isLoadingMental = checkingCategoryLimit === 'Mental';
+
+    return (
+      <View style={styles.actionButtonsContainer}>
+        <View style={styles.utcTimeContainer}>
+          <Text style={styles.utcTimeText}>Week cycle ends: {weekCycleEndTime}</Text>
+          <Text style={styles.resetCountdownText}>Time until reset: {timeUntilReset}</Text>
+        </View>
+        
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.physicalButton, isLoadingPhysical && styles.disabledButtonVisual]}
+            onPress={() => handleCategorySelect('Physical')}
+            disabled={isLoadingPhysical}
+          >
+            {isLoadingPhysical ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <>
+                <FontAwesome5 name="running" size={24} color="white" />
+                <Text style={styles.actionButtonText}>Physical</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.mentalButton, isLoadingMental && styles.disabledButtonVisual]}
+            onPress={() => handleCategorySelect('Mental')}
+            disabled={isLoadingMental}
+          >
+            {isLoadingMental ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <>
+                <FontAwesome5 name="brain" size={24} color="white" />
+                <Text style={styles.actionButtonText}>Mental</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.bonusButton]}
+            onPress={() => handleCategorySelect('Bonus')}
+            disabled={checkingCategoryLimit !== null}
+          >
+            <FontAwesome5 name="star" size={24} color="white" />
+            <Text style={styles.actionButtonText}>Bonus</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
       <ImageBackground 
         source={require('../../../assets/analytics_bg.png')}
         style={styles.backgroundImage}
         imageStyle={{ opacity: 0.16 }}
       >
         <LinearGradient
-          colors={['rgba(248, 250, 252, 0.1)', 'rgba(248, 250, 252, 0.6)', 'rgba(248, 250, 252, 0.95)', 'rgba(248, 250, 252, 1)']}
-          locations={[0, 0.2, 0.5, 0.7]}
-          style={styles.gradient}
+          colors={['#F4F9FF', '#FFFFFF']}
+          style={styles.container}
         >
           <View style={styles.mainContainer}>
             {/* Header */}
@@ -1048,6 +1410,16 @@ const HomeScreen = () => {
                 <Ionicons name="home" size={28} color="#3A8891" />
               </View>
             </View>
+
+            {/* Weekly Limits Unlocked Notification */}
+            {weeklyLimitsUnlocked && (
+              <View style={styles.notificationBanner}>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.notificationText}>
+                  Weekly limits unlocked! You can log additional activities.
+                </Text>
+              </View>
+            )}
 
             {/* Stats Section */}
             <View style={styles.statsSection}>
@@ -1072,9 +1444,7 @@ const HomeScreen = () => {
 
               {/* Monthly Progress */}
               <View style={styles.progressSection}>
-                <Text style={styles.progressTitle}>Monthly Progress</Text>
-                
-                {/* Team Progress */}
+                <Text style={styles.progressTitle}>Weekly Progress</Text>
                 <View style={styles.progressRow}>
                   <Text style={styles.progressLabel}>Team</Text>
                   <View style={styles.progressBar}>
@@ -1087,8 +1457,6 @@ const HomeScreen = () => {
                   </View>
                   <Text style={styles.progressText}>{userStats?.monthlyProgress || 0}%</Text>
                 </View>
-
-                {/* Personal Progress */}
                 <View style={styles.progressRow}>
                   <Text style={styles.progressLabel}>Personal</Text>
                   <View style={styles.progressBar}>
@@ -1108,76 +1476,54 @@ const HomeScreen = () => {
             </View>
 
             {/* Combined Feed */}
-            <ScrollView style={styles.feed}>
-              {getSortedFeed().map((item) => (
-                item.itemType === 'activity' ? (
-                  <ActivityCard
-                    key={`activity-${item.id}`}
-                    activity={item}
-                  />
-                ) : (
-                  <PostCard 
-                    key={`post-${item._id}`}
-                    post={item}
-                  />
-                )
-              ))}
+            <ScrollView 
+              style={styles.feed}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={async () => {
+                  setRefreshing(true);
+                  await Promise.all([fetchActivities(), fetchPosts(), fetchUserStats()]);
+                  setRefreshing(false);
+                }} />
+              }
+            >
+              {loading && activities.length === 0 && posts.length === 0 ? (
+                <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
+              ) : getSortedFeed().length === 0 ? (
+                <Text style={styles.emptyFeedText}>No activities or posts yet. Start logging or post something!</Text>
+              ) : (
+                getSortedFeed().map((item) => (
+                  item.itemType === 'activity' ? (
+                    <ActivityCard
+                      key={`activity-${item.id || item._id}`}
+                      activity={item}
+                    />
+                  ) : (
+                    <PostCard 
+                      key={`post-${item._id}`}
+                      post={item}
+                    />
+                  )
+                ))
+              )}
             </ScrollView>
 
-            {/* Bottom Buttons */}
-            <View style={styles.bottomContainer}>
-              <View style={styles.activityButtonsContainer}>
-                <TouchableOpacity 
-                  style={styles.activityButton}
-                  onPress={() => {
-                    setSelectedCategory('Physical');
-                    setModalVisible(true);
-                  }}
-                >
-                  <Text style={styles.activityButtonText}>Physical</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.activityButton}
-                  onPress={() => {
-                    setSelectedCategory('Mental');
-                    setModalVisible(true);
-                  }}
-                >
-                  <Text style={styles.activityButtonText}>Mental</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.activityButton}
-                  onPress={() => {
-                    setSelectedCategory('Bonus');
-                    setModalVisible(true);
-                  }}
-                >
-                  <Text style={styles.activityButtonText}>Bonus</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.addButton}
-                onPress={() => setShowNewPostModal(true)}
-              >
-                <Ionicons name="add-circle" size={50} color="#4A90E2" />
-              </TouchableOpacity>
-            </View>
-
             <ActivityModal
-              visible={modalVisible}
+              visible={showActivityModal}
               category={selectedCategory}
               onClose={() => {
-                setModalVisible(false);
+                setShowActivityModal(false);
               }}
               onActivityCreated={handleActivityCreated}
             />
 
             <AddContentModal
-              visible={showNewPostModal}
-              onClose={() => setShowNewPostModal(false)}
+              visible={showContentModal}
+              onClose={() => setShowContentModal(false)}
               onPostCreated={handlePostCreated}
             />
+
+            {/* Bottom action buttons with UTC time */}
+            {renderActionButtons()} 
           </View>
         </LinearGradient>
       </ImageBackground>
@@ -1723,6 +2069,86 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 2,
+  },
+  actionButtonsContainer: {
+    padding: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  utcTimeContainer: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 8,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  utcTimeText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  resetCountdownText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    minWidth: 100,
+  },
+  physicalButton: {
+    backgroundColor: '#4A90E2',
+  },
+  mentalButton: {
+    backgroundColor: '#9C27B0',
+  },
+  bonusButton: {
+    backgroundColor: '#FF9800',
+  },
+  actionButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  disabledButtonVisual: {
+    backgroundColor: '#cccccc',
+  },
+  emptyFeedText: {
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  notificationBanner: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    marginBottom: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  notificationText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 14,
+    flex: 1,
+    fontWeight: '500',
   },
 });
 

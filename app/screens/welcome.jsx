@@ -37,7 +37,7 @@ const slides = [
   {
     id: '3',
     title: 'Daily Consistency',
-    text: 'To encourage consistency, you can log up to 4 activities per category per day. (So don\'t be a weekend warrior, keep active everyday!)',
+    text: 'To encourage consistency, you can log up to 1 physical/mental activity per day.\n You can only log additional activities to help your team after reaching your weekly target. (So don\'t be a weekend warrior—stay active every day!)',
     icon: 'calendar-check',
     iconType: 'fa5'
   },
@@ -115,6 +115,29 @@ export default function WelcomeScreen() {
       
       return () => clearTimeout(timer);
     }
+  }, []);
+
+  // Check if user should skip welcome screen on first render
+  useEffect(() => {
+    const checkWelcomeStatus = async () => {
+      try {
+        const welcomeCompleted = await AsyncStorage.getItem('welcomeCompleted');
+        const userIsNew = await AsyncStorage.getItem('userIsNew');
+        
+        // If user is not new and has already completed welcome, redirect to home
+        if (welcomeCompleted === 'true' && userIsNew !== 'true') {
+          console.log('User already completed welcome. Redirecting to home.');
+          router.replace('/screens/(tabs)/home');
+        } else if (userIsNew === 'true') {
+          // Clear the new user flag as they're now viewing the welcome screen
+          await AsyncStorage.removeItem('userIsNew');
+        }
+      } catch (error) {
+        console.error('Error checking welcome status:', error);
+      }
+    };
+    
+    checkWelcomeStatus();
   }, []);
 
   // Function to handle joining a group
