@@ -6,6 +6,9 @@ const mongoose = require('mongoose');
  * Verifies the JWT token and sets user information in the request object
  */
 const authMiddleware = async (req, res, next) => {
+  console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+  console.log('!!!! Auth Middleware IS RUNNING for path:', req.originalUrl, 'method:', req.method);
+  console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
   console.log('==== Auth Middleware START ====');
 
   try {
