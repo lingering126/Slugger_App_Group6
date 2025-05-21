@@ -232,8 +232,9 @@ export default function EditProfile() {
     }
   };
 
-  // Handle form submission - UPDATED to use API
+  // Handle form submission - UPDATED to use API and handle fallback success
   const handleSubmit = async () => {
+    console.log("handleSubmit triggered"); // Add this log
     try {
       setSaving(true);
       
@@ -245,19 +246,25 @@ export default function EditProfile() {
       }
       
       // Add debug logs
-      console.log("Avatar source before saving:", avatarSource);
-      console.log("Avatar source type:", typeof avatarSource);
-      if (avatarSource) {
-        console.log("Avatar source starts with:", avatarSource.substring(0, 50) + '...');
+      console.log("Avatar source before saving:", typeof avatarSource === 'string' ? 
+        (avatarSource.length > 50 ? avatarSource.substring(0, 50) + '...' : avatarSource) : 'null');
+      
+      // Ensure userData has an ID field
+      if (!userData || (!userData.id && !userData._id)) {
+        console.error("User data is missing ID field:", userData);
+        Alert.alert('Error', 'User data is incomplete. Please try logging in again.');
+        setSaving(false);
+        return;
       }
       
       // Update user data with new values including avatar and longTermGoal
       const updatedUserData = {
-        ...userData,
+        ...userData, // Keep all original fields
+        id: userData.id || userData._id, // Ensure ID is preserved
         name: formData.name,
-        email: formData.email,
+        email: formData.email || userData.email,
         bio: formData.bio,
-        longTermGoal: formData.longTermGoal, // Added longTermGoal
+        longTermGoal: formData.longTermGoal,
         avatarUrl: avatarSource
       };
       
@@ -268,16 +275,39 @@ export default function EditProfile() {
       }));
       
       console.log("Calling API to update profile...");
-      await userService.updateUserProfile(updatedUserData); // This will throw on network or server error >= 400
-      console.log("API call completed successfully");
-      
-      // Show success message and navigate back ONLY if API call was successful
-      Alert.alert(
-        'Success', 
-        'Profile updated successfully',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    } catch (error) { // This outer catch will now handle errors from userService.updateUserProfile
+      let result = null;
+      try {
+        result = await userService.updateUserProfile(updatedUserData);
+        console.log("API call completed successfully", JSON.stringify({
+          id: result.id,
+          name: result.name,
+          email: result.email
+        }));
+        
+        // Show success message and navigate back
+        Alert.alert(
+          'Success', 
+          'Profile updated successfully',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } catch (apiError) {
+        // Check if we got a result despite the API error (from local storage fallback)
+        if (apiError.fallbackSuccess && apiError.data) {
+          console.log("API error, but local storage fallback succeeded");
+          result = apiError.data;
+          
+          // Show success message with fallback note
+          Alert.alert(
+            'Profile Updated', 
+            'Your profile has been updated locally. Some changes may not be visible to other users until you reconnect to the server.',
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+        } else {
+          console.error('API error during profile update:', apiError);
+          Alert.alert('Error', apiError.message || 'Failed to save profile changes. Please try again.');
+        }
+      }
+    } catch (error) {
       console.error('Error saving profile:', error);
       Alert.alert('Error', error.message || 'Failed to save profile changes. Please try again.');
     } finally {

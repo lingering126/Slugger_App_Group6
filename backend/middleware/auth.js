@@ -11,15 +11,27 @@ const authMiddleware = (req, res, next) => {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key');
-    console.log('Decoded token:', decoded);
+    console.log('Decoded token:', JSON.stringify(decoded, null, 2));
+    
+    // Find the user ID from multiple possible fields in the token
+    const userId = decoded.userId || decoded._id || decoded.id || decoded.sub;
+    
+    if (!userId) {
+      console.error('No user ID found in token:', JSON.stringify(decoded, null, 2));
+      return res.status(401).json({ message: 'Invalid token: No user ID found' });
+    }
     
     // Ensure user ID is set correctly
     req.user = {
-      id: decoded.userId || decoded._id || decoded.id,  // Support multiple possible ID fields
+      id: userId,  // Set the primary ID field
+      // Add alternative ID fields for backward compatibility
+      userId: userId,
+      _id: userId,
+      // Include all other token payload properties
       ...decoded
     };
     
-    console.log('Set user in request:', req.user);
+    console.log('Set user in request:', JSON.stringify(req.user, null, 2));
     next();
   } catch (error) {
     console.error('Token verification error:', error);

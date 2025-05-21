@@ -28,8 +28,8 @@ async function registerAndLoginUser(appInstance) {
 
   // 1. Register
   const registerResponse = await request(appInstance)
-    .post('/api/auth/register')
-    .send({ username: uniqueUsername, email: uniqueEmail, password: password });
+    .post('/api/auth/signup')
+    .send({ name: uniqueUsername, email: uniqueEmail, password: password }); // Changed username to name
   if (registerResponse.status !== 201) throw new Error('Failed to register user for test setup');
   const userId = registerResponse.body.user.id;
 

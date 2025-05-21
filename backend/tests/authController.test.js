@@ -38,19 +38,20 @@ describe('Auth Controller Tests', () => {
   });
 
   // --- Registration Tests ---
-  describe('POST /api/auth/register', () => {
+  describe('POST /api/auth/signup', () => {
     it('should register a new user successfully', async () => {
       const response = await request(app)
-        .post('/api/auth/register')
+        .post('/api/auth/signup')
         .send({
-          username: 'testuser',
+          name: 'testuser', // Changed username to name
           email: 'test@example.com',
           password: 'password123'
         });
       expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('message', 'Signup successful. Please check your email to verify your account.');
       expect(response.body.user).toHaveProperty('email', 'test@example.com');
-      expect(response.body.user).toHaveProperty('username', 'testuser');
+      expect(response.body.user).toHaveProperty('name', 'testuser'); // Check for name
+      expect(response.body.token).toBeUndefined(); // No token on initial signup
 
       // Verify user in DB
       const userInDb = await User.findOne({ email: 'test@example.com' });
@@ -61,45 +62,45 @@ describe('Auth Controller Tests', () => {
     it('should fail to register a user with an existing email', async () => {
       // First, register a user
       await request(app)
-        .post('/api/auth/register')
+        .post('/api/auth/signup')
         .send({
-          username: 'testuser1',
+          name: 'testuser1', // Changed username to name
           email: 'test@example.com',
           password: 'password123'
         });
 
       // Attempt to register another user with the same email
       const response = await request(app)
-        .post('/api/auth/register')
+        .post('/api/auth/signup')
         .send({
-          username: 'testuser2',
+          name: 'testuser2', // Changed username to name
           email: 'test@example.com', // Same email
           password: 'password456'
         });
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('message', 'Email already registered');
+      expect(response.status).toBe(409); // Expect 409 for existing unverified user
+      expect(response.body).toHaveProperty('message', 'Email already registered but not verified. A new verification email has been sent.');
     });
 
-    it('should register a user with an existing username but different email', async () => {
+    it('should register a user with an existing name but different email', async () => { // Test description updated for clarity
       // First, register a user
       await request(app)
-        .post('/api/auth/register')
+        .post('/api/auth/signup')
         .send({
-          username: 'commonuser',
+          name: 'commonname', // Changed username to name
           email: 'user1@example.com',
           password: 'password123'
         });
 
-      // Attempt to register another user with the same username but different email
+      // Attempt to register another user with the same name but different email
       const response = await request(app)
-        .post('/api/auth/register')
+        .post('/api/auth/signup')
         .send({
-          username: 'commonuser', // Same username
+          name: 'commonname', // Same name
           email: 'user2@example.com', // Different email
           password: 'password456'
         });
-      expect(response.status).toBe(201); // Should succeed as per current logic
-      expect(response.body.user).toHaveProperty('username', 'commonuser');
+      expect(response.status).toBe(201);
+      expect(response.body.user).toHaveProperty('name', 'commonname'); // Check for name
       expect(response.body.user).toHaveProperty('email', 'user2@example.com');
     });
 
@@ -108,9 +109,9 @@ describe('Auth Controller Tests', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       const response = await request(app)
-        .post('/api/auth/register')
+        .post('/api/auth/signup')
         .send({
-          username: 'testuser',
+          name: 'testuser', // Changed username to name
           password: 'password123'
           // email is missing
         });
@@ -212,9 +213,9 @@ describe('Auth Controller Tests', () => {
     it('should fail to login an unverified user', async () => {
       // Register user (they will be unverified by default)
       await request(app)
-        .post('/api/auth/register')
+        .post('/api/auth/signup')
         .send({
-          username: 'unverifieduser',
+          name: 'unverifieduser', // Changed username to name
           email: 'unverified@example.com',
           password: 'password123'
         });
