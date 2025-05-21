@@ -309,11 +309,86 @@ router.post('/resend-verification', async (req, res, next) => {
     user.verificationTokenExpires = verificationTokenExpires;
     await user.save();
     
-    // TODO: Send verification email
-    
-    res.status(200).json({
-      message: 'Verification email sent'
-    });
+    // Send verification email
+    let emailSent = false;
+    let testModeData = {};
+
+    try {
+      if (process.env.MAIL_HOST && process.env.MAIL_PORT && process.env.MAIL_USER && process.env.MAIL_PASS) {
+        const transporter = nodemailer.createTransport({
+          host: process.env.MAIL_HOST,
+          port: process.env.MAIL_PORT,
+          secure: false, // true for 465, false for other ports
+          auth: {
+            user: process.env.MAIL_USER,
+            pass: process.env.MAIL_PASS,
+          },
+        });
+
+        const appUrl = process.env.FRONTEND_URL || 'http://localhost:8081'; // Fallback to common Expo Go URL
+        const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`;
+        
+        console.log('Verification URL:', verificationUrl);
+
+        const mailOptions = {
+          from: process.env.MAIL_FROM || 'noreply@slugger4health.site',
+          to: user.email,
+          subject: 'Verify Your Email Address',
+          html: `
+            <p>Please verify your email address by clicking the link below:</p>
+            <p><a href="${verificationUrl}">Verify Email</a></p>
+            <p>This link will expire in 24 hours.</p>
+          `,
+        };
+
+        // Special handling for Mailgun test mode (e.g., sandbox domains)
+        if (process.env.MAILGUN_TEST_MODE === 'true') {
+          // In Mailgun test mode, emails are not actually sent but can be retrieved via API
+          // or seen in the Mailgun dashboard. We'll simulate this by providing a preview URL.
+          // This requires Mailgun's `nodemailer-mailgun-transport` or similar for actual preview URLs.
+          // For now, we'll just indicate test mode.
+          console.log(`MAILGUN_TEST_MODE active. Email to ${user.email} with token ${verificationToken} would be sent.`);
+          console.log(`Preview URL (simulated for Mailgun sandbox): ${verificationUrl}`);
+          // For the frontend to display a message about checking logs or a preview URL
+          testModeData = { 
+            testMode: true, 
+            previewUrl: verificationUrl // Send the actual link for testing
+          };
+          emailSent = true; // Mark as sent for logic flow, even if only logged
+        } else {
+          await transporter.sendMail(mailOptions);
+          console.log('Verification email sent successfully to:', user.email);
+          emailSent = true;
+        }
+      } else {
+        console.warn('Email configuration missing for resend-verification. Required: MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS');
+      }
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // If Mailgun sandbox domain and recipient not authorized
+      if (emailError.responseCode === 550 && emailError.message.includes('Sandbox subdomains are for test purposes only')) {
+        // This specific error indicates the recipient email is not on Mailgun's authorized list for the sandbox.
+        return res.status(400).json({ 
+          message: 'Failed to send email. The recipient is not authorized for this sandbox domain.',
+          error: 'unauthorized_recipient' // Custom error code for frontend to handle
+        });
+      }
+      // Don't throw, let the response below handle it
+    }
+
+    if (emailSent) {
+      res.status(200).json({
+        message: 'Verification email sent',
+        ...testModeData // Include testMode and previewUrl if applicable
+      });
+    } else {
+      // If email config is missing or another non-Mailgun specific error occurred
+      res.status(500).json({
+        message: 'Verification email could not be sent due to a server error or missing email configuration. For testing, token: ' + verificationToken,
+        verificationToken: verificationToken, // Only for non-production
+        verificationUrl: `${process.env.FRONTEND_URL || 'http://localhost:8081'}/verify-email?token=${verificationToken}`
+      });
+    }
   } catch (error) {
     next(error);
   }
@@ -321,4 +396,4 @@ router.post('/resend-verification', async (req, res, next) => {
 
 // Export router and middleware separately
 module.exports.router = router;
-module.exports.authMiddleware = authMiddleware; 
+module.exports.authMiddleware = authMiddleware;
