@@ -29,10 +29,10 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 
 - `app/`: Frontend React Native application (Expo)
   - `screens/`: Main application screens, including:
-    - `(tabs)/`: Screens accessible via the main tab navigator (e.g., `home.jsx`, `profile.jsx`, `team.jsx`).
-    - Standalone screens (e.g., `login.jsx`, `signup.jsx`, `create-group.jsx`, `new-activity.jsx`).
+    - `(tabs)/`: Screens accessible via the main tab navigator.
+    - Standalone screens.
     - `activity/[id].jsx`: Dynamic route for activity details.
-  - `components/`: Reusable UI components (e.g., `ActivityCard.jsx`, `CustomTextInput.jsx`).
+  - `components/`: Reusable UI components.
   - `services/`: Application-level services (e.g., `api.js` for backend communication, `teamService.js`).
   - `config/`: Configuration files (e.g., `api.js` (likely base URL config), `ipConfig.ts`).
   - `constants/`: Application constants.
@@ -43,11 +43,11 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
   - `index.jsx`: Entry point for the app (Expo Router).
 
 - `backend/`: Node.js backend server (Express.js)
-  - `controllers/`: Business logic for API endpoints (e.g., `authController.js`, `activityController.js`).
-  - `models/`: MongoDB data models/schemas (e.g., `User.js`, `Activity.js`, `Team.js`).
-  - `routes/`: API route definitions (e.g., `auth.js`, `activities.js`, `team.js`).
-  - `middleware/`: Express middleware (e.g., `auth.js` for token verification, `errorHandler.js`).
-  - `utils/`: Utility functions for the backend (e.g., `cycleUtils.js`).
+  - `controllers/`: Business logic for API endpoints.
+  - `models/`: MongoDB data models/schemas.
+  - `routes/`: API route definitions.
+  - `middleware/`: Express middleware .
+  - `utils/`: Utility functions for the backend.
   - `homepage/`: Seems to be a distinct module, possibly for homepage-specific features.
     - `controllers/`, `middleware/`, `models/`, `routes/`: Structure similar to the main backend.
   - `src/`: Another source directory, potentially for core logic or a different module structure.
