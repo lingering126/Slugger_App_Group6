@@ -59,7 +59,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       
-      const response = await fetch(`${API_CONFIG.API_URL}/users/${userId}`, {
+      const response = await fetch(`${API_CONFIG.API_URL}/users/profile/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       

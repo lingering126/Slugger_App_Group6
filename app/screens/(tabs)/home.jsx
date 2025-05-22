@@ -452,7 +452,7 @@ const PostCard = ({ post }) => {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
       
-      const response = await fetch(`${API_CONFIG.API_URL}/users/${userId}`, {
+      const response = await fetch(`${API_CONFIG.API_URL}/users/profile/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -1333,19 +1333,40 @@ const HomeScreen = () => {
         return;
       }
       console.log('Fetching user stats with token...');
-      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.USER.STATS}`, {
+      const response = await fetch(`${API_CONFIG.API_URL}/homepage/stats/user`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await response.json();
-      if (response.ok) {
-        setUserStats(prevStats => ({ ...prevStats, totalPoints: data.totalPoints || 0, totalActivities: data.totalActivities || 0, currentStreak: data.currentStreak || 0, monthlyProgress: data.monthlyProgress || 0 }));
-      } else {
-        console.error('Failed to fetch user stats:', data);
-        setUserStats(null);
+      
+      if (!response.ok) {
+        console.error('Failed to fetch user stats:', response.status);
+        // Fallback to default values if the API call fails
+        setUserStats(prevStats => ({ 
+          ...prevStats, 
+          totalPoints: 0, 
+          totalActivities: 0, 
+          currentStreak: 0, 
+          monthlyProgress: 0 
+        }));
+        return;
       }
+      
+      const data = await response.json();
+      setUserStats(prevStats => ({ 
+        ...prevStats, 
+        totalPoints: data.totalPoints || 0, 
+        totalActivities: data.totalActivities || 0, 
+        currentStreak: data.currentStreak || 0, 
+        monthlyProgress: data.monthlyProgress || 0 
+      }));
     } catch (error) {
       console.error('Error fetching user stats:', error);
-      setUserStats(null);
+      setUserStats(prevStats => ({ 
+        ...prevStats, 
+        totalPoints: 0, 
+        totalActivities: 0, 
+        currentStreak: 0, 
+        monthlyProgress: 0 
+      }));
     }
   };
 
