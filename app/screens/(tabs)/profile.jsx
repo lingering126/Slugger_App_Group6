@@ -226,13 +226,36 @@ export default function Profile() {
       }
       
       // Try to get user data from service
-      const user = await userService.getUserProfile()
+      console.log('Attempting to load user profile data from service...');
+      const user = await userService.getUserProfile();
+      console.log('User profile data loaded:', user ? JSON.stringify({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        loadedFromLocalOnly: user.loadedFromLocalOnly
+      }) : 'null');
       
       if (!user) {
         setError('Unable to load profile data. Please try again later.')
         setUserData(null)
         setLoading(false)
         return
+      }
+
+      // Check if user data has a valid name
+      if (!user.name || user.name === 'User' || user.name === 'Anonymous') {
+        console.warn('Invalid user name detected:', user.name);
+        
+        // Try to get better user data from localStorage
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const localUser = JSON.parse(userJson);
+          if (localUser && localUser.name && localUser.name !== 'User' && localUser.name !== 'Anonymous') {
+            console.log('Found better user name in local storage:', localUser.name);
+            // Update the name
+            user.name = localUser.name;
+          }
+        }
       }
       
       // Get user's selected activities
@@ -333,6 +356,34 @@ export default function Profile() {
   const getAvatarText = () => {
     if (!userData || !userData.name) return "??"
     return userData.name.substring(0, 2).toUpperCase()
+  }
+  
+  // Get proper display name with fallbacks
+  const getDisplayName = () => {
+    // If no user data at all
+    if (!userData) return "Unknown User";
+    
+    // If user has a name that's not a placeholder
+    if (userData.name && 
+        userData.name !== "User" && 
+        userData.name !== "guest user" && 
+        userData.name !== "Anonymous" && 
+        userData.name !== "Unknown User") {
+      return userData.name;
+    }
+    
+    // Try using email
+    if (userData.email && userData.email.includes('@')) {
+      return userData.email.split('@')[0];
+    }
+    
+    // Try using username
+    if (userData.username) {
+      return userData.username;
+    }
+    
+    // Last resort, generate a name
+    return userData.name || "Slugger User";
   }
   
   // Format join date for display
@@ -473,7 +524,7 @@ export default function Profile() {
               )}
             </View>
             <View style={styles.userInfoContainer}>
-              <Text style={styles.userName}>{userData?.name || "Unknown User"}</Text>
+              <Text style={styles.userName}>{getDisplayName()}</Text>
               <Text style={styles.userStatus}>Status: {userData?.status || "Active"}</Text>
               <Text style={styles.userJoinDate}>Member since: {getFormattedJoinDate()}</Text>
             </View>

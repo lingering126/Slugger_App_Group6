@@ -21,7 +21,7 @@ const API_CONFIG = {
       SHARE: '/activities/:id/share'
     },
     USER: {
-      STATS: '/profiles/me',
+      STATS: '/user',
       PROFILE: '/users/profile',
       UPDATE_PROFILE: '/users/profile',
       RESET_WEEKLY_STATS: '/user/reset-weekly'
@@ -44,6 +44,12 @@ const API_CONFIG = {
     }
   }
 };
+
+// Log this to help debug
+console.log('API_CONFIG loaded from app/config/api.js', { 
+  API_URL: API_CONFIG.API_URL,
+  USER_STATS_ENDPOINT: API_CONFIG.ENDPOINTS.USER.STATS 
+});
 
 export { API_CONFIG };
 

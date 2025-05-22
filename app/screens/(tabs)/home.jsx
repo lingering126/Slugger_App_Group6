@@ -1585,6 +1585,10 @@ const HomeScreen = () => {
             setLoading(false);
             return;
           }
+          
+          // Check for incomplete user data and fix it if needed
+          await ensureCompleteUserData();
+          
           await Promise.all([fetchActivities(), fetchPosts(), fetchUserStats()]);
           // Check weekly limits after data is loaded
           checkWeeklyLimits();
@@ -1602,6 +1606,68 @@ const HomeScreen = () => {
       };
     }, [])
   );
+  
+  // Function to ensure user data is complete and valid
+  const ensureCompleteUserData = async () => {
+    try {
+      const userJson = await AsyncStorage.getItem('user');
+      if (!userJson) {
+        console.log('No user data found, fetching from API...');
+        // Try to fetch from API using the userService
+        const { userService } = require('../../services/api');
+        const userData = await userService.getUserProfile();
+        if (userData) {
+          console.log('Successfully fetched user data from API');
+          return;
+        }
+        return;
+      }
+      
+      const userData = JSON.parse(userJson);
+      
+      // Check if the name is a placeholder like "guest user"
+      const isPlaceholderName = !userData.name || 
+                               userData.name === 'User' || 
+                               userData.name === 'guest user' || 
+                               userData.name === 'Anonymous' || 
+                               userData.name.toLowerCase() === 'unknown user';
+      
+      if (isPlaceholderName) {
+        console.log('User has placeholder name, trying to update it...');
+        
+        // Try to find a better name
+        let betterName = null;
+        
+        if (userData.email && userData.email.includes('@')) {
+          betterName = userData.email.split('@')[0];
+        } else if (userData.username) {
+          betterName = userData.username;
+        }
+        
+        if (betterName) {
+          console.log(`Updating user name from "${userData.name}" to "${betterName}"`);
+          userData.name = betterName;
+          
+          // Save updated user data
+          await AsyncStorage.setItem('user', JSON.stringify(userData));
+          
+          // Try to update on the server as well
+          try {
+            const { userService } = require('../../services/api');
+            await userService.updateUserProfile({
+              id: userData.id || userData._id,
+              name: betterName
+            });
+            console.log('Successfully updated name on server');
+          } catch (serverError) {
+            console.warn('Failed to update name on server:', serverError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring complete user data:', error);
+    }
+  };
 
   const fetchPosts = async () => {
     try {
