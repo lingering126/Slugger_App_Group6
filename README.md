@@ -27,34 +27,59 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 
 ## Project Structure
 
-- `app/`: Frontend React Native application
-  - `screens/`: All application screens
-    - `(tabs)/`: Main app screens using tab navigation
-    - `login.jsx`: Login screen
-    - `signup.jsx`: Signup screen
-    - `verify-email.jsx`: Email verification screen
-    - `server-settings.jsx`: Server configuration settings
-    - `connection-test.jsx`: Connection testing utility
-  - `components/`: Reusable UI components
-  - `services/`: Application services including initialization
-  - `utils.js`: Utility functions for networking, server discovery, etc.
-  - `_layout.jsx`: App layout configuration
+- `app/`: Frontend React Native application (Expo)
+  - `screens/`: Main application screens, including:
+    - `(tabs)/`: Screens accessible via the main tab navigator (e.g., `home.jsx`, `profile.jsx`, `team.jsx`).
+    - Standalone screens (e.g., `login.jsx`, `signup.jsx`, `create-group.jsx`, `new-activity.jsx`).
+    - `activity/[id].jsx`: Dynamic route for activity details.
+  - `components/`: Reusable UI components (e.g., `ActivityCard.jsx`, `CustomTextInput.jsx`).
+  - `services/`: Application-level services (e.g., `api.js` for backend communication, `teamService.js`).
+  - `config/`: Configuration files (e.g., `api.js` (likely base URL config), `ipConfig.ts`).
+  - `constants/`: Application constants.
+  - `navigation/`: Navigation-related setup (if not fully covered by Expo Router file-based routing).
+  - `utils/`: Utility functions and helpers for the frontend.
+  - `tests/`: Frontend tests.
+  - `_layout.jsx`: Root layout for the app (Expo Router).
+  - `index.jsx`: Entry point for the app (Expo Router).
 
-- `backend/`: Node.js backend server
-  - `models/`: MongoDB data models
-  - `routes/`: API routes handlers
-  - `middleware/`: Express middleware functions
-  - `utils/`: Utility functions for the backend
-  - `server.js`: Main server file with API endpoints and configurations
-  - `.env`: Environment variables (connection strings, ports, etc.)
+- `backend/`: Node.js backend server (Express.js)
+  - `controllers/`: Business logic for API endpoints (e.g., `authController.js`, `activityController.js`).
+  - `models/`: MongoDB data models/schemas (e.g., `User.js`, `Activity.js`, `Team.js`).
+  - `routes/`: API route definitions (e.g., `auth.js`, `activities.js`, `team.js`).
+  - `middleware/`: Express middleware (e.g., `auth.js` for token verification, `errorHandler.js`).
+  - `utils/`: Utility functions for the backend (e.g., `cycleUtils.js`).
+  - `homepage/`: Seems to be a distinct module, possibly for homepage-specific features.
+    - `controllers/`, `middleware/`, `models/`, `routes/`: Structure similar to the main backend.
+  - `src/`: Another source directory, potentially for core logic or a different module structure.
+    - `analytics/`, `middleware/`, `models/`, `routes/`: Structure similar to the main backend.
+  - `tests/`: Backend tests, including unit and acceptance tests.
+    - `acceptance/`: Acceptance tests for various features.
+  - `server.js`: Main server setup and entry point.
+  - `app.js`: Express application setup (often imported by `server.js`).
+  - `.env`: Environment variables (not committed, an example should be provided).
+  - `jest.config.js`: Jest test runner configuration.
+  - `package.json`: Backend dependencies and scripts.
 
-- `assets/`: App images, icons, and other static assets
-- `lib/`: Library files and shared code
-- `.expo/`: Expo configuration files
-- `babel.config.js`: Babel transpiler configuration
-- `metro.config.js`: Metro bundler configuration
-- `app.json`: Expo application configuration
-- `start-backend.bat`: Windows batch file to start the backend server
+- `assets/`: Static assets for the app (images, icons, fonts).
+- `lib/`: Potentially shared library code or older modules.
+  - `components/`, `config/`, `services/`, `utils/`: Subdirectories suggesting a structured library.
+
+- **Root Directory Files:**
+  - `.gitignore`: Specifies intentionally untracked files that Git should ignore.
+  - `App.js`: Potentially an older entry point or unused file with Expo's file-based routing.
+  - `app.json`: Expo application configuration file (name, version, icon, splash screen, etc.).
+  - `babel.config.js`: Babel transpiler configuration.
+  - `deploy.sh`: Deployment script.
+  - `index.js`: Often the main entry point for React Native projects (might be superseded by `app/index.jsx` with Expo Router).
+  - `metro.config.js`: Metro bundler configuration for React Native.
+  - `package.json`: Project dependencies and scripts for the frontend/root.
+  - `package-lock.json`: Records exact versions of dependencies.
+  - `README.md`: This file.
+  - `render.yaml`: Configuration file for deployment on Render.com.
+  - `start-backend.bat`: Windows batch file to start the backend server.
+  - `tsconfig.json`: TypeScript configuration file (indicates TypeScript usage in parts of the project).
+
+- `.expo/`: Directory generated by Expo for its internal workings (usually not modified directly).
 
 ## Setup Instructions
 
@@ -92,6 +117,14 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 
 ### Backend Setup
 
+The Slugger backend is deployed on Render and is publicly accessible. The frontend application is configured by default to connect to this deployed backend, so you typically do not need to set up or run the backend locally to use the app.
+
+**Important Note on Performance (Render Free Plan):**
+Our current hosting on Render uses a free plan. This can lead to "cold starts" if the backend has been inactive. The first request (e.g., login) might take 50 seconds or more while the service instance spins up. This issue can be referred to:https://github.com/lingering126/Slugger_App_Group6/issues/79.
+
+**For Developers (Optional Local Backend Setup):**
+If you intend to develop or test the backend locally, follow these steps:
+
 1. Navigate to the backend directory:
    ```
    cd Slugger_App_Group6/backend
@@ -102,31 +135,26 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
    npm install
    ```
 
-3. Create a `.env` file based on `.env.example` or modify the existing `.env` file:
-   ```
-   # If you need to create a new .env file:
-   cp .env.example .env
-   ```
-
-4. Update the `.env` file with your MongoDB connection string, JWT secret, email configuration, and port settings:
-   ```
-   MONGODB_URI=your_mongodb_connection_string
-   JWT_SECRET=your_jwt_secret
+3. Create a `.env` file in the `backend` directory. You can copy `backend/.env.example` (if available) or create it manually.
+   Populate it with your local MongoDB connection string, a JWT secret, desired port, and email service credentials (e.g., Ethereal for testing). Example:
+   ```ini
+   MONGODB_URI=your_local_mongodb_connection_string
+   JWT_SECRET=a_strong_secret_for_local_dev
    PORT=5001
-   MAIL_HOST=your_email_host
-   MAIL_PORT=your_email_port
-   MAIL_USER=your_email_user
-   MAIL_PASS=your_email_password
-   MAIL_FROM=your_sender_email
+   MAIL_HOST=smtp.ethereal.email
+   MAIL_PORT=587
+   MAIL_USER=your_ethereal_username
+   MAIL_PASS=your_ethereal_password
+   MAIL_FROM="Your App Name" <noreply@example.com>
    ```
 
-5. Start the backend server:
+4. Start the local backend server:
    ```
    npm run dev
    # or
    node server.js
-   # or on Windows, you can use
-   ..\start-backend.bat
+   # On Windows, you can also use the batch file from the project root:
+   # ..\start-backend.bat (ensure it points to the correct backend directory and command)
    ```
 
 ## Authentication Flow
@@ -203,5 +231,3 @@ If you need to use a different URL, you can update it in `app/services/api.js` o
 - **Email**: Nodemailer for sending verification emails
 - **Networking**: Custom networking layer with automatic server discovery
 - **Environment**: Configuration via .env files on backend
-
-
