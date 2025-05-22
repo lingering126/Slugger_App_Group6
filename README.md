@@ -112,6 +112,7 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 4. Use the Expo Go app on your mobile device to scan the QR code displayed in the terminal. Alternatively, you can press:
    - 'a' to open the app in an Android emulator.
    - 'i' to open the app in an iOS simulator (macOS only).
+   - 'w' to open the app in the web browser.
 
 ### Backend Setup
 
@@ -129,7 +130,13 @@ The project includes a suite of tests for the backend. To run these tests:
     ```bash
     cd backend
     ```
-2.  Run the test script:
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3.  Run the test script:
     ```bash
     npm test
     ```
