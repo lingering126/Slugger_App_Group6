@@ -367,29 +367,32 @@ export default function EditProfile() {
       let result = null;
       let isOnlineUpdate = false;
 
-      try {
-        // Get token again to ensure it's still there
-        const currentToken = await AsyncStorage.getItem('userToken');
-        if (!currentToken && !offlineMode) {
-          // If token disappeared, handle like other auth errors
-          Alert.alert(
-            'Session Expired', 
-            'Your login session has expired. Please log in again to update your profile.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { 
-                text: 'Login', 
-                onPress: () => {
-                  // Navigate to login screen
-                  router.push('/login');
-                }
+      // Get token again to ensure it's still there
+      const currentToken = await AsyncStorage.getItem('userToken');
+      if (!currentToken && !offlineMode) {
+        // If token disappeared, handle like other auth errors
+        Alert.alert(
+          'Session Expired', 
+          'Your login session has expired. Please log in again to update your profile.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Login', 
+              onPress: () => {
+                // Navigate to login screen
+                router.push('/login');
               }
-            ]
-          );
-          setSaving(false);
-          return;
-        }
-        
+            }
+          ]
+        );
+        setSaving(false);
+        return;
+      }
+      
+      // Save current token in case it gets overwritten during API operations
+      const savedToken = currentToken;
+      
+      try {
         result = await userService.updateUserProfile(updatedUserData);
         isOnlineUpdate = true;
         console.log("API call completed successfully", JSON.stringify({
@@ -397,6 +400,13 @@ export default function EditProfile() {
           name: result.name,
           email: result.email
         }));
+        
+        // Verify token is still in AsyncStorage after update
+        const tokenAfterUpdate = await AsyncStorage.getItem('userToken');
+        if (!tokenAfterUpdate && savedToken) {
+          console.warn('Token was lost during profile update, restoring it');
+          await AsyncStorage.setItem('userToken', savedToken);
+        }
         
         // Show success message that indicates whether it was saved to server or just locally
         if (result.fallbackOnly) {

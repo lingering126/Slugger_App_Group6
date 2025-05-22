@@ -1,10 +1,12 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator, Image, Alert } from 'react-native'
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator, Image, Alert, StatusBar } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/native'
 import { useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { userService, groupService } from '../../services/api' 
+import { userService, groupService } from '../../services/api'
+import { getApiUrl } from '../../utils'
+import { FontAwesome } from '@expo/vector-icons'
 
 // Physical activities library
 // Expanded Physical Activities
@@ -190,50 +192,105 @@ export default function Profile() {
   const loadUserData = async () => {
     try {
       setLoading(true)
+      setError(null)
       
-      // Get user data from service or AsyncStorage
+      // Check for userToken first
+      const token = await AsyncStorage.getItem('userToken')
+      if (!token) {
+        console.warn('No token found, attempting to refresh...')
+        
+        // Try to refresh token if possible
+        const refreshToken = await AsyncStorage.getItem('refreshToken')
+        if (refreshToken) {
+          try {
+            const apiUrl = await getApiUrl()
+            const refreshResponse = await fetch(`${apiUrl}/auth/refresh`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ refreshToken })
+            })
+            
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json()
+              if (refreshData.token) {
+                console.log('Token refreshed successfully')
+                await AsyncStorage.setItem('userToken', refreshData.token)
+              }
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing token:', refreshError)
+          }
+        }
+      }
+      
+      // Try to get user data from service
       const user = await userService.getUserProfile()
       
       if (!user) {
-        throw new Error('User data not found')
+        setError('Unable to load profile data. Please try again later.')
+        setUserData(null)
+        setLoading(false)
+        return
       }
       
+      // Get user's selected activities
+      const physicalIds = user.activitySettings?.physicalActivities || []
+      const mentalIds = user.activitySettings?.mentalActivities || []
+      const bonusIds = user.activitySettings?.bonusActivities || []
+      
+      // Map IDs to full activity objects with names
+      const selectedPhysical = physicalActivities.filter(activity => 
+        physicalIds.includes(activity.id)
+      )
+      
+      const selectedMental = mentalActivities.filter(activity => 
+        mentalIds.includes(activity.id)
+      )
+      
+      const selectedBonus = bonusActivities.filter(activity => 
+        bonusIds.includes(activity.id)
+      )
+      
+      // Update state with user data
       setUserData(user)
+      setSelectedPhysicalActivities(selectedPhysical)
+      setSelectedMentalActivities(selectedMental)
+      setSelectedBonusActivities(selectedBonus)
       
-      // Load saved activity preferences
-      if (user.activitySettings) {
-        // Find the full activity objects based on saved IDs
-        if (user.activitySettings.physicalActivities) {
-          const savedPhysical = physicalActivities.filter(activity => 
-            user.activitySettings.physicalActivities.includes(activity.id)
+    } catch (error) {
+      console.error('Error loading user data:', error)
+      setError('Unable to load profile data. Please try again later.')
+      
+      // Try to use cached data if available
+      const userJson = await AsyncStorage.getItem('user')
+      if (userJson) {
+        try {
+          const cachedUser = JSON.parse(userJson)
+          setUserData(cachedUser)
+          
+          // Still try to set activities from cached data
+          const physicalIds = cachedUser.activitySettings?.physicalActivities || []
+          const mentalIds = cachedUser.activitySettings?.mentalActivities || []
+          const bonusIds = cachedUser.activitySettings?.bonusActivities || []
+          
+          setSelectedPhysicalActivities(
+            physicalActivities.filter(a => physicalIds.includes(a.id))
           )
-          setSelectedPhysicalActivities(savedPhysical)
-        }
-        
-        if (user.activitySettings.mentalActivities) {
-          const savedMental = mentalActivities.filter(activity => 
-            user.activitySettings.mentalActivities.includes(activity.id)
+          setSelectedMentalActivities(
+            mentalActivities.filter(a => mentalIds.includes(a.id))
           )
-          setSelectedMentalActivities(savedMental)
-        }
-        
-        if (user.activitySettings.bonusActivities) {
-          const savedBonus = bonusActivities.filter(activity => 
-            user.activitySettings.bonusActivities.includes(activity.id)
+          setSelectedBonusActivities(
+            bonusActivities.filter(a => bonusIds.includes(a.id))
           )
-          setSelectedBonusActivities(savedBonus)
+        } catch (parseError) {
+          console.error('Error parsing cached user data:', parseError)
+          setUserData(null)
         }
+      } else {
+        setUserData(null)
       }
-    } catch (err) {
-      console.error('Error loading user data:', err)
-      setError('Failed to load profile data')
-      
-      // Use default values if unable to get user data
-      setUserData({
-        name: "Guest User",
-        status: "Inactive",
-        createdAt: new Date().toISOString()
-      })
     } finally {
       setLoading(false)
     }

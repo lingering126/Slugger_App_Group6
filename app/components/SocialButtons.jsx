@@ -198,4 +198,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-}); 
+});
+
+// Add default export for Expo Router
+export default SocialButtons; 

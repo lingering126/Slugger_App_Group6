@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { API_CONFIG } from '../../config/api';
+import { refreshAuthToken, getApiUrl } from '../../services/api';
 import ActivityCard from '../../components/ActivityCard';
 
 // Physical activities library
@@ -286,7 +287,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             console.log('Bonus Activities List Length:', bonusActivitiesList.length);
           }
           
-          if (user.activitySettings) {
+          if (user.activitySettings && category) {
             console.log('User has activity settings');
             
             // Map activity IDs to activity names based on category
@@ -400,17 +401,29 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
               setUserActivities(activityData[category] || []);
             }
           } else {
-            console.log('User has no activity settings, using defaults');
-            setUserActivities(activityData[category] || []);
+            console.log('User has no activity settings or no category selected, using defaults');
+            if (category) {
+              setUserActivities(activityData[category] || []);
+            } else {
+              setUserActivities([]);
+            }
           }
         } else {
           console.log('No user data found, using defaults');
-          setUserActivities(activityData[category] || []);
+          if (category) {
+            setUserActivities(activityData[category] || []);
+          } else {
+            setUserActivities([]);
+          }
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
         // On error, fall back to default activities
-        setUserActivities(activityData[category] || []);
+        if (category) {
+          setUserActivities(activityData[category] || []);
+        } else {
+          setUserActivities([]);
+        }
       } finally {
         setLoadingUserActivities(false);
       }
@@ -548,10 +561,10 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
       
       // Create request body
       const requestBody = {
-        type: category,
+        type: category || 'Unknown',
         name: selectedActivity,
         duration: durationInMinutes,
-        icon: getActivityIcon(category, selectedActivity)
+        icon: getActivityIcon(category || 'Unknown', selectedActivity)
       };
       
       // Add teamId to the request if the user is in a team
@@ -577,10 +590,10 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
         // Build complete activity data with user name and avatar
         const activityData = {
           ...data.data,
-          type: category,
+          type: category || 'Unknown',
           name: selectedActivity,
           duration: durationInMinutes,
-          icon: getActivityIcon(category, selectedActivity),
+          icon: getActivityIcon(category || 'Unknown', selectedActivity),
           createdAt: new Date().toISOString(),
           author: userName,
           userName: userName,
@@ -650,7 +663,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             ) : activities.length === 0 ? (
               <View style={styles.emptyActivitiesContainer}>
                 <Text style={styles.emptyActivitiesText}>
-                  No {category.toLowerCase()} activities found. Please set up your preferences in the Profile tab.
+                  No {category ? category.toLowerCase() : ''} activities found. Please set up your preferences in the Profile tab.
                 </Text>
               </View>
             ) : (
@@ -1665,12 +1678,71 @@ const HomeScreen = () => {
         console.log('No token found for fetchActivities');
         setActivities([]);
         setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        
+        // Try to handle the missing token - check if we have a user object that might help
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          if (user && user.id) {
+            console.log('Found user data but no token, attempting to restore session...');
+            
+            // Try to refresh login session using available data
+            const refreshToken = await AsyncStorage.getItem('refreshToken');
+            if (refreshToken) {
+              try {
+                const apiUrl = API_CONFIG.API_URL;
+                const refreshResponse = await fetch(`${apiUrl}/auth/refresh`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ refreshToken })
+                });
+                
+                if (refreshResponse.ok) {
+                  const refreshData = await refreshResponse.json();
+                  if (refreshData.token) {
+                    console.log('Successfully refreshed token');
+                    await AsyncStorage.setItem('userToken', refreshData.token);
+                    // Retry fetching activities with new token
+                    fetchActivities();
+                    return;
+                  }
+                }
+              } catch (refreshError) {
+                console.error('Error refreshing token:', refreshError);
+              }
+            }
+          }
+        }
+        
         return;
       }
+      
       console.log('Fetching activities with token...');
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIST}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      // Check for auth errors
+      if (response.status === 401 || response.status === 403) {
+        console.warn('Authentication error in fetchActivities, attempting to refresh token...');
+        
+        // Try to refresh the token
+        const refreshed = await refreshAuthToken();
+        if (refreshed) {
+          console.log('Token refreshed, retrying activities fetch');
+          // Retry with fresh token
+          setTimeout(() => fetchActivities(), 500);
+          return;
+        }
+        
+        console.error('Unable to refresh authentication token');
+        setActivities([]);
+        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        return;
+      }
+      
       const data = await response.json();
       if (response.ok && data.success) {
         setActivities(data.data?.activities || []);

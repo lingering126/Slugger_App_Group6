@@ -7,7 +7,7 @@ const API_BASE_URL = 'https://slugger-app-group6.onrender.com/api';
 const FALLBACK_API_URL = 'http://localhost:5001/api';
 
 // Function to determine which API URL to use
-const getApiUrl = async () => {
+export const getApiUrl = async () => {
   try {
     // Try to get a stored custom API URL
     const customUrl = await AsyncStorage.getItem('apiBaseUrl');
@@ -22,7 +22,7 @@ const getApiUrl = async () => {
 };
 
 // Utility function to refresh token
-const refreshAuthToken = async () => {
+export const refreshAuthToken = async () => {
   try {
     const refreshToken = await AsyncStorage.getItem('refreshToken');
     const currentToken = await AsyncStorage.getItem('userToken');
@@ -82,6 +82,15 @@ const refreshAuthToken = async () => {
         console.log('Auth token refreshed successfully');
         return true;
       }
+    } else {
+      console.warn('Server rejected token refresh: ', response.status);
+      // Check if we still have the current token
+      const tokenStillExists = await AsyncStorage.getItem('userToken');
+      if (!tokenStillExists && currentToken) {
+        // If token disappeared during the refresh attempt, restore it
+        console.warn('Token was lost during refresh attempt, restoring original token');
+        await AsyncStorage.setItem('userToken', currentToken);
+      }
     }
     
     console.warn('Token refresh failed, but continuing with existing token');
@@ -103,8 +112,17 @@ const userService = {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         console.warn('No authentication token found - user may need to login');
+        // Try to load from local storage before giving up
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          console.log('Found user data in local storage, returning cached version');
+          return JSON.parse(userJson);
+        }
         return null;
       }
+      
+      // Save the original token in case it gets lost during API operations
+      const originalToken = token;
       
       const apiUrl = await getApiUrl();
       
@@ -117,6 +135,22 @@ const userService = {
             'Content-Type': 'application/json'
           }
         });
+        
+        // If auth error, check if token was somehow lost and restore it
+        if (response.status === 401 || response.status === 403) {
+          const currentToken = await AsyncStorage.getItem('userToken');
+          if (!currentToken && originalToken) {
+            console.warn('Token was lost during profile fetch, restoring it');
+            await AsyncStorage.setItem('userToken', originalToken);
+          }
+          
+          // Try to refresh the token
+          const refreshed = await refreshAuthToken();
+          if (refreshed) {
+            // If token was refreshed, try again with the new token
+            return await this.getUserProfile();
+          }
+        }
         
         if (response.ok) {
           const profileData = await response.json();
@@ -132,6 +166,7 @@ const userService = {
               userIdStr = profileData.user.id || (profileData.user._id ? profileData.user._id.toString() : null);
             }
           }
+          
           const userData = {
             id: userIdStr,
             name: profileData.name,
@@ -152,6 +187,14 @@ const userService = {
           
           // Update local storage with fresh data
           await AsyncStorage.setItem('user', JSON.stringify(userData));
+          
+          // Make sure token is still in place after all operations
+          const tokenAfterOps = await AsyncStorage.getItem('userToken');
+          if (!tokenAfterOps && originalToken) {
+            console.warn('Token was lost during profile data processing, restoring it');
+            await AsyncStorage.setItem('userToken', originalToken);
+          }
+          
           return userData;
         }
         
@@ -745,4 +788,9 @@ const profileService = {
   }
 };
 
-export { userService, groupService, profileService, refreshAuthToken };
+export { userService, groupService, profileService };
+
+// Add default export for Expo Router
+export default function APIServices() {
+  return null; // This is just a placeholder to satisfy Expo Router's default export requirement
+}

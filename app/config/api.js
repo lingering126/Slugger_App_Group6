@@ -45,4 +45,9 @@ const API_CONFIG = {
   }
 };
 
-export { API_CONFIG }; 
+export { API_CONFIG };
+
+// Add default export for Expo Router
+export default function APIConfig() {
+  return null; // This is just a placeholder to satisfy Expo Router's default export requirement
+} 
