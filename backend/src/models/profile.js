@@ -74,7 +74,35 @@ profileSchema.virtual('username', {
 profileSchema.methods = {
   // Format the profile for API responses (removes sensitive data)
   toJSON: function() {
-    const profile = this.toObject();
+    const profile = this.toObject({
+      virtuals: true,
+      getters: true,
+      versionKey: false,
+      transform: (doc, ret) => {
+        // Add an id field if not present
+        if (!ret.id && ret._id) {
+          ret.id = ret._id.toString();
+        }
+        
+        // Ensure user is properly serialized
+        if (ret.user) {
+          // If user is populated and is an object
+          if (typeof ret.user === 'object' && ret.user !== null) {
+            // Ensure user has an id field
+            if (!ret.user.id && ret.user._id) {
+              ret.user.id = ret.user._id.toString();
+            }
+          } 
+          // If user is not populated and is just an ObjectId
+          else if (typeof ret.user !== 'string') {
+            ret.user = ret.user.toString();
+          }
+        }
+        
+        return ret;
+      }
+    });
+    
     return profile;
   }
 };

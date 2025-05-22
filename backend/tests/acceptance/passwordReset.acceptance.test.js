@@ -18,8 +18,8 @@ let server;
 // Helper to register a user (email verification not strictly needed for forgot password initiation)
 async function registerUser(appInstance, email, username, password) {
   const registerResponse = await request(appInstance)
-    .post('/api/auth/register')
-    .send({ username, email, password });
+    .post('/api/auth/signup')
+    .send({ name: username, email, password }); // Changed username to name
   if (registerResponse.status !== 201) {
     throw new Error(`Failed to register user for password reset test. Status: ${registerResponse.status}, Body: ${JSON.stringify(registerResponse.body)}`);
   }

@@ -2,11 +2,57 @@ import axios from 'axios';
 import { API_URL } from '../config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Get auth token
+// Get auth token with refresh check
 const getAuthToken = async () => {
   try {
     const token = await AsyncStorage.getItem('userToken');
     console.log('Auth token retrieved:', token ? 'Token exists' : 'No token found');
+    
+    if (!token) {
+      return null;
+    }
+    
+    // Simple check for token expiration
+    try {
+      // Decode JWT payload to check expiration
+      const tokenParts = token.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          console.warn('Token is expired, attempting to refresh');
+          
+          // Try to refresh the token - implementation depends on your auth flow
+          const refreshToken = await AsyncStorage.getItem('refreshToken');
+          if (refreshToken) {
+            try {
+              const apiUrl = await getApiBaseUrl();
+              const refreshResponse = await fetch(`${apiUrl}/auth/refresh`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ refreshToken })
+              });
+              
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json();
+                if (refreshData.token) {
+                  // Save new token
+                  await AsyncStorage.setItem('userToken', refreshData.token);
+                  console.log('Token refreshed successfully');
+                  return refreshData.token;
+                }
+              }
+            } catch (refreshError) {
+              console.error('Error refreshing token:', refreshError);
+            }
+          }
+        }
+      }
+    } catch (tokenCheckError) {
+      console.warn('Error checking token expiration:', tokenCheckError);
+    }
+    
     return token;
   } catch (error) {
     console.error('Error getting auth token:', error);
@@ -53,12 +99,76 @@ api.interceptors.request.use(
     const token = await getAuthToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn('No auth token available for request to:', config.url);
     }
     
     console.log(`Making ${config.method.toUpperCase()} request to: ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor to handle auth errors
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // If the error is 401 Unauthorized and we haven't tried to refresh the token yet
+    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+      console.log('Received 401 Unauthorized, attempting to refresh token...');
+      originalRequest._retry = true;
+      
+      try {
+        // Try to refresh the token
+        const refreshToken = await AsyncStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          console.error('No refresh token available');
+          // Clear tokens and redirect to login in the app
+          await AsyncStorage.removeItem('userToken');
+          // We can't redirect from here, but we'll handle this in the components
+          return Promise.reject(error);
+        }
+        
+        const apiUrl = await getApiBaseUrl();
+        const response = await fetch(`${apiUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ refreshToken })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.token) {
+            // Save the new token
+            await AsyncStorage.setItem('userToken', data.token);
+            console.log('Token refreshed successfully, retrying original request');
+            
+            // Update the Authorization header with the new token
+            api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+            originalRequest.headers['Authorization'] = `Bearer ${data.token}`;
+            
+            // Retry the original request
+            return api(originalRequest);
+          }
+        }
+        
+        // If refresh failed, clear tokens
+        console.error('Token refresh failed');
+        await AsyncStorage.removeItem('userToken');
+        await AsyncStorage.removeItem('refreshToken');
+      } catch (refreshError) {
+        console.error('Error during token refresh:', refreshError);
+      }
+    }
+    
     return Promise.reject(error);
   }
 );

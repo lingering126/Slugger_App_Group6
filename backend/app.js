@@ -42,7 +42,7 @@ app.use('/api/activities', auth, activityRoutes);
 app.use('/api/homepage', auth, homepageRoutes);
 app.use('/api/user-target', auth, userTargetRoutes);
 app.use('/api/teams', auth, teamRoutes); // Added team routes usage
-app.use('/api/profiles', auth, profileRoutes); // Added profile routes usage
+app.use('/api/profiles', auth, profileRoutes); // Ensure auth middleware is correctly applied
 
 // Error handling middleware
 app.use(errorHandler);

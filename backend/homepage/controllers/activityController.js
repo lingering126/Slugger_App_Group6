@@ -313,11 +313,17 @@ exports.shareActivity = async (req, res) => {
 exports.getUserActivities = async (req, res) => {
   console.log('\n--- ENTERING GET USER ACTIVITIES (v2) ---');
   try {
-    const rawUserIdFromAuth = req.user?.id || req.user?._id;
+    // Safely extract user ID with validation
+    if (!req.user) {
+      console.error('[getUserActivities] req.user is missing - auth middleware may not be working properly');
+      return res.status(401).json({ success: false, message: 'Authentication error: User not identified' });
+    }
+    
+    const rawUserIdFromAuth = req.user.id || req.user.userId || req.user._id;
     console.log('[getUserActivities] Raw req.user.id from auth middleware:', rawUserIdFromAuth);
 
     if (!rawUserIdFromAuth) {
-      console.error('[getUserActivities] User ID not found in req.user');
+      console.error('[getUserActivities] User ID not found in req.user:', req.user);
       return res.status(401).json({ success: false, message: 'Authentication required, user ID not found.' });
     }
     
