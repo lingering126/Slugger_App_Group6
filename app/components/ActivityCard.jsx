@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, Linking, Image } from 'react-native';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,6 +16,8 @@ const ActivityCard = ({ activity, onRefresh }) => {
   const [isLikeError, setIsLikeError] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [authorName, setAuthorName] = useState(activity.userName || activity.user?.name || activity.author || 'Anonymous');
+  const [authorAvatar, setAuthorAvatar] = useState(activity.user?.avatarUrl || activity.avatarUrl || null);
 
   // Check and update like status when component mounts or activity changes
   useEffect(() => {
@@ -42,6 +44,35 @@ const ActivityCard = ({ activity, onRefresh }) => {
     }
   }, [activity.comments]);
 
+  // Fetch user data when component mounts
+  useEffect(() => {
+    if (activity.userId && !authorName) {
+      fetchUserData(activity.userId);
+    }
+  }, [activity]);
+
+  // Fetch user information if needed
+  const fetchUserData = async (userId) => {
+    try {
+      if (!userId) return;
+      
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      
+      const response = await fetch(`${API_CONFIG.API_URL}/users/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        if (userData.name) setAuthorName(userData.name);
+        if (userData.avatarUrl) setAuthorAvatar(userData.avatarUrl);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
+
   // Helper functions for UI elements
   const getActivityIcon = (type) => {
     switch (type) {
@@ -57,10 +88,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
   };
 
   const getAvatarText = () => {
-    if (activity.userName) return activity.userName[0];
-    if (activity.user?.name) return activity.user.name[0];
-    if (activity.author) return activity.author[0];
-    return '?';  // Use question mark as avatar for anonymous users
+    return authorName?.[0] || '?';
   };
 
   // Handle like/unlike functionality
@@ -182,10 +210,18 @@ const ActivityCard = ({ activity, onRefresh }) => {
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getAvatarText()}</Text>
+            {authorAvatar ? (
+              <Image 
+                source={{ uri: authorAvatar }} 
+                style={{ width: '100%', height: '100%', borderRadius: 20 }}
+                onError={() => setAuthorAvatar(null)}
+              />
+            ) : (
+              <Text style={styles.avatarText}>{getAvatarText()}</Text>
+            )}
           </View>
           <View style={styles.userDetails}>
-            <Text style={styles.username}>{activity.userName || activity.user?.name || activity.author || 'Anonymous'}</Text>
+            <Text style={styles.username}>{authorName}</Text>
             <Text style={styles.timestamp}>{format(new Date(activity.createdAt), 'dd/MM/yyyy')}</Text>
           </View>
         </View>

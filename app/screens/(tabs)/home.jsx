@@ -275,11 +275,13 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
       const userData = await AsyncStorage.getItem('user');
       let userName = 'Anonymous';
       let userId = 'anonymous';
+      let userAvatar = null;
       
       if (userData) {
         const parsedUser = JSON.parse(userData);
         userName = parsedUser.name || parsedUser.email?.split('@')[0] || 'Anonymous';
         userId = parsedUser.id || 'anonymous';
+        userAvatar = parsedUser.avatarUrl || null;
       }
       
       // Convert time value to minutes
@@ -314,7 +316,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
         const data = await response.json();
         console.log('Activity created:', data);
 
-        // Build complete activity data with user name
+        // Build complete activity data with user name and avatar
         const activityData = {
           ...data.data,
           type: category,
@@ -324,7 +326,8 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
           createdAt: new Date().toISOString(),
           author: userName,
           userName: userName,
-          userId: userId
+          userId: userId,
+          avatarUrl: userAvatar
         };
 
         // Call parent component callback function
@@ -431,6 +434,37 @@ const PostCard = ({ post }) => {
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [isLiked, setIsLiked] = useState(post?.isLikedByUser || false);
   const [likesCount, setLikesCount] = useState(post?.likesCount || 0);
+  const [authorName, setAuthorName] = useState(post?.author?.name || post?.userName || post?.author || 'Anonymous');
+  const [authorAvatar, setAuthorAvatar] = useState(post?.author?.avatarUrl || post?.avatarUrl || null);
+
+  // Fetch user data when component mounts
+  useEffect(() => {
+    if (post?.userId && !authorName) {
+      fetchUserData(post.userId);
+    }
+  }, [post]);
+
+  // Fetch user information if needed
+  const fetchUserData = async (userId) => {
+    try {
+      if (!userId) return;
+      
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      
+      const response = await fetch(`${API_CONFIG.API_URL}/users/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        if (userData.name) setAuthorName(userData.name);
+        if (userData.avatarUrl) setAuthorAvatar(userData.avatarUrl);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
 
   // 检查点赞状态
   useEffect(() => {
@@ -616,10 +650,18 @@ const PostCard = ({ post }) => {
       <View style={styles.postHeader}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{post.author?.[0] || '?'}</Text>
+            {authorAvatar ? (
+              <Image 
+                source={{ uri: authorAvatar }} 
+                style={{ width: '100%', height: '100%', borderRadius: 18 }}
+                onError={() => setAuthorAvatar(null)}
+              />
+            ) : (
+              <Text style={styles.avatarText}>{authorName?.[0] || '?'}</Text>
+            )}
           </View>
           <View style={styles.userInfoText}>
-            <Text style={styles.username}>{post.author?.name || post.userName || post.author || 'Anonymous'}</Text>
+            <Text style={styles.username}>{authorName}</Text>
             <Text style={styles.postTime}>
               {new Date(post.createdAt).toLocaleDateString('en-US', {
                 year: 'numeric',
