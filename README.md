@@ -95,32 +95,30 @@ Unlike the current WhatsApp-based system, Slugger offers a structured, visually 
 
 ### Frontend Setup
 
-1. Install dependencies:
-   ```
-   cd Slugger_App_Group6
+1. Navigate to the project root directory (e.g., `cd Slugger_App_Group6` if you cloned the repository).
+
+2. Install dependencies:
+   ```bash
    npm install
    ```
 
-2. Install additional required packages:
-   ```
-   npm install expo-clipboard @react-native-picker/picker
-   ```
-
 3. Start the Expo development server:
-   ```
+   ```bash
    npm start
-   # or 
+   # or for a clean start
    npx expo start --clear
    ```
 
-3. Use the Expo Go app on your mobile device to scan the QR code, or press 'a' to open in an **Android** emulator or 'i' for **iOS** simulator.
+4. Use the Expo Go app on your mobile device to scan the QR code displayed in the terminal. Alternatively, you can press:
+   - 'a' to open the app in an Android emulator.
+   - 'i' to open the app in an iOS simulator (macOS only).
 
 ### Backend Setup
 
-The Slugger backend is deployed on Render and is publicly accessible. The frontend application is configured by default to connect to this deployed backend, so you typically do not need to set up or run the backend locally to use the app.
+The Slugger backend is deployed on Render and is publicly accessible. The frontend application is configured by default to connect to this deployed backend, **so you typically do not need to set up or run the backend locally to use the app.**
 
 **Important Note on Performance (Render Free Plan):**
-Our current hosting on Render uses a free plan. This can lead to "cold starts" if the backend has been inactive. The first request (e.g., login) might take 50 seconds or more while the service instance spins up. This issue can be referred to:https://github.com/lingering126/Slugger_App_Group6/issues/79.
+Our current hosting on Render uses a free plan. This can lead to "cold starts" if the backend has been inactive. The first request (e.g., login) might take 50 seconds or more while the service instance spins up. You can simply wait for a while then refresh the page to try again. This issue can be referred to:https://github.com/lingering126/Slugger_App_Group6/issues/79.
 
 **For Developers (Optional Local Backend Setup):**
 If you intend to develop or test the backend locally, follow these steps:
