@@ -22,8 +22,9 @@ router.get('/', async (req, res, next) => {
         console.log('Database query:', query);
         
         const posts = await Post.find(query)
-            .populate('userId', 'username name')
+            .populate('userId', 'username name avatarUrl')
             .populate('likes', 'name avatar')
+            .populate('comments.userId', 'username name avatarUrl')
             .sort({ createdAt: -1 });
             
         console.log(`Found ${posts.length} posts`);
@@ -38,13 +39,22 @@ router.get('/', async (req, res, next) => {
                 isLikedByUser: isLiked
             });
 
+            // Format comments to include author name
+            const formattedComments = post.comments.map(comment => ({
+                _id: comment._id,
+                content: comment.content,
+                author: comment.userId?.name || 'Anonymous',
+                createdAt: comment.createdAt
+            }));
+
             return {
                 _id: post._id,
                 content: post.content,
                 userId: post.userId,
+                author: post.userId?.name || 'Anonymous',
                 createdAt: post.createdAt,
                 updatedAt: post.updatedAt,
-                comments: post.comments,
+                comments: formattedComments,
                 visibility: post.visibility,
                 likesCount: likesData.count,
                 isLikedByUser: isLiked,

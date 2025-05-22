@@ -434,19 +434,20 @@ const PostCard = ({ post }) => {
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [isLiked, setIsLiked] = useState(post?.isLikedByUser || false);
   const [likesCount, setLikesCount] = useState(post?.likesCount || 0);
-  const [authorName, setAuthorName] = useState(post?.userId?.name || post?.author?.name || post?.userName || post?.author || 'Anonymous');
-  const [authorAvatar, setAuthorAvatar] = useState(post?.userId?.avatarUrl || post?.author?.avatarUrl || post?.avatarUrl || null);
+  const [authorName, setAuthorName] = useState(post?.author || post?.userId?.name || 'Anonymous');
+  const [authorAvatar, setAuthorAvatar] = useState(post?.userId?.avatarUrl || null);
 
   // Fetch user data when component mounts
   useEffect(() => {
-    // If author avatar is not available directly from post data, and we have a userId, fetch it.
-    if (post?.userId?._id && !authorAvatar) {
-      fetchUserData(post.userId._id);
-    } else if (post?.userId?.name && authorName === 'Anonymous') {
-      // If name was not populated from post.userId.name initially but userId object exists
-      setAuthorName(post.userId.name);
+    // If we already have the author name from the post data, use it
+    if (post?.author && post.author !== 'Anonymous') {
+      setAuthorName(post.author);
     }
-  }, [post, authorAvatar]); // Add authorAvatar to dependency array to re-trigger if it becomes null
+    // If author avatar is not available directly from post data, and we have a userId, fetch it.
+    else if (post?.userId?._id && !authorAvatar) {
+      fetchUserData(post.userId._id);
+    }
+  }, [post]);
 
   // Fetch user information if needed
   const fetchUserData = async (userIdString) => {
@@ -1349,7 +1350,7 @@ const HomeScreen = () => {
         return;
       }
       console.log('Fetching user stats with token...');
-      const response = await fetch(`${API_CONFIG.API_URL}/stats/user`, {
+      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.USER.STATS}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -1375,7 +1376,7 @@ const HomeScreen = () => {
         monthlyProgress: data.monthlyProgress || 0 
       }));
     } catch (error) {
-      console.error('Error fetching user stats:', error);
+      console.error('Failed to fetch user stats:', error);
       setUserStats(prevStats => ({ 
         ...prevStats, 
         totalPoints: 0, 

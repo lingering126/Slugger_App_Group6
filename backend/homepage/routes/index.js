@@ -26,6 +26,9 @@ router.get('/posts', auth, postController.getPosts);
 router.post('/posts/:postId/comments', auth, postController.addComment);
 
 // Statistics-related routes
+router.get('/test-stats', (req, res) => {
+  res.status(200).json({ message: 'Stats test route is working!' });
+});
 router.get('/user', auth, statsController.getUserStats); // Removed redundant '/stats' prefix
 router.put('/user/target', auth, statsController.updateUserTarget); // Removed redundant '/stats' prefix
 router.post('/user/reset-weekly', auth, statsController.resetWeeklyStats); // Removed redundant '/stats' prefix

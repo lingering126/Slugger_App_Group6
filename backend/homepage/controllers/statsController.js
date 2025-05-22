@@ -61,8 +61,13 @@ exports.getUserStats = async (req, res) => {
     console.log('Stats prepared successfully');
     console.log('=== User Stats Fetch Complete ===\n');
 
+    // Return data in the format expected by the frontend
     res.json({
       success: true,
+      totalPoints: userStats.totalPoints || 0,
+      totalActivities: userStats.activitiesCompleted || 0,
+      currentStreak: userStats.streak || 0,
+      monthlyProgress: userStats.calculateProgress() || 0,
       data: stats
     });
   } catch (error) {

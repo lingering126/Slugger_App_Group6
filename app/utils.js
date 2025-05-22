@@ -53,16 +53,16 @@ export const getApiUrl = () => {
     return [global.workingApiUrl];
   }
   
-  // Always prioritize the deployed URL when running on a mobile device
+  // Always prioritize the deployed URL
   const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
   
   // Check if we're running in a web browser environment
   const isWebEnvironment = typeof document !== 'undefined';
   
-  // In web browser environment, use the API config URL
+  // In web browser environment, use the deployed URL first, then API config URL
   if (isWebEnvironment) {
-    console.log('Detected web environment, using API config URL');
-    return [API_CONFIG.API_URL];
+    console.log('Detected web environment, using deployed URL first, then API config URL');
+    return [deployedUrl, API_CONFIG.API_URL];
   }
   
   // For mobile devices, prioritize the deployed URL, then fallback to config
@@ -480,9 +480,40 @@ export const scanNetworkForServer = async () => {
     // Check if we're in a web environment
     const isWebEnvironment = typeof document !== 'undefined';
     
-    // For web environment, simplify and just check localhost
+    // First try the deployed URL
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    try {
+      const pingUrl = `${deployedUrl}/ping`;
+      console.log(`Testing connection to deployed URL: ${pingUrl}`);
+      
+      const response = await fetch(pingUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.ok && await response.text() === 'PONG') {
+        console.log('Server found at deployed URL');
+        const apiUrl = `${deployedUrl}/api`;
+        
+        // Store as global server URL
+        global.workingApiUrl = apiUrl;
+        recordSuccessfulConnection(apiUrl);
+        
+        return {
+          status: 'online',
+          message: 'Connected to deployed server',
+          url: apiUrl
+        };
+      }
+    } catch (error) {
+      console.log('Failed to connect to deployed URL:', error.message);
+    }
+    
+    // For web environment, check localhost only if deployed URL failed
     if (isWebEnvironment) {
-      console.log('Web environment detected, checking localhost only');
+      console.log('Web environment detected, checking localhost');
       
       try {
         const pingUrl = `http://localhost:${API_CONFIG.PORT}/ping`;
@@ -517,9 +548,11 @@ export const scanNetworkForServer = async () => {
       
       return {
         status: 'not_found',
-        message: 'Server not found on localhost'
+        message: 'Server not found on localhost or deployed URL'
       };
     }
+    
+    // For mobile, continue with network scanning if deployed URL failed
     
     // Get the device's own network info
     const netInfo = await NetInfo.fetch();
