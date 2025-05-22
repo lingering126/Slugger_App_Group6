@@ -718,20 +718,24 @@ const PostCard = ({ post }) => {
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [isLiked, setIsLiked] = useState(post?.isLikedByUser || false);
   const [likesCount, setLikesCount] = useState(post?.likesCount || 0);
-  const [authorName, setAuthorName] = useState(post?.author || post?.userId?.name || 'Anonymous');
+  const [authorName, setAuthorName] = useState(post?.author || 'Anonymous'); // post.author is already derived from post.userId.name by backend
   const [authorAvatar, setAuthorAvatar] = useState(post?.userId?.avatarUrl || null);
 
-  // Fetch user data when component mounts
+  // Fetch user data when component mounts or post data changes
   useEffect(() => {
-    // If we already have the author name from the post data, use it
-    if (post?.author && post.author !== 'Anonymous') {
-      setAuthorName(post.author);
-    }
-    // If author avatar is not available directly from post data, and we have a userId, fetch it.
-    else if (post?.userId?._id && !authorAvatar) {
+    // If the author's name from the post prop is 'Anonymous' and we have a userId,
+    // try to fetch more complete user data.
+    if (post?.author === 'Anonymous' && post?.userId?._id) {
+      fetchUserData(post.userId._id);
+    } 
+    // Separately, if the avatar is missing (authorAvatar state is null) and we have a userId,
+    // also try to fetch user data. This covers cases where name might be present but avatar is not.
+    else if (!authorAvatar && post?.userId?._id) { 
       fetchUserData(post.userId._id);
     }
-  }, [post]);
+    // Note: If post.author is not 'Anonymous' and authorAvatar is already set, 
+    // this effect won't call fetchUserData, relying on the initially populated data.
+  }, [post, authorAvatar]); // Depend on post and authorAvatar state
 
   // Fetch user information if needed
   const fetchUserData = async (userIdString) => {
@@ -744,8 +748,8 @@ const PostCard = ({ post }) => {
         return;
       }
       
-      console.log(`PostCard: Fetching user data for ${userIdString}`);
-      const response = await fetch(`${API_CONFIG.API_URL}/users/${userIdString}`, { // Corrected endpoint
+      console.log(`PostCard: Fetching user data for ${userIdString} via /profiles/:userId`);
+      const response = await fetch(`${API_CONFIG.API_URL}/profiles/${userIdString}`, { // Corrected endpoint to use /profiles/
         headers: { 'Authorization': `Bearer ${token}` }
       });
       

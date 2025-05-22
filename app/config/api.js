@@ -21,7 +21,7 @@ const API_CONFIG = {
       SHARE: '/activities/:id/share'
     },
     USER: {
-      STATS: '/user',
+      STATS: '/profiles/me',
       PROFILE: '/users/profile',
       UPDATE_PROFILE: '/users/profile',
       RESET_WEEKLY_STATS: '/user/reset-weekly'
@@ -50,4 +50,4 @@ export { API_CONFIG };
 // Add default export for Expo Router
 export default function APIConfig() {
   return null; // This is just a placeholder to satisfy Expo Router's default export requirement
-} 
+}
