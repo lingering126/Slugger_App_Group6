@@ -21,12 +21,28 @@ const API_CONFIG = {
       SHARE: '/activities/:id/share'
     },
     USER: {
-      STATS: '/stats/user',
+      STATS: '/user',
       PROFILE: '/users/profile',
       UPDATE_PROFILE: '/users/profile',
-      RESET_WEEKLY_STATS: '/stats/user/reset-weekly'
+      RESET_WEEKLY_STATS: '/user/reset-weekly'
+    },
+    POSTS: {
+      CREATE: '/posts',
+      LIST: '/posts',
+      DETAIL: '/posts/:id',
+      LIKE: '/posts/:id/like',
+      COMMENT: '/posts/:id/comments',
+      SHARE: '/posts/:id/share'
+    },
+    TEAMS: {
+      CREATE: '/teams',
+      LIST: '/teams',
+      DETAIL: '/teams/:id',
+      JOIN: '/teams/:id/join',
+      LEAVE: '/teams/:id/leave',
+      MEMBERS: '/teams/:id/members'
     }
   }
 };
 
-export default API_CONFIG; 
+export { API_CONFIG }; 

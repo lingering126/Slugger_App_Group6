@@ -302,9 +302,13 @@ export default function Profile() {
         bonusActivities: selectedBonusActivities.map(a => a.id)
       }
       
-      // Update local user object
+      // Update local user object first to ensure we have the latest data
+      const userJson = await AsyncStorage.getItem('user');
+      const currentUser = userJson ? JSON.parse(userJson) : userData;
+      
+      // Merge with new activity settings
       const updatedUserData = {
-        ...userData,
+        ...currentUser,
         activitySettings,
         updatedAt: new Date().toISOString()
       }
@@ -314,27 +318,48 @@ export default function Profile() {
       
       // Then update user profile via API
       try {
-        // This would call the API service to save settings
-        await userService.updateUserProfile({
+        // Make sure we have a user ID
+        const userId = updatedUserData.id || updatedUserData._id;
+        
+        if (!userId) {
+          console.warn('No user ID found for API update, using local update only');
+          setUserData(updatedUserData);
+          Alert.alert('Success', 'Activity settings saved locally');
+          return;
+        }
+        
+        // Include the user ID when calling updateUserProfile
+        const result = await userService.updateUserProfile({
+          id: userId,
           activitySettings
-        })
+        });
         
-        // Update local state
-        setUserData(updatedUserData)
+        // Update local state with the result (which may be from API or local update)
+        setUserData(result);
         
-        Alert.alert('Success', 'Activity settings saved successfully!')
+        if (result.fallbackOnly) {
+          Alert.alert(
+            'Settings Saved', 
+            'Settings saved locally. Changes will sync with the server when connection is restored.'
+          );
+        } else {
+          Alert.alert('Success', 'Activity settings saved successfully!');
+        }
       } catch (apiError) {
-        console.error('API error saving settings:', apiError)
+        console.error('API error saving settings:', apiError);
+        // We've already saved locally, so just inform the user
         Alert.alert(
-          'Warning', 
+          'Settings Saved', 
           'Settings saved locally but could not connect to server. Your changes will sync when connection is restored.'
-        )
+        );
+        // Still update the local state
+        setUserData(updatedUserData);
       }
     } catch (error) {
-      console.error('Error saving settings:', error)
-      Alert.alert('Error', 'Failed to save settings. Please try again.')
+      console.error('Error saving settings:', error);
+      Alert.alert('Error', 'Failed to save settings. Please try again.');
     } finally {
-      setSavingSettings(false)
+      setSavingSettings(false);
     }
   }
   

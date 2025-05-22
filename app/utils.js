@@ -1,6 +1,6 @@
 import { Platform, Alert } from 'react-native';
 import IPConfig from './config/ipConfig';
-import API_CONFIG from './config/api';
+import { API_CONFIG } from './config/api';
 // Try to import NetInfo, but don't fail if it's not available
 let NetInfo;
 try {

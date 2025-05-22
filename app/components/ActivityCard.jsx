@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, Link
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import API_CONFIG from '../config/api';
+import { API_CONFIG } from '../config/api';
 
 // ActivityCard Component: Displays a single activity with social interactions
 const ActivityCard = ({ activity, onRefresh }) => {

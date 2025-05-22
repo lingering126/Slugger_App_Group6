@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, SafeAreaView, ImageBackground, Image, TextInput, Alert, Linking, Animated, ActivityIndicator, Platform, RefreshControl } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { StatusBar } from 'expo-status-bar';
@@ -6,8 +6,57 @@ import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
-import API_CONFIG from '../../config/api';
+import { API_CONFIG } from '../../config/api';
 import ActivityCard from '../../components/ActivityCard';
+
+// Physical activities library
+// Expanded Physical Activities
+const physicalActivitiesList = [
+  { id: 1, name: 'Cricket', icon: '🏏' },
+  { id: 2, name: 'Soccer', icon: '⚽' },
+  { id: 3, name: 'Run', icon: '🏃' },
+  { id: 4, name: 'Walk', icon: '🚶' },
+  { id: 5, name: 'HIIT', icon: '🔥' },
+  { id: 6, name: 'Gym Workout', icon: '💪' },
+  { id: 7, name: 'Cycle', icon: '🚴' },
+  { id: 8, name: 'Swim', icon: '🏊' },
+  { id: 9, name: 'Home Workout', icon: '🏠' },
+  { id: 11, name: 'Yoga', icon: '🧘' },
+  { id: 12, name: 'Squash', icon: '🎾' },
+  { id: 13, name: 'Rugby', icon: '🏉' },
+  { id: 14, name: 'Touch Rugby', icon: '👐' },
+  { id: 15, name: 'Steps goal', icon: '👣' },
+  { id: 16, name: 'DIY', icon: '🔨' },
+  { id: 17, name: 'Gardening', icon: '🌱' },
+  { id: 19, name: 'Pilates', icon: '🧘‍♀️' },
+  { id: 20, name: 'Dance', icon: '💃' },
+  { id: 18, name: 'Physical other', icon: '❓' }
+];
+
+// Realistic Mental Activities List
+const mentalActivitiesList = [
+  { id: 1, name: 'Meditation', icon: '🧘' },
+  { id: 2, name: 'Reading', icon: '📚' },
+  { id: 3, name: 'Writing', icon: '✍️' },
+  { id: 4, name: 'Music Practice', icon: '🎵' },
+  { id: 5, name: 'Brain Training', icon: '🧠' },
+  { id: 6, name: 'Language Learning', icon: '🗣️' },
+  { id: 7, name: 'Journaling', icon: '📓' },
+  { id: 8, name: 'Breathing Exercise', icon: '💨' },
+  { id: 10, name: 'Puzzle Solving', icon: '🧩' },
+  { id: 11, name: 'Drawing/Sketching', icon: '🎨' },
+  { id: 12, name: 'Mindfulness', icon: '🪷' },
+  { id: 9, name: 'Mental other', icon: '❓' }
+];
+
+// Expanded Bonus Activities
+const bonusActivitiesList = [
+  { id: 1, name: 'Community Service', icon: '🤝' },
+  { id: 2, name: 'Family', icon: '👨‍👩‍👧‍👦' },
+  { id: 3, name: 'Personal Best', icon: '🏆' },
+  { id: 4, name: 'Personal Goal', icon: '🎯' },
+  { id: 5, name: 'Bonus other', icon: '✨' }
+];
 
 // Activity category data
 const activityData = {
@@ -15,15 +64,38 @@ const activityData = {
     "Cricket", "Soccer", "Run", "Walk", "HIIT", "Gym Workout", 
     "Cycle", "Swim", "Home Workout", "Physio", "Yoga", "Squash", 
     "Rugby", "Touch Rugby", "Steps goal", "DIY", "Gardening", 
-    "Physical other"
+    "Pilates", "Dance", "Rock Climbing", "Martial Arts", "Tennis",
+    "Basketball", "Hiking", "Skiing/Snowboarding", "Kayaking/Paddling",
+    "Golf", "Volleyball", "Badminton", "Table Tennis", "Boxing",
+    "Surfing", "Baseball", "Softball", "American Football", "Hockey",
+    "Skating", "Rowing", "Crossfit", "Bowling", "Archery", "Horse Riding",
+    "Jumping Rope", "Frisbee", "Bouldering", "Gymnastics", "Tai Chi",
+    "Kickboxing", "Weightlifting", "Stretching", "Sailing", "Scuba Diving",
+    "Snorkeling", "Fishing", "Canoeing", "Water Polo", "Ballet", "Parkour",
+    "Skateboarding", "Rollerblading", "Ice Hockey", "Handball", "Wrestling",
+    "Judo", "Karate", "Lawn Bowling", "Aerobics", "Zumba", "Spinning",
+    "Circuit Training", "Stair Climbing", "Functional Training", "Snowshoeing",
+    "Cross-country Skiing", "Mountain Biking", "BMX", "Wakeboarding", "Kitesurfing",
+    "Windsurfing", "Paragliding", "Hang Gliding", "Bungee Jumping", "Rafting",
+    "Canyoning", "Stand-up Paddleboarding", "Disc Golf", "Lacrosse", "Cricket nets",
+    "Ultimate Frisbee", "Trail Running", "Paintball", "Indoor Climbing", "Cheerleading",
+    "Dancing", "Pole Dancing", "Hula Hooping", "Physical other"
   ],
   Mental: [
-    "Meditation", "Reading", "Writing", "Music Practice", 
-    "Mental Gym", "Duolingo", "Language Training", "Cold shower", 
-    "Mental other", "Journal", "Breathing exercise"
+    "Meditation", "Reading", "Writing", "Music Practice", "Brain Training",
+    "Language Learning", "Journaling", "Breathing Exercise", "Mental other",
+    "Puzzle Solving", "Drawing/Sketching", "Mindfulness", "Online Course", 
+    "Podcast", "Audiobook", "Chess", "Sudoku", "Crossword", "Educational Video",
+    "Gratitude Practice", "Digital Detox", "Planning/Organizing", "Self-reflection",
+    "Cooking New Recipe", "DIY Project", "Gardening", "Knowledge Sharing", 
+    "Therapy Session", "Skill Practice", "Documentary", "Board Game", "Reading News",
+    "Learning Instrument", "Photography", "Creative Writing", "Goal Setting", 
+    "Public Speaking", "Deep Conversation", "Hobby Time", "Nature Observation"
   ],
   Bonus: [
-    "Community Service", "Family", "Personal Best", "Personal Goal", "Bonus other"
+    "Community Service", "Family", "Personal Best", "Personal Goal", 
+    "Environmental Action", "Volunteering", "Teaching Others", 
+    "Religious/Spiritual Practice", "Self-Care", "Bonus other"
   ]
 };
 
@@ -159,25 +231,193 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [loading, setLoading] = useState(false);
   const [userTeam, setUserTeam] = useState(null);
-  const activities = category ? activityData[category] || [] : [];
+  const [userActivities, setUserActivities] = useState([]);
+  const [loadingUserActivities, setLoadingUserActivities] = useState(false);
+  
+  // Get activities based on category and user preferences
+  const activities = useMemo(() => {
+    if (!category) return [];
+    
+    // If user has selected activities in their profile, use those
+    if (userActivities.length > 0) {
+      console.log(`Using ${userActivities.length} user-selected ${category} activities`);
+      return userActivities;
+    }
+    
+    // Fallback to default activities if no user preferences are found
+    console.log(`Using default ${category} activities list`);
+    return activityData[category] || [];
+  }, [category, userActivities]);
 
-  // Fetch user's team on component mount
+  // Fetch user's team and activity preferences on component mount
   useEffect(() => {
-    const fetchUserTeam = async () => {
+    const fetchUserData = async () => {
       try {
+        setLoadingUserActivities(true);
+        
+        // Fetch team data
         const teamData = await AsyncStorage.getItem('userTeam');
         if (teamData) {
           setUserTeam(JSON.parse(teamData));
         }
+        
+        // Fetch user profile data to get activity preferences
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const user = JSON.parse(userData);
+          console.log('Fetched user data:', user?.name);
+          
+          // Debug: Print out activity settings
+          if (user.activitySettings) {
+            console.log('ACTIVITY SETTINGS:', JSON.stringify(user.activitySettings, null, 2));
+            console.log('Physical Activities:', user.activitySettings.physicalActivities);
+            console.log('Mental Activities:', user.activitySettings.mentalActivities);
+            console.log('Bonus Activities:', user.activitySettings.bonusActivities);
+            
+            // Debug: Print out activity lists
+            console.log('Physical Activities List Length:', physicalActivitiesList.length);
+            console.log('Mental Activities List Length:', mentalActivitiesList.length);
+            console.log('Bonus Activities List Length:', bonusActivitiesList.length);
+          }
+          
+          if (user.activitySettings) {
+            console.log('User has activity settings');
+            
+            // Map activity IDs to activity names based on category
+            if (category === 'Physical' && Array.isArray(user.activitySettings.physicalActivities)) {
+              console.log(`User has ${user.activitySettings.physicalActivities.length} physical activities`);
+              
+              // Debug: Print out the IDs to match
+              console.log('Physical Activity IDs to match:', user.activitySettings.physicalActivities);
+              
+              // Check if any activity IDs match
+              if (user.activitySettings.physicalActivities.length > 0) {
+                // Get physical activities from profile
+                const matchingActivities = physicalActivitiesList.filter(
+                  activity => user.activitySettings.physicalActivities.some(
+                    id => id === activity.id || id === activity.id.toString() || parseInt(id) === activity.id
+                  )
+                );
+                
+                // Debug: Print out the matching activities
+                console.log('Matching Physical Activities:', matchingActivities.map(a => `${a.id}:${a.name}`));
+                
+                const selectedActivities = matchingActivities.map(activity => activity.name);
+                
+                console.log(`Found ${selectedActivities.length} matching physical activities`);
+                
+                if (selectedActivities.length > 0) {
+                  setUserActivities(selectedActivities);
+                } else {
+                  // If no matches found, use default activities
+                  console.log('No matching physical activities found, using defaults');
+                  setUserActivities(activityData[category] || []);
+                }
+              } else {
+                // If no activities selected, use default activities
+                console.log('No physical activities selected, using defaults');
+                setUserActivities(activityData[category] || []);
+              }
+            } 
+            else if (category === 'Mental' && Array.isArray(user.activitySettings.mentalActivities)) {
+              console.log(`User has ${user.activitySettings.mentalActivities.length} mental activities`);
+              
+              // Debug: Print out the IDs to match
+              console.log('Mental Activity IDs to match:', user.activitySettings.mentalActivities);
+              
+              // Check if any activity IDs match
+              if (user.activitySettings.mentalActivities.length > 0) {
+                // Get mental activities from profile
+                const matchingActivities = mentalActivitiesList.filter(
+                  activity => user.activitySettings.mentalActivities.some(
+                    id => id === activity.id || id === activity.id.toString() || parseInt(id) === activity.id
+                  )
+                );
+                
+                // Debug: Print out the matching activities
+                console.log('Matching Mental Activities:', matchingActivities.map(a => `${a.id}:${a.name}`));
+                
+                const selectedActivities = matchingActivities.map(activity => activity.name);
+                
+                console.log(`Found ${selectedActivities.length} matching mental activities`);
+                
+                if (selectedActivities.length > 0) {
+                  setUserActivities(selectedActivities);
+                } else {
+                  // If no matches found, use default activities
+                  console.log('No matching mental activities found, using defaults');
+                  setUserActivities(activityData[category] || []);
+                }
+              } else {
+                // If no activities selected, use default activities
+                console.log('No mental activities selected, using defaults');
+                setUserActivities(activityData[category] || []);
+              }
+            }
+            else if (category === 'Bonus' && Array.isArray(user.activitySettings.bonusActivities)) {
+              console.log(`User has ${user.activitySettings.bonusActivities.length} bonus activities`);
+              
+              // Debug: Print out the IDs to match
+              console.log('Bonus Activity IDs to match:', user.activitySettings.bonusActivities);
+              
+              // Check if any activity IDs match
+              if (user.activitySettings.bonusActivities.length > 0) {
+                // Get bonus activities from profile
+                const matchingActivities = bonusActivitiesList.filter(
+                  activity => user.activitySettings.bonusActivities.some(
+                    id => id === activity.id || id === activity.id.toString() || parseInt(id) === activity.id
+                  )
+                );
+                
+                // Debug: Print out the matching activities
+                console.log('Matching Bonus Activities:', matchingActivities.map(a => `${a.id}:${a.name}`));
+                
+                const selectedActivities = matchingActivities.map(activity => activity.name);
+                
+                console.log(`Found ${selectedActivities.length} matching bonus activities`);
+                
+                if (selectedActivities.length > 0) {
+                  setUserActivities(selectedActivities);
+                } else {
+                  // If no matches found, use default activities
+                  console.log('No matching bonus activities found, using defaults');
+                  setUserActivities(activityData[category] || []);
+                }
+              } else {
+                // If no activities selected, use default activities
+                console.log('No bonus activities selected, using defaults');
+                setUserActivities(activityData[category] || []);
+              }
+            } else {
+              // If no category-specific settings, use default activities
+              console.log(`No ${category} activities settings found, using defaults`);
+              setUserActivities(activityData[category] || []);
+            }
+          } else {
+            console.log('User has no activity settings, using defaults');
+            setUserActivities(activityData[category] || []);
+          }
+        } else {
+          console.log('No user data found, using defaults');
+          setUserActivities(activityData[category] || []);
+        }
       } catch (error) {
-        console.error('Error fetching user team:', error);
+        console.error('Error fetching user data:', error);
+        // On error, fall back to default activities
+        setUserActivities(activityData[category] || []);
+      } finally {
+        setLoadingUserActivities(false);
       }
     };
 
-    if (visible) {
-      fetchUserTeam();
+    if (visible && category) {
+      fetchUserData();
+    } else {
+      // Reset when modal is closed
+      setSelectedActivity(null);
+      setUserActivities([]);
     }
-  }, [visible]);
+  }, [visible, category]);
 
   const getActivityIcon = (type, name) => {
     switch (type) {
@@ -384,26 +624,39 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
           <Text style={styles.modalLabel}>Select Activity</Text>
           <ScrollView style={styles.activityList}>
             <View style={styles.activityGrid}>
-            {activities.map((activity, index) => (
-              <TouchableOpacity 
-                key={index}
-                style={[
+            {loadingUserActivities ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#3A8891" />
+                <Text style={styles.loadingText}>Loading your activities...</Text>
+              </View>
+            ) : activities.length === 0 ? (
+              <View style={styles.emptyActivitiesContainer}>
+                <Text style={styles.emptyActivitiesText}>
+                  No {category.toLowerCase()} activities found. Please set up your preferences in the Profile tab.
+                </Text>
+              </View>
+            ) : (
+              activities.map((activity, index) => (
+                <TouchableOpacity 
+                  key={index}
+                  style={[
                     styles.activityGridItem,
-                  selectedActivity === activity && styles.selectedActivity
-                ]}
+                    selectedActivity === activity && styles.selectedActivity
+                  ]}
                   onPress={() => {
                     setSelectedActivity(activity);
                     console.log('Selected activity:', activity);
                   }}
-              >
-                <Text style={[
+                >
+                  <Text style={[
                     styles.activityGridText,
-                  selectedActivity === activity && styles.selectedActivityText
-                ]}>
-                  {activity}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                    selectedActivity === activity && styles.selectedActivityText
+                  ]}>
+                    {activity}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            )}
             </View>
           </ScrollView>
 
@@ -2111,7 +2364,7 @@ const styles = StyleSheet.create({
   teamOption: { 
     padding: 10,
     borderRadius: 8,
-    backgroundColor: '#f5f5f0',
+    backgroundColor: '#f5f50',
     marginBottom: 5,
   },
   selectedTeam: { 
@@ -2131,7 +2384,30 @@ const styles = StyleSheet.create({
   },
   likedText: { 
     color: '#ff4b4b'
-  }
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+    fontSize: 14,
+  },
+  emptyActivitiesContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  emptyActivitiesText: {
+    color: '#666',
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+  },
 });
 
 export default HomeScreen;

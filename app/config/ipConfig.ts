@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import API_CONFIG from './api';
+import { API_CONFIG } from './api';
 
 // Automatically get development server IP address
 export const getServerIP = (): string | null => {

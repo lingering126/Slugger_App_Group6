@@ -28,7 +28,7 @@ const refreshAuthToken = async () => {
     const currentToken = await AsyncStorage.getItem('userToken');
     
     if (!refreshToken || !currentToken) {
-      console.warn('Cannot refresh token: missing refresh token or current token');
+      console.log('Cannot refresh token: missing refresh token or current token');
       // If we have a token but no refresh token, we should still allow 
       // the request to proceed with the current token
       return !!currentToken;
@@ -248,7 +248,8 @@ const userService = {
       // Validate token exists
       if (!token) {
         console.warn('No authentication token found - user may need to login');
-        throw new Error('Authentication required');
+        // Instead of failing, proceed with local update only
+        return this.updateProfileLocally(userData);
       }
       
       // Validate input
@@ -261,14 +262,20 @@ const userService = {
         throw new Error('User ID is required for profile update');
       }
       
-      // Attempt to refresh token if needed
-      const refreshResult = await refreshAuthToken();
-      console.log('Token refresh attempt result:', refreshResult);
+      // Attempt to refresh token if needed - but don't fail if refresh fails
+      try {
+        const refreshResult = await refreshAuthToken();
+        console.log('Token refresh attempt result:', refreshResult);
+      } catch (refreshError) {
+        console.warn('Token refresh failed but continuing with existing token:', refreshError);
+        // Continue with existing token
+      }
       
       // Re-get the token in case it was refreshed
       const currentToken = await AsyncStorage.getItem('userToken');
       if (!currentToken) {
-        throw new Error('Authentication token is missing after refresh attempt');
+        console.warn('Authentication token is missing after refresh attempt, falling back to local update');
+        return this.updateProfileLocally(userData);
       }
       
       // Ensure userData has proper ID format
@@ -351,10 +358,7 @@ const userService = {
           if (response.status === 401 || response.status === 403) {
             console.warn('Authentication error from server, will fall back to local update');
             // Don't throw yet - try fallback first
-            throw { 
-              message: responseData?.message || 'Authentication error',
-              fallbackToLocal: true
-            };
+            return this.updateProfileLocally(userData);
           }
           
           // If the primary /api/profiles endpoint fails, parse the error and throw it.
@@ -367,49 +371,48 @@ const userService = {
             : 'No detailed error information available';
             
           console.error('Failed to update profile via /api/profiles:', errorMessage, errorDetail);
-          throw new Error(errorMessage);
+          // Instead of throwing, fall back to local update
+          return this.updateProfileLocally(userData);
         }
       } catch (profileUpdateAttemptError) {
-        // If explicitly marked for fallback, throw to outer catch
-        if (profileUpdateAttemptError.fallbackToLocal) {
-          throw profileUpdateAttemptError;
-        }
-        
         // This catch handles errors from the fetch call itself (network error) 
         // or from parsing the JSON if the primary call failed.
         console.error('Error during primary profile update attempt (/api/profiles):', profileUpdateAttemptError);
-        throw profileUpdateAttemptError; 
+        return this.updateProfileLocally(userData);
       }
     } catch (error) { // This is the outermost catch for userService.updateUserProfile
       console.error('Overall error in updateUserProfile:', error);
+      return this.updateProfileLocally(userData);
+    }
+  },
+  
+  // Helper method for local profile updates
+  async updateProfileLocally(userData) {
+    console.warn('Falling back to local storage update');
+    try {
+      // Get current user data first
+      const userJson = await AsyncStorage.getItem('user');
+      const currentUser = userJson ? JSON.parse(userJson) : {};
       
-      // Handle fallback to local storage
-      console.warn('Falling back to local storage update');
-      try {
-        // Get current user data first
-        const userJson = await AsyncStorage.getItem('user');
-        const currentUser = userJson ? JSON.parse(userJson) : {};
-        
-        // Merge with new data and add updatedAt timestamp
-        const updatedUserData = {
-          ...currentUser,
-          ...userData,
-          updatedAt: new Date().toISOString()
-        };
-        
-        // Save to AsyncStorage
-        await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
-        
-        console.log('===== END updateUserProfile - FALLBACK SUCCESS =====');
-        
-        // Add flag to indicate this was a local-only update
-        updatedUserData.fallbackOnly = true;
-        return updatedUserData;
-      } catch (fallbackError) {
-        console.error('Fallback error:', fallbackError);
-        console.log('===== END updateUserProfile - COMPLETE FAILURE =====');
-        throw error; // Throw original error if fallback fails
-      }
+      // Merge with new data and add updatedAt timestamp
+      const updatedUserData = {
+        ...currentUser,
+        ...userData,
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
+      
+      console.log('===== END updateUserProfile - FALLBACK SUCCESS =====');
+      
+      // Add flag to indicate this was a local-only update
+      updatedUserData.fallbackOnly = true;
+      return updatedUserData;
+    } catch (fallbackError) {
+      console.error('Fallback error:', fallbackError);
+      console.log('===== END updateUserProfile - COMPLETE FAILURE =====');
+      throw new Error('Failed to update profile locally: ' + fallbackError.message);
     }
   },
   
@@ -425,6 +428,21 @@ const userService = {
         throw new Error('Authentication required');
       }
       
+      // Get current user data to include ID
+      const userJson = await AsyncStorage.getItem('user');
+      const user = userJson ? JSON.parse(userJson) : null;
+      
+      if (!user || (!user.id && !user._id)) {
+        console.error('No user ID found in stored user data');
+        throw new Error('User ID is required for activity update');
+      }
+      
+      // Include user ID in the data to send
+      const dataToSend = {
+        ...activitySettings,
+        id: user.id || user._id
+      };
+      
       // Try profile activities endpoint
       try {
         const apiUrl = await getApiUrl();
@@ -434,15 +452,11 @@ const userService = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(activitySettings)
+          body: JSON.stringify(dataToSend)
         });
         
         if (response.ok) {
           const updatedProfile = await response.json();
-          
-          // Get current user data
-          const userJson = await AsyncStorage.getItem('user');
-          const user = userJson ? JSON.parse(userJson) : {};
           
           // Update with new activity settings
           const updatedUser = {
@@ -476,7 +490,7 @@ const userService = {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify(activitySettings)
+            body: JSON.stringify(dataToSend)
           });
           
           if (response.ok) {
