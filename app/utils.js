@@ -292,30 +292,11 @@ export const promptForServerIP = () => {
 // Helper function to check if the server is reachable
 export const checkServerConnection = async (apiUrls) => {
   try {
-    // Check if we're in a web environment
-    const isWebEnvironment = typeof document !== 'undefined';
-    
-    // For web environment, simplify and prioritize localhost
-    if (isWebEnvironment) {
-      console.log('Web environment detected, checking localhost first');
-      
-      const localhostUrl = `http://localhost:${API_CONFIG.PORT || 5001}/api`;
-      const pingResult = await pingServer(localhostUrl);
-      
-      if (pingResult) {
-        console.log('Successfully connected to localhost in web environment');
-        global.workingApiUrl = localhostUrl;
-        recordSuccessfulConnection(localhostUrl);
-        return {
-          status: 'online',
-          message: 'Server is reachable via localhost (web environment)',
-          url: localhostUrl
-        };
-      }
-    }
-    
-    // First check if the device has internet connection
-    const netInfo = await NetInfo.fetch();
+  // Check if we're in a web environment
+  const isWebEnvironment = typeof document !== 'undefined';
+  
+  // First check if the device has internet connection
+  const netInfo = await NetInfo.fetch();
     
     if (!netInfo.isConnected) {
       return {
@@ -670,31 +651,10 @@ const Utils = {
       // Check if we're in a web environment
       const isWebEnvironment = typeof document !== 'undefined';
       
-      // For web environment, prioritize localhost
-      if (isWebEnvironment) {
-        console.log('Web environment detected, trying localhost first');
-        
-        try {
-          const localhostUrl = `http://localhost:${API_CONFIG.PORT}/api`;
-          const pingResult = await pingServer(localhostUrl);
-          
-          if (pingResult) {
-            console.log('Successfully connected to localhost in web environment');
-            global.workingApiUrl = localhostUrl;
-            recordSuccessfulConnection(localhostUrl);
-            return {
-              status: 'online',
-              message: 'Server is reachable via localhost (web environment)',
-              url: localhostUrl
-            };
-          }
-        } catch (error) {
-          console.log('Failed to connect to localhost:', error.message);
-        }
-      }
-      
       // First try to scan network for server if we don't have a working API URL
-      if (!global.workingApiUrl) {
+      // For deployed web, we don't want to scan or try localhost by default here,
+      // getApiUrl() will provide the correct production URL.
+      if (!isWebEnvironment && !global.workingApiUrl) {
         console.log('No cached server connection, trying to scan network...');
         const scanResult = await scanNetworkForServer();
         
@@ -743,4 +703,4 @@ const Utils = {
 };
 
 // Export the Utils object as the default export
-export default Utils; 
+export default Utils;
