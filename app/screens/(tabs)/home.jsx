@@ -272,6 +272,16 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
+      const userData = await AsyncStorage.getItem('user');
+      let userName = 'Anonymous';
+      let userId = 'anonymous';
+      
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        userName = parsedUser.name || parsedUser.email?.split('@')[0] || 'Anonymous';
+        userId = parsedUser.id || 'anonymous';
+      }
+      
       // Convert time value to minutes
       // Format: "0.25" = 15 mins, "0.5" = 30 mins, "0.75" = 45 mins, "1" = 1 hour, etc.
       const durationInMinutes = parseFloat(selectedTime) * 60;
@@ -304,7 +314,7 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
         const data = await response.json();
         console.log('Activity created:', data);
 
-        // Build complete activity data with Anonymous as default username
+        // Build complete activity data with user name
         const activityData = {
           ...data.data,
           type: category,
@@ -312,8 +322,9 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
           duration: durationInMinutes,
           icon: getActivityIcon(category, selectedActivity),
           createdAt: new Date().toISOString(),
-          author: 'Anonymous',  // Use Anonymous as default username
-          userId: 'anonymous'   // Use lowercase anonymous as default userID
+          author: userName,
+          userName: userName,
+          userId: userId
         };
 
         // Call parent component callback function
@@ -608,7 +619,7 @@ const PostCard = ({ post }) => {
             <Text style={styles.avatarText}>{post.author?.[0] || '?'}</Text>
           </View>
           <View style={styles.userInfoText}>
-            <Text style={styles.username}>{post.author?.name || 'Anonymous'}</Text>
+            <Text style={styles.username}>{post.author?.name || post.userName || post.author || 'Anonymous'}</Text>
             <Text style={styles.postTime}>
               {new Date(post.createdAt).toLocaleDateString('en-US', {
                 year: 'numeric',
@@ -1441,43 +1452,12 @@ const HomeScreen = () => {
                   <Text style={styles.statLabel}>Streak</Text>
                 </View>
               </View>
-
-              {/* Monthly Progress */}
-              <View style={styles.progressSection}>
-                <Text style={styles.progressTitle}>Weekly Progress</Text>
-                <View style={styles.progressRow}>
-                  <Text style={styles.progressLabel}>Team</Text>
-                  <View style={styles.progressBar}>
-                    <View 
-                      style={[
-                        styles.progressFill,
-                        { width: `${userStats?.monthlyProgress || 0}%` }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.progressText}>{userStats?.monthlyProgress || 0}%</Text>
-                </View>
-                <View style={styles.progressRow}>
-                  <Text style={styles.progressLabel}>Personal</Text>
-                  <View style={styles.progressBar}>
-                    <View 
-                      style={[
-                        styles.progressFill,
-                        { 
-                          width: `${userStats?.monthlyProgress || 0}%`,
-                          backgroundColor: '#ff9800'
-                        }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.progressText}>{userStats?.monthlyProgress || 0}%</Text>
-                </View>
-              </View>
             </View>
 
             {/* Combined Feed */}
             <ScrollView 
               style={styles.feed}
+              contentContainerStyle={{ flexGrow: 1, width: '100%' }} 
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={async () => {
                   setRefreshing(true);
@@ -1489,7 +1469,9 @@ const HomeScreen = () => {
               {loading && activities.length === 0 && posts.length === 0 ? (
                 <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
               ) : getSortedFeed().length === 0 ? (
-                <Text style={styles.emptyFeedText}>No activities or posts yet. Start logging or post something!</Text>
+                <View style={styles.emptyFeedContainer}>
+                  <Text style={styles.emptyFeedText}>No activities or posts yet. Start logging or post something!</Text>
+                </View>
               ) : (
                 getSortedFeed().map((item) => (
                   item.itemType === 'activity' ? (
@@ -1522,7 +1504,6 @@ const HomeScreen = () => {
               onPostCreated={handlePostCreated}
             />
 
-            {/* Bottom action buttons with UTC time */}
             {renderActionButtons()} 
           </View>
         </LinearGradient>
@@ -1534,7 +1515,8 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#E8F0F2', 
+    backgroundColor: '#E8F0F2',
+    paddingHorizontal: 0,
   },
   backgroundImage: {
     flex: 1,
@@ -1551,6 +1533,7 @@ const styles = StyleSheet.create({
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: 'rgba(248, 250, 252, 0.95)',
+    paddingHorizontal: 0,
   },
   header: {
     flexDirection: 'row', 
@@ -1567,388 +1550,194 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statsSection: {
-    padding: 10,
+    padding: 6,
+    paddingVertical: 4,
     backgroundColor: '#fff',
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between', 
-    marginBottom: 10,
+    justifyContent: 'space-around', 
+    flexWrap: 'wrap', 
+    marginBottom: 5,
   },
   statCard: {
-    flex: 1, 
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
     marginHorizontal: 4,
+    minWidth: 70, 
+    flexGrow: 1, 
+    flexBasis: '25%', 
+    marginBottom: 4, 
   },
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a1a1a',
-    marginVertical: 2,
+    marginVertical: 0,
   },
   statLabel: {
     fontSize: 12,
     color: '#666',
   },
-  progressSection: {
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  progressTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 10,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  progressLabel: {
-    width: 60,
-    fontSize: 12,
-    color: '#666',
-  },
-  progressBar: { 
-    flex: 1,
-    height: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 3,
-    marginHorizontal: 8,
-  },
-  progressFill: {
-    height: '100%', 
-    backgroundColor: '#4CAF50',
-    borderRadius: 3,
-  },
-  progressText: {
-    width: 35,
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'right',
-  },
   feed: {
-    flex: 1, 
-    marginBottom: 60,
+    flex: 1,
+    width: '100%',
+  },
+  emptyFeedContainer: { 
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   postCard: {
     backgroundColor: '#fff', 
-    padding: 15,
+    paddingHorizontal: 8, 
+    paddingVertical: 8, 
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    marginVertical: 3,
+    marginHorizontal: 4,
+    width: '97%',
+    alignSelf: 'center',
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8, 
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1, 
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36, 
+    height: 36, 
+    borderRadius: 18, 
     backgroundColor: '#6c63ff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 8, 
   },
   avatarText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14, 
     fontWeight: 'bold',
   },
   username: {
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 15, 
   },
   postContent: {
-    fontSize: 16,
-    lineHeight: 24,
-    marginBottom: 10,
+    fontSize: 15, 
+    lineHeight: 22, 
+    marginBottom: 8,
+    width: '100%',
   },
   postImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 10,
-    marginBottom: 10,
+    height: 180, 
+    borderRadius: 8, 
+    marginBottom: 8, 
   },
-  activityCard: {
+  activityCard: { 
     backgroundColor: '#f8f9fa',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
+    borderRadius: 8,
+    padding: 10, 
+    marginBottom: 8,
+    width: '100%',
   },
-  activityHeader: {
+  activityHeader: { 
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    alignItems: 'center', 
+    marginBottom: 8,
+    flexWrap: 'wrap', 
   },
-  activityTitle: {
-    fontSize: 16,
+  activityTitle: { 
+    fontSize: 15, 
     fontWeight: 'bold',
+    flexShrink: 1, 
   },
-  activityPoints: {
+  activityPoints: { 
     color: '#4CAF50',
     fontWeight: 'bold',
+    fontSize: 15, 
+    marginLeft: 8, 
   },
-  activityDetails: {
-    marginBottom: 5,
+  activityDetails: { 
+    marginBottom: 4,
   },
-  activityText: {
-    fontSize: 14,
+  activityText: { 
+    fontSize: 13, 
     color: '#666',
-    marginBottom: 5,
+    marginBottom: 3,
     textAlign: 'left',
   },
-  progressBarContainer: {
-    marginTop: 5,
-    paddingRight: 15,
+  progressBarContainer: { 
+    marginTop: 4,
+    paddingRight: 10, 
   },
-  progressBarBackground: {
-    height: 8,
+  progressBarBackground: { 
+    height: 6, 
     backgroundColor: '#f0f0f0',
-    borderRadius: 4,
+    borderRadius: 3,
     flex: 1,
   },
-  progressBarFill: {
+  progressBarFill: { 
     height: '100%',
     backgroundColor: '#4CAF50',
-    borderRadius: 4,
-  },
-  progressDescription: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-    textAlign: 'right',
+    borderRadius: 3,
   },
   commentsSection: {
-    marginTop: 10,
-    marginBottom: 10,
-    paddingTop: 10,
-    paddingLeft: 15,
+    marginTop: 8, 
+    marginBottom: 8, 
+    paddingTop: 8, 
+    paddingHorizontal: 12, 
     borderTopWidth: 1,
     borderTopColor: '#eee',
     backgroundColor: '#f8f9fa',
   },
   commentContainer: {
-    marginBottom: 6,
+    marginBottom: 5, 
   },
   commentHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    alignItems: 'flex-start', 
+    flexWrap: 'nowrap', 
   },
   commentAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22, 
+    height: 22, 
+    borderRadius: 11, 
     backgroundColor: '#6c63ff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 6, 
+    marginTop: 2, 
   },
   commentAvatarText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11, 
     fontWeight: 'bold',
   },
   commentAuthor: {
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13, 
     color: '#1a1a1a',
-    marginRight: 8,
+    marginRight: 6, 
   },
   commentContent: {
-    flex: 1,
-    fontSize: 14,
+    flex: 1, 
+    fontSize: 13, 
     color: '#4a4a4a',
-  },
-  bottomContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  activityButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  activityButton: {
-    backgroundColor: '#4A90E2',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  activityButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  addButton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 70,
-    backgroundColor: '#fff',
-    borderRadius: 25,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  commentInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  commentInput: {
-    flex: 1,
-    height: 36,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 18,
-    paddingHorizontal: 15,
-    marginRight: 10,
-  },
-  sendButton: {
-    padding: 5,
-  },
-  postInput: {
-    height: 120,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 15,
-    marginVertical: 15,
-    textAlignVertical: 'top',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  typeSelection: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  typeOption: {
-    flex: 1,
-    padding: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 5,
-  },
-  teamSelection: {
-    marginBottom: 15,
-  },
-  teamOption: {
-    padding: 10,
-    borderRadius: 8,
-    backgroundColor: '#f5f5f0',
-    marginBottom: 5,
-  },
-  contentTypeSelection: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  contentTypeOption: {
-    flex: 1,
-    padding: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 5,
-  },
-  selectedOption: {
-    backgroundColor: '#4A90E2',
-  },
-  optionText: {
-    color: '#666',
-  },
-  selectedOptionText: {
-    color: '#fff',
-  },
-  teamOptionText: {
-    color: '#666',
-  },
-  selectedTeam: {
-    backgroundColor: '#4A90E2',
-  },
-  selectedTeamText: {
-    color: '#fff',
-  },
-  contentInput: {
-    height: 120,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    textAlignVertical: 'top',
-  },
-  activityFields: {
-    marginBottom: 15,
-  },
-  activityInput: {
-    height: 40,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 10,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    marginHorizontal: 5,
-    alignItems: 'center',
-  },
-  confirmButton: {
-    backgroundColor: '#4A90E2',
-  },
-  cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    lineHeight: 18, 
   },
   socialButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around', 
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
+    paddingVertical: 8, 
+    paddingHorizontal: 10, 
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
@@ -1956,12 +1745,239 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
+    flexGrow: 1, 
+    flexBasis: 0, 
+    paddingVertical: 6, 
   },
   socialButtonText: {
-    marginLeft: 5,
+    marginLeft: 4, 
     color: '#666',
+    fontSize: 13, 
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10, 
+    paddingVertical: 6, 
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0', 
+  },
+  commentInput: {
+    flex: 1,
+    height: 34, 
+    backgroundColor: '#f5f5f5',
+    borderRadius: 17, 
+    paddingHorizontal: 12, 
+    marginRight: 8, 
+    fontSize: 13, 
+  },
+  sendButton: {
+    padding: 4, 
+  },
+  actionButtonsContainer: {
+    paddingHorizontal: 8, 
+    paddingVertical: 6, 
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0', 
+  },
+  utcTimeContainer: {
+    paddingVertical: 4, 
+    paddingHorizontal: 8, 
+    backgroundColor: 'rgba(240, 240, 240, 0.85)', 
+    borderRadius: 6, 
+    marginBottom: 6, 
+    alignItems: 'center',
+  },
+  utcTimeText: {
+    fontSize: 11, 
+    color: '#333',
+    fontWeight: '500',
+    marginBottom: 1, 
+  },
+  resetCountdownText: {
+    fontSize: 11, 
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    flexWrap: 'wrap', 
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6, 
+    paddingHorizontal: 8, 
+    borderRadius: 16, 
+    minWidth: 80, 
+    marginVertical: 3, 
+    flexGrow: 1, 
+    marginHorizontal: 3, 
+  },
+  physicalButton: {
+    backgroundColor: '#4A90E2',
+  },
+  mentalButton: {
+    backgroundColor: '#9C27B0',
+  },
+  bonusButton: {
+    backgroundColor: '#FF9800',
+  },
+  actionButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  disabledButtonVisual: {
+    backgroundColor: '#cccccc',
+  },
+  emptyFeedText: {
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 20, 
+  },
+  notificationBanner: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    marginBottom: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  notificationText: {
+    color: '#fff',
+    marginLeft: 8,
     fontSize: 14,
+    flex: 1,
+    fontWeight: '500',
+  },
+  modalOverlay: { 
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: { 
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalTitle: { 
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalHeader: { 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  closeButton: { 
+    padding: 5,
+  },
+  pickerContainer: { 
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  picker: { 
+    height: 50,
+  },
+  modalLabel: { 
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+    color: '#333',
+  },
+  activityList: { 
+    maxHeight: '50%',
+  },
+  activityGrid: { 
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 5,
+  },
+  activityGridItem: { 
+    width: '48%',
+    backgroundColor: '#f5f5f5',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityGridText: { 
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+  },
+  selectedActivity: { 
+    backgroundColor: '#4A90E2',
+  },
+  selectedActivityText: { 
+    color: '#fff',
+  },
+  confirmButton: { 
+    backgroundColor: '#4A90E2',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  confirmButtonText: { 
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  disabledButton: { 
+    backgroundColor: '#ccc',
+  },
+  userInfoText: { 
+    flex: 1,
+  },
+  postTime: { 
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  errorText: { 
+    color: '#ff4b4b',
+    marginBottom: 10,
+  },
+  contentInput: { 
+    height: 120,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 15,
+    textAlignVertical: 'top',
+  },
+  modalButtons: { 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: { 
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  cancelButton: { 
+    backgroundColor: '#f0f0f0',
+  },
+  modalButtonText: { 
+    color: '#fff', 
+    fontWeight: 'bold',
   },
   shareModalOverlay: {
     flex: 1,
@@ -1988,168 +2004,54 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  likedText: {
+  typeSelection: { 
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  typeOption: { 
+    flex: 1,
+    padding: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 5,
+  },
+  selectedOption: { 
+    backgroundColor: '#4A90E2',
+  },
+  optionText: { 
+    color: '#666',
+  },
+  selectedOptionText: { 
+    color: '#fff',
+  },
+  teamSelection: { 
+    marginBottom: 15,
+  },
+  teamOption: { 
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f0',
+    marginBottom: 5,
+  },
+  selectedTeam: { 
+    backgroundColor: '#4A90E2',
+  },
+  selectedTeamText: { 
+    color: '#fff',
+  },
+  activityFields: { 
+    marginBottom: 15,
+  },
+  activityInput: { 
+    height: 40,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    padding: 10,
+  },
+  likedText: { 
     color: '#ff4b4b'
-  },
-  errorText: {
-    color: '#ff4b4b',
-    marginBottom: 10,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  closeButton: {
-    padding: 5,
-  },
-  pickerContainer: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  picker: {
-    height: 50,
-  },
-  modalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
-    color: '#333',
-  },
-  activityList: {
-    maxHeight: '50%',
-  },
-  activityGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 5,
-  },
-  activityGridItem: {
-    width: '48%',
-    backgroundColor: '#f5f5f5',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityGridText: {
-    fontSize: 14,
-    color: '#333',
-    textAlign: 'center',
-  },
-  selectedActivity: {
-    backgroundColor: '#4A90E2',
-  },
-  selectedActivityText: {
-    color: '#fff',
-  },
-  confirmButton: {
-    backgroundColor: '#4A90E2',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  userInfoText: {
-    flex: 1,
-  },
-  postTime: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  actionButtonsContainer: {
-    padding: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  utcTimeContainer: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 8,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-  utcTimeText: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  resetCountdownText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 20,
-    minWidth: 100,
-  },
-  physicalButton: {
-    backgroundColor: '#4A90E2',
-  },
-  mentalButton: {
-    backgroundColor: '#9C27B0',
-  },
-  bonusButton: {
-    backgroundColor: '#FF9800',
-  },
-  actionButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  disabledButtonVisual: {
-    backgroundColor: '#cccccc',
-  },
-  emptyFeedText: {
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  notificationBanner: {
-    backgroundColor: '#4CAF50',
-    padding: 12,
-    marginBottom: 10,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 10,
-  },
-  notificationText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontSize: 14,
-    flex: 1,
-    fontWeight: '500',
-  },
+  }
 });
 
 export default HomeScreen;

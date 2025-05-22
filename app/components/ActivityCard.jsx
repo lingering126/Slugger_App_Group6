@@ -57,6 +57,9 @@ const ActivityCard = ({ activity, onRefresh }) => {
   };
 
   const getAvatarText = () => {
+    if (activity.userName) return activity.userName[0];
+    if (activity.user?.name) return activity.user.name[0];
+    if (activity.author) return activity.author[0];
     return '?';  // Use question mark as avatar for anonymous users
   };
 
@@ -182,7 +185,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
             <Text style={styles.avatarText}>{getAvatarText()}</Text>
           </View>
           <View style={styles.userDetails}>
-            <Text style={styles.username}>Anonymous</Text>
+            <Text style={styles.username}>{activity.userName || activity.user?.name || activity.author || 'Anonymous'}</Text>
             <Text style={styles.timestamp}>{format(new Date(activity.createdAt), 'dd/MM/yyyy')}</Text>
           </View>
         </View>
@@ -289,19 +292,21 @@ const ActivityCard = ({ activity, onRefresh }) => {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
-    marginVertical: 4,
-    marginHorizontal: 8,
+    marginVertical: 3,
+    marginHorizontal: 4,
     borderRadius: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    width: '97%',
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -335,33 +340,39 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   content: {
-    padding: 12,
+    padding: 10,
+    width: '100%',
   },
   activityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap', // Allow wrapping for smaller screens
   },
   icon: {
-    fontSize: 24,
-    marginRight: 12,
+    fontSize: 22, // Slightly smaller icon
+    marginRight: 10, // Slightly less margin
   },
   activityInfo: {
     flex: 1,
+    minWidth: 150, // Ensure it doesn't get too squished before wrapping
   },
   title: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller title
     fontWeight: '600',
     color: '#1a1a1a',
+    flexShrink: 1, // Allow title to shrink if needed
   },
   duration: {
-    fontSize: 14,
+    fontSize: 13, // Slightly smaller duration text
     color: '#666',
-    marginTop: 2,
+    marginTop: 1,
   },
   points: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller points text
     fontWeight: '600',
     color: '#4CAF50',
+    marginLeft: 'auto', // Push points to the right if space allows, helps with wrapping
+    paddingLeft: 8, // Add some padding if it's next to wrapped content
   },
   status: {
     marginTop: 8,
@@ -411,19 +422,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
-    padding: 8,
+    paddingVertical: 6, // Reduced vertical padding
+    paddingHorizontal: 4, // Reduced horizontal padding
+    justifyContent: 'space-around', // Better distribution
   },
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    padding: 8,
+    flexGrow: 1, // Allow buttons to grow but not necessarily take equal fixed space
+    flexBasis: 0, // Allow flexGrow to work effectively
+    paddingVertical: 6, // Reduced padding
+    paddingHorizontal: 4, // Reduced padding
+    minWidth: 70, // Ensure buttons have a minimum tap area
   },
   socialButtonText: {
-    marginLeft: 4,
+    marginLeft: 3, // Reduced margin
     color: '#666',
-    fontSize: 14,
+    fontSize: 13, // Slightly smaller text
   },
   likedText: {
     color: '#ff4b4b',
@@ -473,4 +489,4 @@ const styles = StyleSheet.create({
   }
 });
 
-export default ActivityCard; 
+export default ActivityCard;
