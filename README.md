@@ -120,40 +120,6 @@ The Slugger backend is deployed on Render and is publicly accessible. The fronte
 **Important Note on Performance (Render Free Plan):**
 Our current hosting on Render uses a free plan. This can lead to "cold starts" if the backend has been inactive. The first request (e.g., login) might take 50 seconds or more while the service instance spins up. You can simply wait for a while then refresh the page to try again. This issue can be referred to:https://github.com/lingering126/Slugger_App_Group6/issues/79.
 
-**For Developers (Optional Local Backend Setup):**
-If you intend to develop or test the backend locally, follow these steps:
-
-1. Navigate to the backend directory:
-   ```
-   cd Slugger_App_Group6/backend
-   ```
-
-2. Install dependencies:
-   ```
-   npm install
-   ```
-
-3. Create a `.env` file in the `backend` directory. You can copy `backend/.env.example` (if available) or create it manually.
-   Populate it with your local MongoDB connection string, a JWT secret, desired port, and email service credentials (e.g., Ethereal for testing). Example:
-   ```ini
-   MONGODB_URI=your_local_mongodb_connection_string
-   JWT_SECRET=a_strong_secret_for_local_dev
-   PORT=5001
-   MAIL_HOST=smtp.ethereal.email
-   MAIL_PORT=587
-   MAIL_USER=your_ethereal_username
-   MAIL_PASS=your_ethereal_password
-   MAIL_FROM="Your App Name" <noreply@example.com>
-   ```
-
-4. Start the local backend server:
-   ```
-   npm run dev
-   # or
-   node server.js
-   # On Windows, you can also use the batch file from the project root:
-   # ..\start-backend.bat (ensure it points to the correct backend directory and command)
-   ```
 
 ## Running Tests
 
@@ -168,7 +134,10 @@ The project includes a suite of tests for the backend. To run these tests:
     npm test
     ```
     This will execute all Jest tests defined in the backend.
-    Details can be referred to: https://github.com/lingering126/Slugger_App_Group6/blob/main/backend/tests/Unit_Test.md
+
+    Details can be referred to:
+
+    https://github.com/lingering126/Slugger_App_Group6/blob/main/backend/tests/Unit_Test.md
    
     https://github.com/lingering126/Slugger_App_Group6/blob/main/backend/tests/acceptance/ACCEPTANCE_TESTS_README.md 
 
@@ -246,3 +215,41 @@ If you need to use a different URL, you can update it in `app/services/api.js` o
 - **Email**: Nodemailer for sending verification emails
 - **Networking**: Custom networking layer with automatic server discovery
 - **Environment**: Configuration via .env files on backend
+
+**Optional Local Backend Setup**
+
+If you intend to develop or test the backend locally, follow these steps:
+
+1. Navigate to the backend directory:
+   ```
+   cd Slugger_App_Group6/backend
+   ```
+
+2. Install dependencies:
+   ```
+   npm install
+   ```
+
+3. Create a `.env` file in the `backend` directory. You can copy `backend/.env.example` (if available) or create it manually.
+   Populate it with your local MongoDB connection string, a JWT secret, desired port, and email service credentials (e.g., Ethereal for testing). Example:
+   ```ini
+   MONGODB_URI=your_local_mongodb_connection_string
+   JWT_SECRET=a_strong_secret_for_local_dev
+   PORT=5001
+   MAIL_HOST=smtp.ethereal.email
+   MAIL_PORT=587
+   MAIL_USER=your_ethereal_username
+   MAIL_PASS=your_ethereal_password
+   MAIL_FROM="Your App Name" <noreply@example.com>
+   ```
+
+
+4. Start the local backend server:
+   ```
+   npm run dev
+   # or
+   node server.js
+   # On Windows, you can also use the batch file from the project root:
+   # ..\start-backend.bat (ensure it points to the correct backend directory and command)
+   ```
+
