@@ -29,8 +29,9 @@ router.post('/posts/:postId/comments', auth, postController.addComment);
 router.get('/test-stats', (req, res) => {
   res.status(200).json({ message: 'Stats test route is working!' });
 });
-router.get('/user', auth, statsController.getUserStats); // Removed redundant '/stats' prefix
-router.put('/user/target', auth, statsController.updateUserTarget); // Removed redundant '/stats' prefix
-router.post('/user/reset-weekly', auth, statsController.resetWeeklyStats); // Removed redundant '/stats' prefix
+// Rely on authMiddleware applied at the group level in server.js
+router.get('/user', statsController.getUserStats); 
+router.put('/user/target', statsController.updateUserTarget); 
+router.post('/user/reset-weekly', statsController.resetWeeklyStats);
 
 module.exports = router;
