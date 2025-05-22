@@ -155,6 +155,23 @@ If you intend to develop or test the backend locally, follow these steps:
    # ..\start-backend.bat (ensure it points to the correct backend directory and command)
    ```
 
+## Running Tests
+
+The project includes a suite of tests for the backend. To run these tests:
+
+1.  Navigate to the backend directory:
+    ```bash
+    cd backend
+    ```
+2.  Run the test script:
+    ```bash
+    npm test
+    ```
+    This will execute all Jest tests defined in the backend.
+    Details can be referred to: https://github.com/lingering126/Slugger_App_Group6/blob/main/backend/tests/Unit_Test.md
+   
+    https://github.com/lingering126/Slugger_App_Group6/blob/main/backend/tests/acceptance/ACCEPTANCE_TESTS_README.md 
+
 ## Authentication Flow
 
 1. **Signup**: Users register with email and password
