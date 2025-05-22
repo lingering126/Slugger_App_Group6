@@ -434,35 +434,51 @@ const PostCard = ({ post }) => {
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [isLiked, setIsLiked] = useState(post?.isLikedByUser || false);
   const [likesCount, setLikesCount] = useState(post?.likesCount || 0);
-  const [authorName, setAuthorName] = useState(post?.author?.name || post?.userName || post?.author || 'Anonymous');
-  const [authorAvatar, setAuthorAvatar] = useState(post?.author?.avatarUrl || post?.avatarUrl || null);
+  const [authorName, setAuthorName] = useState(post?.userId?.name || post?.author?.name || post?.userName || post?.author || 'Anonymous');
+  const [authorAvatar, setAuthorAvatar] = useState(post?.userId?.avatarUrl || post?.author?.avatarUrl || post?.avatarUrl || null);
 
   // Fetch user data when component mounts
   useEffect(() => {
-    if (post?.userId && !authorName) {
-      fetchUserData(post.userId);
+    // If author avatar is not available directly from post data, and we have a userId, fetch it.
+    if (post?.userId?._id && !authorAvatar) {
+      fetchUserData(post.userId._id);
+    } else if (post?.userId?.name && authorName === 'Anonymous') {
+      // If name was not populated from post.userId.name initially but userId object exists
+      setAuthorName(post.userId.name);
     }
-  }, [post]);
+  }, [post, authorAvatar]); // Add authorAvatar to dependency array to re-trigger if it becomes null
 
   // Fetch user information if needed
-  const fetchUserData = async (userId) => {
+  const fetchUserData = async (userIdString) => {
     try {
-      if (!userId) return;
+      if (!userIdString) return;
       
       const token = await AsyncStorage.getItem('userToken');
-      if (!token) return;
+      if (!token) {
+        console.log('PostCard: No token, cannot fetch user data for', userIdString);
+        return;
+      }
       
-      const response = await fetch(`${API_CONFIG.API_URL}/users/profile/${userId}`, {
+      console.log(`PostCard: Fetching user data for ${userIdString}`);
+      const response = await fetch(`${API_CONFIG.API_URL}/users/${userIdString}`, { // Corrected endpoint
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       if (response.ok) {
         const userData = await response.json();
+        console.log(`PostCard: Fetched user data for ${userIdString}:`, userData);
         if (userData.name) setAuthorName(userData.name);
         if (userData.avatarUrl) setAuthorAvatar(userData.avatarUrl);
+        else setAuthorAvatar(null); // Explicitly set to null if not present
+      } else {
+        console.error(`PostCard: Failed to fetch user data for ${userIdString}: ${response.status}`);
+        // Optionally set a default avatar or name if fetch fails
+        // setAuthorName('User'); // Or keep 'Anonymous'
+        setAuthorAvatar(null); 
       }
     } catch (error) {
-      console.error('Error fetching user data:', error);
+      console.error(`PostCard: Error fetching user data for ${userIdString}:`, error);
+      setAuthorAvatar(null);
     }
   };
 
@@ -1333,7 +1349,7 @@ const HomeScreen = () => {
         return;
       }
       console.log('Fetching user stats with token...');
-      const response = await fetch(`${API_CONFIG.API_URL}/homepage/stats/user`, {
+      const response = await fetch(`${API_CONFIG.API_URL}/stats/user`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
