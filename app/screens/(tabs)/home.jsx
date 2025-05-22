@@ -21,6 +21,7 @@ const physicalActivitiesList = [
   { id: 7, name: 'Cycle', icon: '🚴' },
   { id: 8, name: 'Swim', icon: '🏊' },
   { id: 9, name: 'Home Workout', icon: '🏠' },
+  { id: 10, name: 'Physio', icon: '🧑‍⚕️' },
   { id: 11, name: 'Yoga', icon: '🧘' },
   { id: 12, name: 'Squash', icon: '🎾' },
   { id: 13, name: 'Rugby', icon: '🏉' },
@@ -28,9 +29,9 @@ const physicalActivitiesList = [
   { id: 15, name: 'Steps goal', icon: '👣' },
   { id: 16, name: 'DIY', icon: '🔨' },
   { id: 17, name: 'Gardening', icon: '🌱' },
+  { id: 18, name: 'Physical other', icon: '❓' },
   { id: 19, name: 'Pilates', icon: '🧘‍♀️' },
-  { id: 20, name: 'Dance', icon: '💃' },
-  { id: 18, name: 'Physical other', icon: '❓' }
+  { id: 20, name: 'Dance', icon: '💃' }
 ];
 
 // Realistic Mental Activities List
@@ -55,7 +56,12 @@ const bonusActivitiesList = [
   { id: 2, name: 'Family', icon: '👨‍👩‍👧‍👦' },
   { id: 3, name: 'Personal Best', icon: '🏆' },
   { id: 4, name: 'Personal Goal', icon: '🎯' },
-  { id: 5, name: 'Bonus other', icon: '✨' }
+  { id: 5, name: 'Bonus other', icon: '✨' },
+  { id: 6, name: 'Environmental Action', icon: '🌳' },
+  { id: 7, name: 'Volunteering', icon: '🙌' },
+  { id: 8, name: 'Teaching Others', icon: '👨‍🏫' },
+  { id: 9, name: 'Religious/Spiritual Practice', icon: '🕊️' },
+  { id: 10, name: 'Self-Care', icon: '🧖' }
 ];
 
 // Activity category data
@@ -94,8 +100,8 @@ const activityData = {
   ],
   Bonus: [
     "Community Service", "Family", "Personal Best", "Personal Goal", 
-    "Environmental Action", "Volunteering", "Teaching Others", 
-    "Religious/Spiritual Practice", "Self-Care", "Bonus other"
+    "Bonus other", "Environmental Action", "Volunteering", "Teaching Others", 
+    "Religious/Spiritual Practice", "Self-Care"
   ]
 };
 
@@ -495,6 +501,18 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             return '🏆';
           case 'Personal Goal':
             return '🎯';
+          case 'Environmental Action':
+            return '🌳';
+          case 'Volunteering':
+            return '🙌';
+          case 'Teaching Others':
+            return '👨‍🏫';
+          case 'Religious/Spiritual Practice':
+            return '🕊️';
+          case 'Self-Care':
+            return '🧖';
+          case 'Bonus other':
+            return '✨';
           default:
             return '⭐';
         }
