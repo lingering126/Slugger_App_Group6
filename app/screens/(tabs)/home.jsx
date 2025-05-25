@@ -1949,7 +1949,7 @@ const HomeScreen = () => {
               <ActivityIndicator color="white" size="small" />
             ) : (
               <>
-                <FontAwesome5 name="running" size={24} color="white" />
+                <FontAwesome5 name="running" size={18} color="white" />
                 <Text style={styles.actionButtonText}>Physical</Text>
               </>
             )}
@@ -1964,7 +1964,7 @@ const HomeScreen = () => {
               <ActivityIndicator color="white" size="small" />
             ) : (
               <>
-                <FontAwesome5 name="brain" size={24} color="white" />
+                <FontAwesome5 name="brain" size={18} color="white" />
                 <Text style={styles.actionButtonText}>Mental</Text>
               </>
             )}
@@ -1975,7 +1975,7 @@ const HomeScreen = () => {
             onPress={() => handleCategorySelect('Bonus')}
             disabled={checkingCategoryLimit !== null}
           >
-            <FontAwesome5 name="star" size={24} color="white" />
+            <FontAwesome5 name="star" size={18} color="white" />
             <Text style={styles.actionButtonText}>Bonus</Text>
           </TouchableOpacity>
           
@@ -1984,7 +1984,7 @@ const HomeScreen = () => {
             onPress={() => setShowContentModal(true)}
             disabled={checkingCategoryLimit !== null}
           >
-            <FontAwesome5 name="edit" size={24} color="white" />
+            <FontAwesome5 name="edit" size={18} color="white" />
             <Text style={styles.actionButtonText}>Post</Text>
           </TouchableOpacity>
         </View>
@@ -2452,7 +2452,8 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: 'white',
     fontWeight: 'bold',
-    marginLeft: 8,
+    marginLeft: 4,
+    fontSize: 12,
   },
   disabledButtonVisual: {
     backgroundColor: '#cccccc',
@@ -2523,12 +2524,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     borderRadius: 10,
     marginBottom: 6,
-    minHeight: 110,
+    minHeight: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
   picker: { 
-    height: 110,
+    height: 50,
     width: '100%',
     backgroundColor: 'transparent',
   },
@@ -2733,7 +2734,7 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     textAlign: 'center',
-    height: 110,
+    height: 50,
   },
 });
 
