@@ -24,7 +24,7 @@ const feedRoutes = require('./homepage/routes/feed'); // Import the new feed rou
 // Function to get all server IP addresses
 const getServerIPs = () => {
   // Always include the deployed URL first for verification links
-  const deployedUrl = 'https://slugger-app-group6.onrender.com';
+  const deployedUrl = process.env.DEPLOYED_URL || 'http://localhost:5001';
   const networkInterfaces = os.networkInterfaces();
   const serverIPs = [];
   
@@ -673,7 +673,7 @@ app.post('/api/auth/signup', async (req, res) => {
     const serverIPs = getServerIPs();
     
     // Always use the deployed URL as the primary verification link
-    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const deployedUrl = process.env.DEPLOYED_URL || 'http://localhost:5001';
     const verificationLink = `${deployedUrl}/verify-email?token=${verificationToken}`;
     
     console.log('=== Signup Email Link Details ===');
@@ -1017,7 +1017,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     const serverIPs = getServerIPs();
     
     // Always use the deployed URL as the primary verification link
-    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const deployedUrl = process.env.DEPLOYED_URL || 'http://localhost:5001';
     const verificationLink = `${deployedUrl}/verify-email?token=${user.verificationToken}`;
     
     console.log('=== Resend Email Link Details ===');
