@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Image, ScrollView, Alert, ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Image, ScrollView, Alert, ActivityIndicator, Keyboard, TouchableWithoutFeedback } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import teamService from "../../services/teamService";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -434,12 +434,12 @@ export default function TeamsScreen() {
     if (!team) return { total: 0, completed: 0, progress: 0 };
     if (team.calculatedTargetValue !== undefined) {
       const completed = team.members?.reduce((sum, member) => sum + (member.completedActivities || 0), 0) || 0;
-      const progress = team.calculatedTargetValue > 0 ? Math.round((completed / team.calculatedTargetValue) * 100) : 0;
+      const progress = team.calculatedTargetValue > 0 ? Math.min(100, Math.round((completed / team.calculatedTargetValue) * 100)) : 0;
       return { total: team.calculatedTargetValue, completed, progress };
     }
     const targetValue = team.targetValue || 0;
     const completed = team.members?.reduce((sum, member) => sum + (member.completedActivities || 0), 0) || 0;
-    const progress = targetValue > 0 ? Math.round((completed / targetValue) * 100) : 0;
+    const progress = targetValue > 0 ? Math.min(100, Math.round((completed / targetValue) * 100)) : 0;
     return { total: targetValue, completed, progress };
   };
 
@@ -541,7 +541,7 @@ export default function TeamsScreen() {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       if (!token) { Alert.alert('Error', 'Please log in first'); setLoading(false); return; }
-      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
+      const apiUrl = 'http://192.168.1.6:5001/api'; // Updated URL
       const response = await fetch(`${apiUrl}/groups/${userTeam._id}/targets`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -659,7 +659,7 @@ export default function TeamsScreen() {
     </ScrollView>
   );
 
-  const renderTeamListHeader = () => (
+  const renderTeamListHeader = useMemo(() => (
     <>
       <View style={styles.headerContainer}>
         <Text style={styles.header}>Teams</Text>
@@ -685,6 +685,8 @@ export default function TeamsScreen() {
             onChangeText={setTeamIdToJoin}
             maxLength={6}
             keyboardType="number-pad"
+            returnKeyType="done"
+            blurOnSubmit={true}
           />
           <TouchableOpacity 
             style={styles.joinByIdButton}
@@ -702,10 +704,12 @@ export default function TeamsScreen() {
           placeholder="Search teams..."
           value={search}
           onChangeText={setSearch}
+          returnKeyType="search"
+          blurOnSubmit={true}
         />
       </View>
     </>
-  );
+  ), [teamIdToJoin, search, loading, router]);
 
   const renderTeamList = () => (
     <View style={styles.container}>
@@ -772,11 +776,56 @@ export default function TeamsScreen() {
     }
   };
 
+  const handleModalOverlayPress = () => {
+    Keyboard.dismiss();
+  };
+
   const renderPersonalTargetModal = () => (
     <Modal visible={personalTargetModal} transparent animationType="slide" onRequestClose={() => { setPersonalTargetModal(false); setTeamToJoin(null); }}>
-      <View style={styles.modalOverlay}><View style={styles.modalContent}><Text style={styles.modalTitle}>Set Your Personal Target</Text><Text style={styles.modalDescription}>How many activities do you want to complete for this team? This will contribute to the team's overall target.</Text>
-          <View style={styles.formGroup}><Text style={styles.label}>Your Personal Target</Text><TextInput style={styles.input} value={String(personalTargetValue)} onChangeText={(text) => { const numValue = parseInt(text) || 0; if (numValue < 99) setPersonalTargetValue(numValue); }} keyboardType="numeric" placeholder="Enter your target (0-99)" maxLength={2} /></View>
-          <View style={styles.modalButtons}><TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => { setPersonalTargetModal(false); setTeamToJoin(null); }}><Text style={styles.buttonText}>Cancel</Text></TouchableOpacity><TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleSetPersonalTargetAndJoin} disabled={loading}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Join Team</Text>}</TouchableOpacity></View></View></View>
+      <TouchableWithoutFeedback onPress={handleModalOverlayPress}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Set Your Personal Target</Text>
+              <Text style={styles.modalDescription}>How many activities do you want to complete for this team? This will contribute to the team's overall target.</Text>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Your Personal Target</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={String(personalTargetValue)} 
+                  onChangeText={(text) => { 
+                    const numValue = parseInt(text) || 0; 
+                    if (numValue < 99) setPersonalTargetValue(numValue); 
+                  }} 
+                  keyboardType="numeric" 
+                  placeholder="Enter your target (0-99)" 
+                  maxLength={2}
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                />
+              </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.cancelButton]} 
+                  onPress={() => { 
+                    setPersonalTargetModal(false); 
+                    setTeamToJoin(null); 
+                  }}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.saveButton]} 
+                  onPress={handleSetPersonalTargetAndJoin} 
+                  disabled={loading}
+                >
+                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Join Team</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 
@@ -814,9 +863,47 @@ export default function TeamsScreen() {
 
   const renderUpdatePersonalTargetModal = () => (
     <Modal visible={updateTargetModal} transparent animationType="slide" onRequestClose={() => setUpdateTargetModal(false)}>
-      <View style={styles.modalOverlay}><View style={styles.modalContent}><Text style={styles.modalTitle}>Update Personal Target</Text><Text style={styles.modalDescription}>Set your personal activity target for this 7-day cycle. This represents how many activities you aim to complete during this cycle.</Text>
-          <View style={styles.formGroup}><Text style={styles.label}>Your Personal Target</Text><TextInput style={styles.input} value={String(newPersonalTarget)} onChangeText={(text) => { const numValue = parseInt(text) || 0; if (numValue < 99) setNewPersonalTarget(numValue); }} keyboardType="numeric" placeholder="Enter your target (0-99)" maxLength={2} /></View>
-          <View style={styles.modalButtons}><TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setUpdateTargetModal(false)}><Text style={styles.buttonText}>Cancel</Text></TouchableOpacity><TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleUpdatePersonalTarget} disabled={loading}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save</Text>}</TouchableOpacity></View></View></View>
+      <TouchableWithoutFeedback onPress={handleModalOverlayPress}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Update Personal Target</Text>
+              <Text style={styles.modalDescription}>Set your personal activity target for this 7-day cycle. This represents how many activities you aim to complete during this cycle.</Text>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Your Personal Target</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={String(newPersonalTarget)} 
+                  onChangeText={(text) => { 
+                    const numValue = parseInt(text) || 0; 
+                    if (numValue < 99) setNewPersonalTarget(numValue); 
+                  }} 
+                  keyboardType="numeric" 
+                  placeholder="Enter your target (0-99)" 
+                  maxLength={2}
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                />
+              </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.cancelButton]} 
+                  onPress={() => setUpdateTargetModal(false)}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.saveButton]} 
+                  onPress={handleUpdatePersonalTarget} 
+                  disabled={loading}
+                >
+                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 

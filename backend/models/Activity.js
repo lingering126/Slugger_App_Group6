@@ -192,14 +192,28 @@ activitySchema.methods.toResponseFormat = function() {
     teamsId: this.teamsId,
     icon: this.icon,
     likes: this.likes,
+    authorInfo: this.userId ? {
+      _id: this.userId._id || this.userId,
+      id: this.userId._id || this.userId,
+      name: this.userId.name || 'Anonymous',
+      avatarUrl: this.userId.avatar || null
+    } : { name: 'Anonymous', avatarUrl: null, _id: null, id: null },
     comments: this.comments.map(comment => ({
       id: comment._id,
       author: comment.userId?.name || 'Anonymous',
       content: comment.content,
-      createdAt: comment.createdAt
+      createdAt: comment.createdAt,
+      authorInfo: comment.userId ? {
+        _id: comment.userId._id || comment.userId,
+        id: comment.userId._id || comment.userId,
+        name: comment.userId.name || 'Anonymous',
+        avatarUrl: comment.userId.avatar || null
+      } : { name: 'Anonymous', avatarUrl: null, _id: null, id: null }
     })),
     createdAt: this.createdAt,
-    updatedAt: this.updatedAt
+    updatedAt: this.updatedAt,
+    isLikedByUser: false, // This will be set by the route handler
+    likesCount: this.likes ? this.likes.length : 0,
   };
 };
 
@@ -248,7 +262,7 @@ activitySchema.methods.getLikesData = async function() {
     users: this.likes.map(user => ({
       id: user._id,
       name: user.name,
-      avatar: user.avatar
+      avatarUrl: user.avatar
     }))
   };
 };
@@ -263,7 +277,7 @@ activitySchema.methods.getCommentsData = async function() {
       user: {
         id: comment.userId._id,
         name: comment.userId.name,
-        avatar: comment.userId.avatar
+        avatarUrl: comment.userId.avatar
       },
       content: comment.content,
       createdAt: comment.createdAt

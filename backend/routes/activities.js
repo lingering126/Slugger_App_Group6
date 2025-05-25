@@ -112,8 +112,8 @@ router.get('/', async (req, res) => {
 
     // 执行查询
     const activities = await Activity.find(query)
-      .populate('userId', 'name')
-      .populate('comments.userId', 'name')
+      .populate('userId', 'name avatar')
+      .populate('comments.userId', 'name avatar')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

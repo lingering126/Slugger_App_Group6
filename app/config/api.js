@@ -1,7 +1,7 @@
 // API Configuration
 const API_CONFIG = {
-  API_URL: 'https://slugger-app-group6.onrender.com/api',
-  BASE_URL: 'https://slugger-app-group6.onrender.com',
+  API_URL: 'http://192.168.1.6:5001/api',
+  BASE_URL: 'http://192.168.1.6:5001',
   PORT: 5001,
   ENDPOINTS: {
     AUTH: {
@@ -21,10 +21,10 @@ const API_CONFIG = {
       SHARE: '/activities/:id/share'
     },
     USER: {
-      STATS: '/user',
+      STATS: '/stats/user',
       PROFILE: '/users/profile',
       UPDATE_PROFILE: '/users/profile',
-      RESET_WEEKLY_STATS: '/user/reset-weekly'
+      RESET_WEEKLY_STATS: '/stats/user/reset-weekly'
     },
     POSTS: {
       CREATE: '/posts',

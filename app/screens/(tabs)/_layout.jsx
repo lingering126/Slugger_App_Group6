@@ -27,12 +27,27 @@ export default function TabsLayout() {
           name="team"
           options={{
             title: "Team",
+            headerStyle: { backgroundColor: "#4A90E2" },
+            headerTintColor: "#fff",
+            headerTitleAlign: "center",
           }}
         />
         <Tabs.Screen
           name="profile"
           options={{
             title: "Profile",
+            headerStyle: { backgroundColor: "#3A8891" },
+            headerTintColor: "#fff",
+            headerTitleAlign: "center",
+          }}
+        />
+        <Tabs.Screen
+          name="profile/EditProfile"
+          options={{
+            title: " ",
+            headerStyle: { backgroundColor: "#3A8891" },
+            headerTintColor: "#fff",
+            headerTitleAlign: "center",
           }}
         />
         <Tabs.Screen
@@ -46,6 +61,9 @@ export default function TabsLayout() {
           name="more"
           options={{
             title: "More",
+            headerStyle: { backgroundColor: "#dc3748b9" },
+            headerTintColor: "#fff",
+            headerTitleAlign: "center",
           }}
         />
       </Tabs>

@@ -123,7 +123,7 @@ describe('Auth Controller Tests', () => {
       // Let's assume a generic error or a 400 if AppError is used by Mongoose validation hook (unlikely)
       // The User model has `email: { required: true }`.
       // The route's try-catch will pass this to `next(error)`, handled by `errorHandler`.
-      // Let's expect 500 for now if not specifically handled as 400 by a validation middleware.
+      // Let's expect 400 for now if not specifically handled as 400 by a validation middleware.
       // Update: The `auth.js` register route does not have explicit checks for missing fields before `new User()`.
       // Mongoose validation errors are typically passed to `next(error)`.
       // The `errorHandler` middleware will handle this. If it's a Mongoose ValidationError,
@@ -134,13 +134,13 @@ describe('Auth Controller Tests', () => {
       // However, the `auth.js` route does not have input validation for required fields before calling `new User()`.
       // Let's assume the `errorHandler` converts Mongoose validation errors to a 400 or 500.
       // The `AppError` is used for specific business logic errors. Mongoose errors are different.
-      // Let's test for a 500 as a general server error due to validation.
+      // Let's test for a 400 as a client error due to validation.
       // If the `errorHandler` is well-defined for Mongoose, it might be 400.
       // The current `errorHandler` in `activityController.test.js` is not shown, but I added it to this test app.
-      // Let's assume Mongoose validation error leads to a 500 if not specifically handled.
+      // Let's assume Mongoose validation error leads to a 400 if not specifically handled.
       // The prompt asks for simple tests. A specific check for "Email and password are required" is in login, not register.
       // The register route *will* fail due to Mongoose validation.
-      expect(response.status).toBe(500); // Or 400 if errorHandler is smart
+      expect(response.status).toBe(400); // Changed to 400 as it's a client error
       // A more specific check would be:
       // expect(response.body.message).toMatch(/email.*required/i);
 

@@ -123,7 +123,7 @@ postSchema.methods.getLikesData = async function() {
     users: this.likes.map(user => ({
       id: user._id,
       name: user.name,
-      avatar: user.avatar
+      avatarUrl: user.avatar
     }))
   };
 };

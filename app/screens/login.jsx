@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -23,8 +23,22 @@ export default function LoginScreen() {
   const [resendingEmail, setResendingEmail] = useState(false);
   const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
   const [verificationPromptEmail, setVerificationPromptEmail] = useState('');
+  const timeoutRef = useRef(null);
+  const controllerRef = useRef(null);
   const router = useRouter();
   const params = useLocalSearchParams();
+
+  // Cleanup function to clear any pending timeout
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Check if user was redirected after verification
   useEffect(() => {
@@ -115,12 +129,18 @@ export default function LoginScreen() {
       
       // Create an abort controller for timeout
       const controller = new AbortController();
+      controllerRef.current = controller;
+      let isTimedOut = false;
+      
       const timeoutId = setTimeout(() => {
+        isTimedOut = true;
         controller.abort();
         console.log('Login request timed out after 15 seconds');
         setError('Request timed out. Server might be unavailable.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         setLoading(false);
       }, 15000);
+      
+      timeoutRef.current = timeoutId;
       
       let response, data;
       
@@ -138,7 +158,8 @@ export default function LoginScreen() {
         });
         
         // Clear the timeout since we got a response
-        clearTimeout(timeoutId);
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
         
         // Check if response might be HTML instead of JSON
         const contentType = response.headers.get('content-type');
@@ -238,12 +259,20 @@ export default function LoginScreen() {
           setLoading(false);
         }
       } catch (fetchError) {
-        clearTimeout(timeoutId);
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
         console.log('Fetch error details:', fetchError);
         
         // Only show connection errors for actual network issues
         if (fetchError.name === 'AbortError') {
-          setError('Connection timed out. Please check your internet connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
+          // Only show timeout error if it was actually caused by our timeout
+          if (isTimedOut) {
+            setError('Connection timed out. Please check your internet connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
+          } else {
+            // Request was aborted for other reasons (like navigation), don't show error
+            console.log('Request was aborted (likely due to navigation), not showing error');
+            return;
+          }
         } else if (fetchError.name === 'TypeError' && fetchError.message.includes('Network request failed')) {
           setError('Network error. Please check your connection and try again.\n Mostly it is because the server has cold start delay. Please wait around 30 seconds then refresh the page and try again.');
         } else {

@@ -11,67 +11,39 @@ const ActivityCard = ({ activity, onRefresh }) => {
   const [comment, setComment] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [comments, setComments] = useState(activity.comments || []);
-  const [isLiked, setIsLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(0);
+  
+  // Use authorInfo and like/comment counts directly from the activity prop
+  const [isLiked, setIsLiked] = useState(activity.isLikedByUser || false);
+  const [likesCount, setLikesCount] = useState(activity.likesCount || 0);
+  
   const [isLikeError, setIsLikeError] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [authorName, setAuthorName] = useState(activity.userName || activity.user?.name || activity.author || 'Anonymous');
-  const [authorAvatar, setAuthorAvatar] = useState(activity.user?.avatarUrl || activity.avatarUrl || null);
+  const [authorName, setAuthorName] = useState(activity.authorInfo?.name || 'Anonymous');
+  const [authorAvatar, setAuthorAvatar] = useState(activity.authorInfo?.avatarUrl || null);
 
-  // Check and update like status when component mounts or activity changes
   useEffect(() => {
-    const checkLikeStatus = async () => {
-      try {
-        const userId = await AsyncStorage.getItem('userId');
-        setCurrentUserId(userId);
-        const likes = Array.isArray(activity.likes) ? activity.likes : [];
-        setIsLiked(likes.includes(userId));
-        setLikesCount(likes.length);
-        setIsLikeError(false);
-      } catch (error) {
-        console.error('Error checking like status:', error);
-        setIsLikeError(true);
-      }
+    const loadCurrentUserId = async () => {
+      const userId = await AsyncStorage.getItem('userId');
+      setCurrentUserId(userId);
     };
-    checkLikeStatus();
-  }, [activity.likes]);
+    loadCurrentUserId();
+  }, []);
 
-  // Update comments when activity comments change
+  // Update local state if activity prop changes (e.g., after a feed refresh)
   useEffect(() => {
-    if (activity.comments) {
-      setComments(Array.isArray(activity.comments) ? activity.comments : []);
-    }
-  }, [activity.comments]);
-
-  // Fetch user data when component mounts
-  useEffect(() => {
-    if (activity.userId && !authorName) {
-      fetchUserData(activity.userId);
-    }
+    // console.log('activity:', activity);
+    console.log('✅activity.authorInfo.name', activity.authorInfo.name);
+    console.log('activity.name', activity.name);
+    console.log('activity.isLikedByUser', activity.isLikedByUser);
+    console.log('activity.likesCount', activity.likesCount);
+    
+    setAuthorName(activity.authorInfo?.name || 'Anonymous');
+    setAuthorAvatar(activity.authorInfo?.avatarUrl || null);
+    setIsLiked(activity.isLikedByUser || false);
+    setLikesCount(activity.likesCount || 0);
+    setComments(activity.comments || []);
   }, [activity]);
-
-  // Fetch user information if needed
-  const fetchUserData = async (userId) => {
-    try {
-      if (!userId) return;
-      
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) return;
-      
-      const response = await fetch(`${API_CONFIG.API_URL}/users/profile/${userId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        if (userData.name) setAuthorName(userData.name);
-        if (userData.avatarUrl) setAuthorAvatar(userData.avatarUrl);
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    }
-  };
 
   // Helper functions for UI elements
   const getActivityIcon = (type) => {
@@ -107,8 +79,9 @@ const ActivityCard = ({ activity, onRefresh }) => {
       setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
 
       // API call to update like status
-      console.log('Sending like request for activity:', activity.id);
-      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIKE.replace(':id', activity.id)}`, {
+      const activityId = activity.id || activity._id;
+      console.log('Sending like request for activity:', activityId);
+      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIKE.replace(':id', activityId)}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -151,8 +124,9 @@ const ActivityCard = ({ activity, onRefresh }) => {
       }
 
       // API call to add comment
-      console.log('Sending comment for activity:', activity.id);
-      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.COMMENT.replace(':id', activity.id)}`, {
+      const activityId = activity.id || activity._id;
+      console.log('Sending comment for activity:', activityId);
+      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.COMMENT.replace(':id', activityId)}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -166,11 +140,13 @@ const ActivityCard = ({ activity, onRefresh }) => {
 
       if (response.ok) {
         // Update local state with new comment
+        console.log('✅加了data.comment', data.comment);
         const newComment = {
           id: data.comment.id,
           author: data.comment.author,
           content: data.comment.content,
-          createdAt: data.comment.createdAt
+          createdAt: data.comment.createdAt,
+          authorInfo: data.comment.authorInfo || { name: data.comment.author || 'Anonymous', avatarUrl: null }
         };
         
         setComments(prev => [...prev, newComment]);
@@ -248,16 +224,26 @@ const ActivityCard = ({ activity, onRefresh }) => {
       {/* Comments Section */}
       {comments.length > 0 && (
         <View style={styles.commentsSection}>
-          {comments.map((comment, index) => (
-            <View key={index} style={styles.commentContainer}>
+          {comments.map((commentItem, index) => (
+            <View key={commentItem.id || commentItem._id || index} style={styles.commentContainer}>
               <View style={styles.commentHeader}>
                 <View style={styles.commentAvatar}>
-                  <Text style={styles.commentAvatarText}>
-                    {comment?.author?.[0] || 'A'}
-                  </Text>
+                  {commentItem.authorInfo?.avatarUrl ? (
+                    <Image 
+                      source={{ uri: commentItem.authorInfo.avatarUrl }} 
+                      style={{ width: '100%', height: '100%', borderRadius: 12 }}
+                      onError={(e) => { 
+                        // console.log("Error loading comment author avatar", e.nativeEvent.error);
+                      }}
+                    />
+                  ) : (
+                    <Text style={styles.commentAvatarText}>
+                      {commentItem.authorInfo?.name?.[0] || 'A'}
+                    </Text>
+                  )}
                 </View>
-                <Text style={styles.commentAuthor}>{comment?.author || 'Anonymous'}</Text>
-                <Text style={styles.commentContent}>{comment?.content || ''}</Text>
+                <Text style={styles.commentAuthor}>{commentItem.authorInfo?.name || 'Anonymous'}</Text>
+                <Text style={styles.commentContent}>{commentItem.content || ''}</Text>
               </View>
             </View>
           ))}

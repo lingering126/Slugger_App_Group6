@@ -174,59 +174,63 @@ export default function EditProfile() {
         return;
       }
 
-      // Launch camera
+      // Launch camera with base64 option
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
+        base64: true, // Request base64 data
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedImageUri = result.assets[0].uri;
-        console.log("Selected image URI:", selectedImageUri);
+        const asset = result.assets[0];
+        console.log("Selected image URI:", asset.uri);
         
-        // For mobile devices, we need to convert the image to base64
-        try {
-          const base64 = await convertImageToBase64(selectedImageUri);
-          setAvatarSource(base64);
+        const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3MB
+
+        // Validate file size (max 3MB)
+        if (asset.fileSize && asset.fileSize > MAX_SIZE_BYTES) {
+          Alert.alert(
+            "The image you selected is too large", 
+            `Please select an image smaller than ${MAX_SIZE_BYTES / (1024 * 1024)}MB (actual size: ${(asset.fileSize / (1024*1024)).toFixed(2)}MB).`
+          );
+          return;
+        } else if (!asset.fileSize && asset.base64 && (asset.base64.length * 0.75) > MAX_SIZE_BYTES) {
+          Alert.alert(
+            "The image you selected is too large", 
+            `Please select an image smaller than ${MAX_SIZE_BYTES / (1024 * 1024)}MB (estimated size: ${(asset.base64.length * 0.75 / (1024*1024)).toFixed(2)}MB).`
+          );
+          return;
+        }
+
+        // Validate file type (PNG, JPEG, WebP)
+        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const fileExtension = asset.uri ? asset.uri.split('.').pop()?.toLowerCase() : '';
+        const isAllowedExtension = ['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension);
+
+        if (asset.mimeType && !allowedMimeTypes.includes(asset.mimeType.toLowerCase())) {
+          Alert.alert("Unsupported image format", "Please select a PNG, JPEG, or WebP image.");
+          return;
+        } else if (!asset.mimeType && !isAllowedExtension) {
+          Alert.alert("Unsupported image format", "Please select a PNG, JPEG, or WebP image.");
+          return;
+        }
+
+        if (asset.base64) {
+          // Create proper data URI with MIME type
+          const dataUriMimeType = asset.mimeType || (isAllowedExtension ? `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}` : 'image/jpeg');
+          const base64Uri = `data:${dataUriMimeType};base64,${asset.base64}`;
+          console.log("Generated base64Uri (first 100 chars):", base64Uri.substring(0, 100) + "...");
+          setAvatarSource(base64Uri);
           console.log("New avatar set from camera (converted to base64)");
-        } catch (error) {
-          console.error("Error converting camera image:", error);
-          // Fallback to URI if conversion fails
-          setAvatarSource(selectedImageUri);
-          console.log("New avatar set from camera:", selectedImageUri);
+        } else {
+          console.log("Error: asset.base64 is missing.");
+          Alert.alert("Error", "Failed to read image data (base64).");
         }
       }
     } catch (error) {
       console.error('Error taking photo:', error);
       Alert.alert('Error', 'Failed to take photo');
-    }
-  };
-
-  // Helper function to convert an image URI to base64
-  const convertImageToBase64 = async (uri) => {
-    try {
-      // For web platform
-      if (Platform.OS === 'web') {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } 
-      // For mobile platforms, you'd need to implement a different method
-      // This is a placeholder - you'd need a library like expo-file-system
-      // Example: return await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-      
-      // For now, just return the URI for mobile platforms as a fallback
-      return uri;
-    } catch (error) {
-      console.error('Error converting image to base64:', error);
-      throw error;
     }
   };
 
@@ -242,23 +246,24 @@ export default function EditProfile() {
         }
       }
 
-      // Open image picker
+      // Open image picker with base64 option for mobile
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
+        base64: Platform.OS !== 'web', // Request base64 for mobile platforms
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedImageUri = result.assets[0].uri;
-        console.log("Selected image URI:", selectedImageUri);
+        const asset = result.assets[0];
+        console.log("Selected image URI:", asset.uri);
         
         // For Web/macOS, we need to convert the image to base64
         if (Platform.OS === 'web') {
           try {
             // Get blob from URI
-            const response = await fetch(selectedImageUri);
+            const response = await fetch(asset.uri);
             const blob = await response.blob();
             
             // Convert blob to base64 using FileReader
@@ -274,16 +279,47 @@ export default function EditProfile() {
             Alert.alert("Error", "Failed to process the image");
           }
         } else {
-          // For mobile devices, try to convert to base64
-          try {
-            const base64 = await convertImageToBase64(selectedImageUri);
-            setAvatarSource(base64);
+          // For mobile devices, use the base64 data from ImagePicker
+          const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3MB
+
+          // Validate file size (max 3MB)
+          if (asset.fileSize && asset.fileSize > MAX_SIZE_BYTES) {
+            Alert.alert(
+              "The image you selected is too large", 
+              `Please select an image smaller than ${MAX_SIZE_BYTES / (1024 * 1024)}MB (actual size: ${(asset.fileSize / (1024*1024)).toFixed(2)}MB).`
+            );
+            return;
+          } else if (!asset.fileSize && asset.base64 && (asset.base64.length * 0.75) > MAX_SIZE_BYTES) {
+            Alert.alert(
+              "The image you selected is too large", 
+              `Please select an image smaller than ${MAX_SIZE_BYTES / (1024 * 1024)}MB (estimated size: ${(asset.base64.length * 0.75 / (1024*1024)).toFixed(2)}MB).`
+            );
+            return;
+          }
+
+          // Validate file type (PNG, JPEG, WebP)
+          const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+          const fileExtension = asset.uri ? asset.uri.split('.').pop()?.toLowerCase() : '';
+          const isAllowedExtension = ['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension);
+
+          if (asset.mimeType && !allowedMimeTypes.includes(asset.mimeType.toLowerCase())) {
+            Alert.alert("Unsupported image format", "Please select a PNG, JPEG, or WebP image.");
+            return;
+          } else if (!asset.mimeType && !isAllowedExtension) {
+            Alert.alert("Unsupported image format", "Please select a PNG, JPEG, or WebP image.");
+            return;
+          }
+
+          if (asset.base64) {
+            // Create proper data URI with MIME type
+            const dataUriMimeType = asset.mimeType || (isAllowedExtension ? `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}` : 'image/jpeg');
+            const base64Uri = `data:${dataUriMimeType};base64,${asset.base64}`;
+            console.log("Generated base64Uri (first 100 chars):", base64Uri.substring(0, 100) + "...");
+            setAvatarSource(base64Uri);
             console.log("New avatar set from gallery (converted to base64)");
-          } catch (error) {
-            console.error("Error converting gallery image:", error);
-            // Fallback to URI if conversion fails
-            setAvatarSource(selectedImageUri);
-            console.log("New avatar set from gallery:", selectedImageUri);
+          } else {
+            console.log("Error: asset.base64 is missing.");
+            Alert.alert("Error", "Failed to read image data (base64).");
           }
         }
       }
@@ -689,7 +725,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   headerText: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
   },
@@ -700,7 +736,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   content: {

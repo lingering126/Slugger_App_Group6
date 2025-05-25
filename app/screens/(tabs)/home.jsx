@@ -633,165 +633,128 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.modalLabel}>Select Duration (Hours)</Text>
-          <View style={styles.pickerContainer}>
-          <Picker 
-            selectedValue={selectedTime} 
-            style={styles.picker} 
-              onValueChange={(itemValue) => {
-                setSelectedTime(itemValue);
-                console.log('Selected time:', itemValue);
-              }}
-          >
-            <Picker.Item key="0.25" label="15 minutes" value="0.25" />
-            <Picker.Item key="0.5" label="30 minutes" value="0.5" />
-            <Picker.Item key="0.75" label="45 minutes" value="0.75" />
-            {[...Array(8).keys()].map((num) => (
-              <Picker.Item key={num + 1} label={`${num + 1} hour${num > 0 ? 's' : ''}`} value={`${num + 1}`} />
-            ))}
-          </Picker>
-          </View>
-
-          <Text style={styles.modalLabel}>Select Activity</Text>
-          <ScrollView style={styles.activityList}>
-            <View style={styles.activityGrid}>
-            {loadingUserActivities ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#3A8891" />
-                <Text style={styles.loadingText}>Loading your activities...</Text>
-              </View>
-            ) : activities.length === 0 ? (
-              <View style={styles.emptyActivitiesContainer}>
-                <Text style={styles.emptyActivitiesText}>
-                  No {category ? category.toLowerCase() : ''} activities found. Please set up your preferences in the Profile tab.
-                </Text>
-              </View>
-            ) : (
-              activities.map((activity, index) => (
-                <TouchableOpacity 
-                  key={index}
-                  style={[
-                    styles.activityGridItem,
-                    selectedActivity === activity && styles.selectedActivity
-                  ]}
-                  onPress={() => {
-                    setSelectedActivity(activity);
-                    console.log('Selected activity:', activity);
+          <View style={styles.modalBody}>
+            <View style={styles.timeSection}>
+              <Text style={styles.modalLabel}>Select Duration (Hours)</Text>
+              <View style={styles.pickerContainer}>
+                <Picker 
+                  selectedValue={selectedTime} 
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                  onValueChange={(itemValue) => {
+                    setSelectedTime(itemValue);
+                    console.log('Selected time:', itemValue);
                   }}
                 >
-                  <Text style={[
-                    styles.activityGridText,
-                    selectedActivity === activity && styles.selectedActivityText
-                  ]}>
-                    {activity}
-                  </Text>
-                </TouchableOpacity>
-              ))
-            )}
+                  <Picker.Item key="0.25" label="15 minutes" value="0.25" color="#333" />
+                  <Picker.Item key="0.5" label="30 minutes" value="0.5" color="#333" />
+                  <Picker.Item key="0.75" label="45 minutes" value="0.75" color="#333" />
+                  {[...Array(8).keys()].map((num) => (
+                    <Picker.Item key={num + 1} label={`${num + 1} hour${num > 0 ? 's' : ''}`} value={`${num + 1}`} color="#333" />
+                  ))}
+                </Picker>
+              </View>
             </View>
-          </ScrollView>
+
+            <View style={styles.activitySection}>
+              <Text style={styles.modalLabel}>Select Activity</Text>
+              <ScrollView style={styles.activityList}>
+                <View style={styles.activityGrid}>
+                {loadingUserActivities ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#3A8891" />
+                    <Text style={styles.loadingText}>Loading your activities...</Text>
+                  </View>
+                ) : activities.length === 0 ? (
+                  <View style={styles.emptyActivitiesContainer}>
+                    <Text style={styles.emptyActivitiesText}>
+                      No {category ? category.toLowerCase() : ''} activities found. Please set up your preferences in the Profile tab.
+                    </Text>
+                  </View>
+                ) : (
+                  activities.map((activity, index) => (
+                    <TouchableOpacity 
+                      key={index}
+                      style={[
+                        styles.activityGridItem,
+                        selectedActivity === activity && styles.selectedActivity
+                      ]}
+                      onPress={() => {
+                        setSelectedActivity(activity);
+                        console.log('Selected activity:', activity);
+                      }}
+                    >
+                      <Text style={[
+                        styles.activityGridText,
+                        selectedActivity === activity && styles.selectedActivityText
+                      ]}>
+                        {activity}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+                </View>
+              </ScrollView>
+            </View>
 
             <TouchableOpacity
-            style={[
-              styles.confirmButton,
-              (!selectedActivity || loading) && styles.disabledButton
-            ]}
+              style={[
+                styles.confirmButton,
+                (!selectedActivity || loading) && styles.disabledButton
+              ]}
               onPress={handleConfirm}
-            disabled={!selectedActivity || loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.confirmButtonText}>Confirm</Text>
-            )}
+              disabled={!selectedActivity || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              )}
             </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
   );
 };
 
-const PostCard = ({ post }) => {
+const PostCard = ({ post, onPostUpdated }) => {
   const [comment, setComment] = useState('');
   const [localComments, setLocalComments] = useState(post?.comments || []);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [isLiked, setIsLiked] = useState(post?.isLikedByUser || false);
   const [likesCount, setLikesCount] = useState(post?.likesCount || 0);
-  const [authorName, setAuthorName] = useState(post?.author || 'Anonymous'); // post.author is already derived from post.userId.name by backend
-  const [authorAvatar, setAuthorAvatar] = useState(post?.userId?.avatarUrl || null);
+  const [authorName, setAuthorName] = useState(post?.authorInfo?.name || 'Anonymous');
+  const [authorAvatar, setAuthorAvatar] = useState(post?.authorInfo?.avatarUrl || null);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  // Fetch user data when component mounts or post data changes
   useEffect(() => {
-    // If the author's name from the post prop is 'Anonymous' and we have a userId,
-    // try to fetch more complete user data.
-    if (post?.author === 'Anonymous' && post?.userId?._id) {
-      fetchUserData(post.userId._id);
-    } 
-    // Separately, if the avatar is missing (authorAvatar state is null) and we have a userId,
-    // also try to fetch user data. This covers cases where name might be present but avatar is not.
-    else if (!authorAvatar && post?.userId?._id) { 
-      fetchUserData(post.userId._id);
-    }
-    // Note: If post.author is not 'Anonymous' and authorAvatar is already set, 
-    // this effect won't call fetchUserData, relying on the initially populated data.
-  }, [post, authorAvatar]); // Depend on post and authorAvatar state
-
-  // Fetch user information if needed
-  const fetchUserData = async (userIdString) => {
-    try {
-      if (!userIdString) return;
-      
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        console.log('PostCard: No token, cannot fetch user data for', userIdString);
-        return;
-      }
-      
-      console.log(`PostCard: Fetching user data for ${userIdString} via /profiles/:userId`);
-      const response = await fetch(`${API_CONFIG.API_URL}/profiles/${userIdString}`, { // Corrected endpoint to use /profiles/
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        console.log(`PostCard: Fetched user data for ${userIdString}:`, userData);
-        if (userData.name) setAuthorName(userData.name);
-        if (userData.avatarUrl) setAuthorAvatar(userData.avatarUrl);
-        else setAuthorAvatar(null); // Explicitly set to null if not present
-      } else {
-        console.error(`PostCard: Failed to fetch user data for ${userIdString}: ${response.status}`);
-        // Optionally set a default avatar or name if fetch fails
-        // setAuthorName('User'); // Or keep 'Anonymous'
-        setAuthorAvatar(null); 
-      }
-    } catch (error) {
-      console.error(`PostCard: Error fetching user data for ${userIdString}:`, error);
-      setAuthorAvatar(null);
-    }
-  };
-
-  // 检查点赞状态
+    const loadCurrentUserId = async () => {
+      const userId = await AsyncStorage.getItem('userId');
+      setCurrentUserId(userId);
+    };
+    loadCurrentUserId();
+  }, []);
+  
   useEffect(() => {
-    if (!post) return;
-
-    console.log('Initializing post like status:', {
-      postId: post._id,
-      likesCount: post.likesCount,
-      isLikedByUser: post.isLikedByUser
-    });
-    
-    // 直接使用帖子的点赞状态
-    setIsLiked(post.isLikedByUser || false);
-    setLikesCount(post.likesCount || 0);
-  }, [post?._id, post?.likesCount, post?.isLikedByUser]);
+    console.log('✅post.authorInfo.name', post.authorInfo.name);
+    console.log('post.content', post.content);
+    console.log('post.isLikedByUser', post.isLikedByUser);
+    console.log('post.likesCount', post.likesCount);
+    setAuthorName(post?.authorInfo?.name || 'Anonymous');
+    setAuthorAvatar(post?.authorInfo?.avatarUrl || null);
+    setIsLiked(post?.isLikedByUser || false);
+    setLikesCount(post?.likesCount || 0);
+    setLocalComments(post?.comments || []);
+  }, [post]);
 
   const handleLike = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       const userId = await AsyncStorage.getItem('userId');
       if (!token || !userId) {
-        console.error('No token or userId found');
+        console.error('No token or userId found for like action');
         return;
       }
 
@@ -833,18 +796,23 @@ const PostCard = ({ post }) => {
 
         setIsLiked(serverLikeStatus);
         setLikesCount(serverLikesCount);
+        
+        if (onPostUpdated) {
+          onPostUpdated({ ...post, isLikedByUser: serverLikeStatus, likesCount: serverLikesCount });
+        }
       } else {
         // If request fails, restore previous state
         console.error('Failed to update like status:', data);
         setIsLiked(prevIsLiked);
         setLikesCount(prevLikesCount);
-        Alert.alert('Error', 'Failed to update like status');
+        Alert.alert('Error', data.message || 'Failed to update like status');
       }
     } catch (error) {
       // Restore previous state in case of error
       console.error('Error updating like status:', error);
-      setIsLiked(prevIsLiked);
-      setLikesCount(prevLikesCount);
+      setIsLiked(isLiked);
+      setLikesCount(likesCount);
+      console.error('Error updating like status:', error);
       Alert.alert('Error', 'Failed to update like status');
     }
   };
@@ -882,6 +850,10 @@ const PostCard = ({ post }) => {
     
     try {
       const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert("Error", "You need to be logged in to comment.");
+        return;
+      }
       const response = await fetch(`${API_CONFIG.API_URL}/posts/${post?._id}/comments`, {
         method: 'POST',
         headers: {
@@ -892,17 +864,28 @@ const PostCard = ({ post }) => {
       });
 
       if (response.ok) {
-        const newComment = await response.json();
-        setLocalComments(prevComments => [...prevComments, {
-          id: newComment.id,
-          author: newComment.author || 'Anonymous',
-          content: comment
-        }]);
+        const newCommentData = await response.json();
+        
+        const formattedNewComment = {
+          ...(newCommentData.comment || newCommentData),
+          authorInfo: newCommentData.comment?.authorInfo || 
+                      (newCommentData.authorInfo || 
+                       { name: newCommentData.comment?.author || newCommentData.author || 'Anonymous', avatarUrl: null })
+        };
+
+        setLocalComments(prevComments => [...prevComments, formattedNewComment]);
         setComment('');
         setShowCommentInput(false);
+        if (onPostUpdated) {
+          onPostUpdated({ ...post, comments: [...localComments, formattedNewComment]});
+        }
+      } else {
+        const errorData = await response.json();
+        Alert.alert('Error', errorData.message || 'Failed to add comment');
       }
     } catch (error) {
       console.error('Error adding comment:', error);
+      Alert.alert('Error', 'Failed to add comment');
     }
   };
 
@@ -975,30 +958,36 @@ const PostCard = ({ post }) => {
               })}
             </Text>
           </View>
-          </View>
         </View>
+      </View>
       {renderContent()}
       
-      {/* 评论列表 */}
       {localComments.length > 0 && (
         <View style={styles.commentsSection}>
-          {localComments.map((comment, index) => (
-            <View key={index} style={styles.commentContainer}>
+          {localComments.map((commentItem, index) => (
+            <View key={commentItem.id || commentItem._id || index} style={styles.commentContainer}>
               <View style={styles.commentHeader}>
                 <View style={styles.commentAvatar}>
-                  <Text style={styles.commentAvatarText}>
-                    {comment?.author?.[0] || '?'}
-                  </Text>
-          </View>
-                <Text style={styles.commentAuthor}>{comment?.author || 'Anonymous'}</Text>
-                <Text style={styles.commentContent}>{comment?.content || ''}</Text>
-          </View>
-        </View>
+                  {commentItem.authorInfo?.avatarUrl ? (
+                    <Image 
+                      source={{ uri: commentItem.authorInfo.avatarUrl }} 
+                      style={{ width: '100%', height: '100%', borderRadius: 11 }}
+                      onError={(e) => { /* console.log("Error loading comment author avatar", e.nativeEvent.error); */ }}
+                    />
+                  ) : (
+                    <Text style={styles.commentAvatarText}>
+                      {commentItem.authorInfo?.name?.[0] || 'A'}
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.commentAuthor}>{commentItem.authorInfo?.name || 'Anonymous'}</Text>
+                <Text style={styles.commentContent}>{commentItem.content || ''}</Text>
+              </View>
+            </View>
           ))}
-      </View>
+        </View>
       )}
 
-      {/* 评论按钮和输入框 */}
       <View style={styles.socialButtonsContainer}>
         <TouchableOpacity 
           style={styles.socialButton} 
@@ -1029,9 +1018,8 @@ const PostCard = ({ post }) => {
         >
           <Ionicons name="share-social-outline" size={24} color="#666" />
         </TouchableOpacity>
-        </View>
+      </View>
 
-      {/* 分享选项弹窗 */}
       <Modal
         visible={showShareOptions}
         transparent={true}
@@ -1055,7 +1043,6 @@ const PostCard = ({ post }) => {
         </TouchableOpacity>
       </Modal>
 
-      {/* 点击评论按钮后显示的输入框 */}
       {showCommentInput && (
         <View style={styles.commentInputContainer}>
           <TextInput
@@ -1071,9 +1058,9 @@ const PostCard = ({ post }) => {
           >
             <Ionicons name="send" size={24} color="#4A90E2" />
           </TouchableOpacity>
-            </View>
+        </View>
       )}
-      </View>
+    </View>
   );
 };
 
@@ -1135,7 +1122,7 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
       setError('');
 
       const token = await AsyncStorage.getItem('userToken');
-      console.log('Retrieved token:', token);
+      // console.log('Retrieved token:', token); // Sensitive: Token printed
       
       if (!token) {
         console.error('No token found in AsyncStorage');
@@ -1216,6 +1203,7 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
             <TextInput
               style={styles.contentInput}
               placeholder="What's on your mind?"
+              placeholderTextColor="#888"
               multiline
               value={content}
               onChangeText={setContent}
@@ -1251,6 +1239,7 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
 const HomeScreen = () => {
   const [selectedFeed, setSelectedFeed] = useState('all');
   const [userStats, setUserStats] = useState(null);
+  const [feedItems, setFeedItems] = useState([]);
   const [activities, setActivities] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1267,6 +1256,11 @@ const HomeScreen = () => {
   const flatListRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const PAGE_LIMIT = 10;
 
   // Calculate UTC week cycle (starts on Monday 00:00 UTC)
   const calculateWeekCycle = () => {
@@ -1325,21 +1319,31 @@ const HomeScreen = () => {
       const lastResetTime = new Date(lastResetTimeStr);
       
       // Check if we're in a new UTC week cycle since the last reset
-      // UTC week starts on Monday 00:00
+      // UTC week starts on Sunday 00:00 (day 0)
       const lastResetDay = lastResetTime.getUTCDay();
-      const lastResetDateNum = lastResetTime.getUTCDate();
-      
       const currentDay = now.getUTCDay();
-      const currentDateNum = now.getUTCDate();
       
-      // Determine if we've crossed a Monday 00:00 UTC boundary since last reset
-      const isNewWeekCycle = 
-        // If current day is Monday (1) or later in the week, and last reset was before this week's Monday
-        (currentDay >= 1 && lastResetDay >= currentDay && lastResetDateNum < currentDateNum) ||
-        // If current day is early in the week, and last reset was in previous week
-        (currentDay < lastResetDay) ||
-        // If it's been more than 7 days since last reset
-        (now.getTime() - lastResetTime.getTime() > 7 * 24 * 60 * 60 * 1000);
+      // Calculate start of current week (Sunday 00:00 UTC)
+      const startOfCurrentWeek = new Date(now);
+      startOfCurrentWeek.setUTCDate(now.getUTCDate() - currentDay);
+      startOfCurrentWeek.setUTCHours(0, 0, 0, 0);
+      
+      // Calculate start of last reset week
+      const lastResetDayOffset = lastResetTime.getUTCDay();
+      const startOfLastResetWeek = new Date(lastResetTime);
+      startOfLastResetWeek.setUTCDate(lastResetTime.getUTCDate() - lastResetDayOffset);
+      startOfLastResetWeek.setUTCHours(0, 0, 0, 0);
+      
+      // Check if we've crossed into a new week
+      const isNewWeekCycle = startOfCurrentWeek.getTime() > startOfLastResetWeek.getTime();
+      
+      console.log('Weekly reset check:', {
+        lastResetTime: lastResetTime.toISOString(),
+        currentTime: now.toISOString(),
+        startOfCurrentWeek: startOfCurrentWeek.toISOString(),
+        startOfLastResetWeek: startOfLastResetWeek.toISOString(),
+        isNewWeekCycle
+      });
       
       if (isNewWeekCycle) {
         console.log("New week cycle detected, resetting stats...");
@@ -1550,56 +1554,53 @@ const HomeScreen = () => {
 
   const handleActivityCreated = async (newActivity) => {
     try {
-      await fetchActivities();
+      // Only update stats, not fetchActivities to avoid overwriting weekly stats
+      await fetchUserStats();
       
       // Show a success message
       Alert.alert('Success', `Logged ${newActivity.type} activity: ${newActivity.name}`);
     } catch (error) {
-      console.error('Error refreshing activities after creation:', error);
+      console.error('Error refreshing data after activity creation:', error);
     }
   };
 
   const getSortedFeed = () => {
-    const currentActivities = Array.isArray(activities) ? activities : [];
-    const currentPosts = Array.isArray(posts) ? posts : [];
-
-    const allItems = [
-      ...currentActivities.map(activity => ({ ...activity, itemType: 'activity', createdAt: new Date(activity.createdAt) })),
-      ...currentPosts.map(post => ({ ...post, itemType: 'post', createdAt: new Date(post.createdAt) }))
-    ];
-    return allItems.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return feedItems;
   };
 
+  // focus update info
   useFocusEffect(
     useCallback(() => {
-      const loadDataForCurrentUser = async () => {
-        setLoading(true);
+      const loadInitialFeed = async (isRefreshing = false) => {
+        if (!isRefreshing) setLoading(true);
+        else setRefreshing(true);
+
         console.log("HomeScreen focused, reloading data for current user...");
         try {
           const token = await AsyncStorage.getItem('userToken');
           if (!token) {
             console.log("No token found on focus, user might be logged out.");
+            setFeedItems([]); // Clear feed if no token
             setActivities([]);
             setPosts([]);
             setUserStats(null);
-            setLoading(false);
+            if (!isRefreshing) setLoading(false);
+            else setRefreshing(false);
             return;
           }
           
-          // Check for incomplete user data and fix it if needed
           await ensureCompleteUserData();
-          
-          await Promise.all([fetchActivities(), fetchPosts(), fetchUserStats()]);
-          // Check weekly limits after data is loaded
-          checkWeeklyLimits();
+          await fetchFeedItems(1, isRefreshing); // Fetch first page of combined feed
+          await fetchUserStats(); // Keep fetching user stats separately if needed
+          // checkWeeklyLimits(); // Keep if still relevant
         } catch (error) {
-          console.error('Error loading data on focus:', error);
-        } finally {
-          setLoading(false);
+          console.error('Error loading data on focus/refresh:', error);
+          if (isRefreshing) setRefreshing(false);
+          else setLoading(false);
         }
       };
 
-      loadDataForCurrentUser();
+      loadInitialFeed(false); // Initial load
 
       return () => {
         console.log("HomeScreen out of focus");
@@ -1722,6 +1723,8 @@ const HomeScreen = () => {
       }
       
       const data = await response.json();
+      console.log('data', data);
+      console.log('Updated userStats', data.totalPoints, data.totalActivities, data.currentStreak, data.monthlyProgress);
       setUserStats(prevStats => ({ 
         ...prevStats, 
         totalPoints: data.totalPoints || 0, 
@@ -1809,32 +1812,117 @@ const HomeScreen = () => {
         
         console.error('Unable to refresh authentication token');
         setActivities([]);
-        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        // setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        // Remove setting userStats, avoid overwriting this week's stats
         return;
       }
       
       const data = await response.json();
       if (response.ok && data.success) {
         setActivities(data.data?.activities || []);
-        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: data.data?.stats?.totalPoints || 0, totalActivities: data.data?.pagination?.total || 0 }));
+        // Remove setting userStats, avoid overwriting this week's stats
+        // setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: data.data?.stats?.totalPoints || 0, totalActivities: data.
+        // data?.pagination?.total || 0 }));
       } else {
         console.error('Failed to fetch activities:', data.message || 'Unknown error');
         setActivities([]);
-        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        // Remove setting userStats, avoid overwriting this week's stats
+        // setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
       }
     } catch (error) {
       console.error('Error fetching activities:', error);
       setActivities([]);
-      setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+      // Remove setting userStats, avoid overwriting this week's stats
+      // setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+    }
+  };
+
+    // ADDED: fetchFeedItems function
+  const fetchFeedItems = async (page, isRefreshing = false) => {
+    if (loadingMore && !isRefreshing) return; // Prevent multiple loads
+    if (!hasMoreItems && !isRefreshing && page > 1) return; // No more items to load
+
+    // console.log(`Fetching feed: page ${page}, refreshing: ${isRefreshing}`);
+
+    if (isRefreshing) {
+      // console.log('Refreshing feed, setting page to 1');
+      setCurrentPage(1);
+      setHasMoreItems(true); // Reset hasMore on refresh
+      // setLoading(true); // setLoading(true) is handled by loadInitialFeed or onRefresh itself
+    } else if (page > 1) {
+      // console.log('Loading more feed items');
+      setLoadingMore(true);
+    } else { // Initial load for page 1 (not a refresh action)
+      // console.log('Initial feed load (page 1)');
+      if (!refreshing) setLoading(true); // Main loading for initial fetch if not already refreshing
+    }
+
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setFeedItems([]);
+        setHasMoreItems(false);
+        // if (isRefreshing) setRefreshing(false); else if (page === 1) setLoading(false);
+        // setLoadingMore(false);
+        return;
+      }
+
+      const apiUrl = await getApiUrl(); // Assuming getApiUrl correctly points to your base (e.g. http://localhost:5001)
+      const response = await fetch(`${apiUrl}/feed?page=${page}&limit=${PAGE_LIMIT}`, { // Use /feed endpoint
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        console.warn('Authentication error in fetchFeedItems, attempting to refresh token...');
+        const refreshed = await refreshAuthToken(); // Ensure refreshAuthToken is available
+        if (refreshed) {
+          fetchFeedItems(page, isRefreshing); // Retry with the same page
+          return;
+        }
+        console.error('Unable to refresh authentication token for feed');
+        setFeedItems(isRefreshing ? [] : []);
+        setHasMoreItems(false);
+        return;
+      }
+
+      const responseData = await response.json();
+
+      if (response.ok && responseData.success) {
+        const fetchedItems = responseData.data?.feed || [];
+        const pagination = responseData.data?.pagination;
+        const newHasMore = pagination?.hasNextPage || false;
+
+        // console.log(`Fetched ${fetchedItems.length} items. HasMore: ${newHasMore}`);
+
+        setFeedItems(prevItems =>
+          (page === 1 || isRefreshing) ? fetchedItems : [...prevItems, ...fetchedItems]
+        );
+        setHasMoreItems(newHasMore);
+        if (pagination?.page) setCurrentPage(pagination.page);
+      } else {
+        console.error('Failed to fetch feed items:', responseData.message || await response.text());
+        if (isRefreshing || page === 1) setFeedItems([]);
+        setHasMoreItems(false);
+      }
+    } catch (error) {
+      console.error('Error fetching feed items:', error);
+      if (isRefreshing || page === 1) setFeedItems([]); // Clear on error for initial or refresh
+      setHasMoreItems(false);
+    } finally {
+      if (isRefreshing) setRefreshing(false);
+      if (page === 1 && !isRefreshing) setLoading(false); // Turn off main loading for initial non-refresh
+      setLoadingMore(false);
     }
   };
 
   const handlePostCreated = async () => {
     try {
-      await Promise.all([
-        fetchActivities(),
-        fetchPosts()
-      ]);
+      // await Promise.all([
+      //   fetchActivities(),
+      //   fetchPosts()
+      // ]);
+      // only refresh feed and posts, not fetchActivities to avoid overwriting this week's stats
+      await fetchFeedItems(1, true);
     } catch (error) {
       console.error('Error refreshing data after post creation:', error);
     }
@@ -1847,8 +1935,8 @@ const HomeScreen = () => {
     return (
       <View style={styles.actionButtonsContainer}>
         <View style={styles.utcTimeContainer}>
-          <Text style={styles.utcTimeText}>Week cycle ends: {weekCycleEndTime}</Text>
-          <Text style={styles.resetCountdownText}>Time until reset: {timeUntilReset}</Text>
+          {/* <Text style={styles.utcTimeText}>Current UTC Time: {currentUtcTime}</Text> */}
+          <Text style={styles.resetCountdownText}>Week starts every Sunday 00:00 UTC</Text>
         </View>
         
         <View style={styles.actionButtons}>
@@ -1889,6 +1977,15 @@ const HomeScreen = () => {
           >
             <FontAwesome5 name="star" size={24} color="white" />
             <Text style={styles.actionButtonText}>Bonus</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.postButton]}
+            onPress={() => setShowContentModal(true)}
+            disabled={checkingCategoryLimit !== null}
+          >
+            <FontAwesome5 name="edit" size={24} color="white" />
+            <Text style={styles.actionButtonText}>Post</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1951,34 +2048,64 @@ const HomeScreen = () => {
             <ScrollView 
               style={styles.feed}
               contentContainerStyle={{ flexGrow: 1, width: '100%' }} 
+              onScroll={({ nativeEvent }) => {
+                const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+                const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 200;
+                if (isCloseToBottom && hasMoreItems && !loadingMore && !refreshing && !loading) {
+                  // console.log("Scrolled near bottom, attempting to load more feed items...");
+                  fetchFeedItems(currentPage + 1);
+                }
+              }}
+              scrollEventThrottle={400}
               refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={async () => {
-                  setRefreshing(true);
-                  await Promise.all([fetchActivities(), fetchPosts(), fetchUserStats()]);
-                  setRefreshing(false);
-                }} />
+                <RefreshControl 
+                  refreshing={refreshing} 
+                  onRefresh={() => {
+                    // console.log("Pull to refresh triggered for feed");
+                    fetchFeedItems(1, true); // Fetch page 1 and mark as refreshing
+                  }} 
+                />
               }
             >
-              {loading && activities.length === 0 && posts.length === 0 ? (
+              {(loading && feedItems.length === 0 && !refreshing) ? ( // Show main loader only on initial load
                 <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
               ) : getSortedFeed().length === 0 ? (
                 <View style={styles.emptyFeedContainer}>
                   <Text style={styles.emptyFeedText}>No activities or posts yet. Start logging or post something!</Text>
                 </View>
               ) : (
-                getSortedFeed().map((item) => (
-                  item.itemType === 'activity' ? (
-                    <ActivityCard
-                      key={`activity-${item.id || item._id}`}
-                      activity={item}
-                    />
-                  ) : (
-                    <PostCard 
-                      key={`post-${item._id}`}
-                      post={item}
-                    />
-                  )
-                ))
+                console.log('loading', loading),
+                console.log('feedItems.length', feedItems.length),
+                console.log('refreshing', refreshing),
+                getSortedFeed().map((item) => {
+                  if (!item || (!item.id && !item._id)) { // Add a check for valid item
+                    console.warn("Encountered an item without id or _id:", item);
+                    return null; 
+                  }
+                  const key = `${item.itemType}-${item.id || item._id}-${item.createdAt}`; // More unique key
+                  if (item.itemType === 'activity') {
+                    return (
+                      <ActivityCard
+                        key={key}
+                        activity={item}
+                        onRefresh={() => fetchFeedItems(1, true)} // Pass refresh if ActivityCard needs it
+                      />
+                    );
+                  } else if (item.itemType === 'post') {
+                    return (
+                      <PostCard 
+                        key={key}
+                        post={item}
+                        onPostUpdated={() => fetchFeedItems(1, true)} // If PostCard modifies data
+                      />
+                    );
+                  }
+                  return null; // Should not happen
+                })
+              )}
+              {/* Loading more indicator at the bottom */}
+              {loadingMore && (
+                <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 20 }} />
               )}
             </ScrollView>
 
@@ -2106,7 +2233,7 @@ const styles = StyleSheet.create({
     width: 36, 
     height: 36, 
     borderRadius: 18, 
-    backgroundColor: '#6c63ff',
+    backgroundColor: '#0E5E6F',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8, 
@@ -2202,7 +2329,7 @@ const styles = StyleSheet.create({
     width: 22, 
     height: 22, 
     borderRadius: 11, 
-    backgroundColor: '#6c63ff',
+    backgroundColor: '#0E5E6F',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 6, 
@@ -2319,6 +2446,9 @@ const styles = StyleSheet.create({
   bonusButton: {
     backgroundColor: '#FF9800',
   },
+  postButton: {
+    backgroundColor: '#34c759c6',
+  },
   actionButtonText: {
     color: 'white',
     fontWeight: 'bold',
@@ -2359,19 +2489,32 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 20,
     width: '90%',
-    maxHeight: '80%',
-  },
-  modalTitle: { 
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    maxHeight: '85%',
+    minHeight: '70%',
+    display: 'flex',
+    flexDirection: 'column',
   },
   modalHeader: { 
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 15,
+    flexShrink: 0,
+  },
+  modalBody: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  timeSection: {
+    flexShrink: 0,
+    marginBottom: 5,
+  },
+  activitySection: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
   },
   closeButton: { 
     padding: 5,
@@ -2379,19 +2522,31 @@ const styles = StyleSheet.create({
   pickerContainer: { 
     backgroundColor: '#f5f5f5',
     borderRadius: 10,
-    marginBottom: 20,
+    marginBottom: 6,
+    minHeight: 110,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   picker: { 
-    height: 50,
+    height: 110,
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+  modalTitle: { 
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
   },
   modalLabel: { 
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     marginBottom: 10,
     color: '#333',
   },
   activityList: { 
-    maxHeight: '50%',
+    flex: 1,
+    minHeight: 150,
   },
   activityGrid: { 
     flexDirection: 'row',
@@ -2424,7 +2579,8 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 15,
+    flexShrink: 0,
   },
   confirmButtonText: { 
     color: '#fff',
@@ -2467,6 +2623,11 @@ const styles = StyleSheet.create({
   },
   cancelButton: { 
     backgroundColor: '#f0f0f0',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 15,
+    flexShrink: 0,
   },
   modalButtonText: { 
     color: '#fff', 
@@ -2567,6 +2728,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     lineHeight: 20,
+  },
+  pickerItem: {
+    color: '#333',
+    fontSize: 16,
+    textAlign: 'center',
+    height: 110,
   },
 });
 

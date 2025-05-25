@@ -58,8 +58,7 @@ router.post('/login', async (req, res, next) => {
       user: {
         id: user._id,
         email: user.email,
-        name: user.name,
-        avatar: user.avatar
+        name: user.name
       }
     });
   } catch (error) {

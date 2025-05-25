@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { userService, groupService } from '../../services/api'
 import { getApiUrl } from '../../utils'
 import { FontAwesome } from '@expo/vector-icons'
+import * as ImagePicker from 'expo-image-picker'
 
 // Physical activities library
 // Expanded Physical Activities
@@ -174,6 +175,7 @@ export default function Profile() {
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedAvatarBase64, setSelectedAvatarBase64] = useState(null);
   
   // Groups state
   const [groups, setGroups] = useState([])
@@ -436,14 +438,26 @@ export default function Profile() {
           return;
         }
         
-        // Include the user ID when calling updateUserProfile
-        const result = await userService.updateUserProfile({
+        const profileUpdatePayload = {
           id: userId,
-          activitySettings
-        });
+          activitySettings,
+          // Conditionally add avatarUrl if a new avatar has been selected
+          ...(selectedAvatarBase64 && { avatarUrl: selectedAvatarBase64 }),
+        };
+
+        // Include the user ID when calling updateUserProfile
+        const result = await userService.updateUserProfile(profileUpdatePayload);
         
         // Update local state with the result (which may be from API or local update)
-        setUserData(result);
+        // The result from userService should ideally be the complete updated user profile
+        setUserData(result); 
+        // Also update AsyncStorage with the potentially new user data (including new avatarUrl from CDN)
+        await AsyncStorage.setItem('user', JSON.stringify(result));
+
+        if (selectedAvatarBase64 && result.avatarUrl) {
+          // If a new avatar was uploaded and we got a new URL back, clear the base64 state
+          setSelectedAvatarBase64(null);
+        }
         
         if (result.fallbackOnly) {
           Alert.alert(
@@ -508,13 +522,19 @@ export default function Profile() {
         <View style={styles.headerContainer}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              {userData?.avatarUrl ? (
+              {selectedAvatarBase64 ? (
+                <Image 
+                  source={{ uri: selectedAvatarBase64 }} 
+                  style={{ width: '100%', height: '100%' }}
+                />
+              ) : userData?.avatarUrl ? (
                 <Image 
                   source={{ uri: userData.avatarUrl }} 
                   style={{ width: '100%', height: '100%' }}
                   onError={(e) => {
                     console.log('Avatar image error:', e.nativeEvent.error)
                     // Fall back to placeholder on error
+                    // Consider setting a flag to show placeholder if userData.avatarUrl fails
                   }}
                 />
               ) : (
@@ -715,7 +735,7 @@ export default function Profile() {
           </View>
 
           {/* Developer Tools Section - For testing only */}
-          <View style={styles.devToolsSection}>
+          {/* <View style={styles.devToolsSection}>
             <Text style={styles.devToolsTitle}>Developer Tools</Text>
             <Text style={styles.devToolsDescription}>These tools are for development testing only</Text>
             
@@ -734,7 +754,7 @@ export default function Profile() {
             >
               <Text style={styles.resetButtonText}>Reset Welcome Flow</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
           
           {/* Save Button */}
           <TouchableOpacity 

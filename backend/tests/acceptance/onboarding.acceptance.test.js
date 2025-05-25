@@ -114,9 +114,9 @@ describe('Acceptance Test: User Onboarding Flow', () => {
     expect(authToken).toBeDefined();
 
     // 6. Access a protected route (e.g., user stats)
-    // Note: The actual path for user stats is /api/homepage/stats/user
+    // Note: The actual path for user stats is /api/homepage/user
     const statsResponse = await request(app)
-      .get('/api/homepage/stats/user') // Corrected path based on app.js structure
+      .get('/api/homepage/user') // Corrected path, removed /stats
       .set('Authorization', `Bearer ${authToken}`);
     
     expect(statsResponse.status).toBe(200);
