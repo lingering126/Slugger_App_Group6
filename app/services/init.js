@@ -67,7 +67,7 @@ const initServerConnection = async () => {
   
   try {
     // First try the deployed URL directly
-    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const deployedUrl = 'https://slugger-app-group6-qrpk.onrender.com';
     const deployedPingUrl = `${deployedUrl}/ping`;
     
     console.log(`Trying ping to deployed URL: ${deployedPingUrl}`);

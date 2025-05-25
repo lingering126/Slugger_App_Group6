@@ -214,7 +214,7 @@ export default function TeamsScreen() {
         setLoading(false);
         return;
       }
-      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
+      const apiUrl = 'https://slugger-app-group6-qrpk.onrender.com/api';
       const response = await fetch(`${apiUrl}/teams/all`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
@@ -261,7 +261,7 @@ export default function TeamsScreen() {
         return;
       }
       const teamIdToLeave = userTeam._id;
-      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
+      const apiUrl = 'https://slugger-app-group6-qrpk.onrender.com/api';
       const response = await fetch(`${apiUrl}/teams/leave`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -365,7 +365,7 @@ export default function TeamsScreen() {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
-      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
+      const apiUrl = 'https://slugger-app-group6-qrpk.onrender.com/api';
       const userData = await AsyncStorage.getItem('user');
       let currentUserId = null;
       if (userData) currentUserId = JSON.parse(userData).id;
@@ -416,7 +416,7 @@ export default function TeamsScreen() {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
-      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
+      const apiUrl = 'https://slugger-app-group6-qrpk.onrender.com/api';
       const response = await fetch(`${apiUrl}/teams/${userTeam._id}/target?recalculate=true`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -517,7 +517,7 @@ export default function TeamsScreen() {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       if (!token) { Alert.alert('Error', 'Please log in first'); setLoading(false); return; }
-      const apiUrl = 'https://slugger-app-group6.onrender.com/api';
+      const apiUrl = 'https://slugger-app-group6-qrpk.onrender.com/api';
       const response = await fetch(`${apiUrl}/groups/${userTeam._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -541,7 +541,7 @@ export default function TeamsScreen() {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       if (!token) { Alert.alert('Error', 'Please log in first'); setLoading(false); return; }
-      const apiUrl = 'http://192.168.1.6:5001/api'; // Updated URL
+      const apiUrl = 'https://slugger-app-group6-qrpk.onrender.com/api'; // Updated URL
       const response = await fetch(`${apiUrl}/groups/${userTeam._id}/targets`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

@@ -1,7 +1,7 @@
 // API Configuration
 const API_CONFIG = {
-  API_URL: 'http://192.168.1.6:5001/api',
-  BASE_URL: 'http://192.168.1.6:5001',
+  API_URL: 'https://slugger-app-group6-qrpk.onrender.com/api',
+  BASE_URL: 'https://slugger-app-group6-qrpk.onrender.com',
   PORT: 5001,
   ENDPOINTS: {
     AUTH: {

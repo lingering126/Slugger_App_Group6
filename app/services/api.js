@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Base API URL - consider moving this to an environment config
-const API_BASE_URL = 'https://slugger-app-group6.onrender.com/api';
+const API_BASE_URL = 'https://slugger-app-group6-qrpk.onrender.com/api';
 
 // Fallback URL if the main one fails
 const FALLBACK_API_URL = 'http://localhost:5001/api';
