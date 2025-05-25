@@ -73,11 +73,11 @@ const getApiBaseUrl = async () => {
       return global.workingApiUrl;
     }
     // Default to the deployed URL
-    return 'https://slugger-app-group6.onrender.com/api';
+    return 'https://slugger-app-group6-qrpk.onrender.com/api';
   } catch (error) {
     console.error('Error getting API base URL:', error);
     // Default to the deployed URL in case of error
-    return 'https://slugger-app-group6.onrender.com/api';
+    return 'https://slugger-app-group6-qrpk.onrender.com/api';
   }
 };
 

@@ -9,51 +9,45 @@ const { execSync } = require('child_process');
 function findAllNanoidNonSecure(baseDir) {
   const results = [];
   
-  function searchDir(dir) {
-    if (!fs.existsSync(dir)) return;
+  function searchDir(dir, depth = 0) {
+    if (!fs.existsSync(dir) || depth > 10) return; // prevent too deep recursion
     
-    const files = fs.readdirSync(dir);
-    
-    for (const file of files) {
-      const fullPath = path.join(dir, file);
-      const stat = fs.statSync(fullPath);
+    try {
+      const files = fs.readdirSync(dir);
       
-      if (stat.isDirectory()) {
-        // if it is a nanoid/non-secure directory
-        if (file === 'non-secure' && path.basename(dir) === 'nanoid') {
-          const packageJsonPath = path.join(fullPath, 'package.json');
-          if (fs.existsSync(packageJsonPath)) {
-            results.push(fullPath);
+      for (const file of files) {
+        const fullPath = path.join(dir, file);
+        
+        try {
+          const stat = fs.statSync(fullPath);
+          
+          if (stat.isDirectory()) {
+            // if it is a nanoid/non-secure directory
+            if (file === 'non-secure' && path.basename(dir) === 'nanoid') {
+              const packageJsonPath = path.join(fullPath, 'package.json');
+              if (fs.existsSync(packageJsonPath)) {
+                results.push(fullPath);
+              }
+            } else if (file === 'node_modules' || file.startsWith('.') === false) {
+              // continue searching in subdirectories, but avoid going into .git, .expo, etc.
+              searchDir(fullPath, depth + 1);
+            }
           }
-        } else if (file !== 'node_modules') {
-          // avoid infinite recursion
-          searchDir(fullPath);
+        } catch (statError) {
+          // ignore permission errors or other stat errors
+          continue;
         }
       }
+    } catch (readError) {
+      // ignore permission errors
+      return;
     }
   }
   
-  // find all possible directories that might contain nanoid
-  const possibleDirs = [
-    path.join(baseDir, 'node_modules', 'nanoid', 'non-secure'),
-    path.join(baseDir, 'node_modules', '@react-navigation', 'core', 'node_modules', 'nanoid', 'non-secure'),
-    path.join(baseDir, 'node_modules', '@react-navigation', 'native', 'node_modules', 'nanoid', 'non-secure'),
-    path.join(baseDir, 'node_modules', '@react-navigation', 'stack', 'node_modules', 'nanoid', 'non-secure'),
-    path.join(baseDir, 'node_modules', '@react-navigation', 'drawer', 'node_modules', 'nanoid', 'non-secure'),
-    path.join(baseDir, 'node_modules', '@react-navigation', 'bottom-tabs', 'node_modules', 'nanoid', 'non-secure'),
-    path.join(baseDir, 'node_modules', '@react-navigation', 'routers', 'node_modules', 'nanoid', 'non-secure'),
-    path.join(baseDir, 'node_modules', '@react-navigation', 'elements', 'node_modules', 'nanoid', 'non-secure'),
-    path.join(baseDir, 'node_modules', '@react-navigation', 'material-top-tabs', 'node_modules', 'nanoid', 'non-secure')
-  ];
-  
-  // check the explicit directories
-  for (const dir of possibleDirs) {
-    if (fs.existsSync(dir)) {
-      const packageJsonPath = path.join(dir, 'package.json');
-      if (fs.existsSync(packageJsonPath)) {
-        results.push(dir);
-      }
-    }
+  // start searching from node_modules
+  const nodeModulesDir = path.join(baseDir, 'node_modules');
+  if (fs.existsSync(nodeModulesDir)) {
+    searchDir(nodeModulesDir);
   }
   
   return results;
@@ -78,8 +72,16 @@ function fixNanoidNonSecure(nonSecureDir) {
         // update the package.json config to ensure the package can be parsed correctly
         packageJson = {
           ...packageJson,
-          main: "index.js" // change the main entry to index.js instead of index.cjs
+          main: "index.js", // change the main entry to index.js instead of index.cjs
+          module: "index.js",
+          // remove type: "module" if it exists, as it can cause issues with Metro
+          ...(packageJson.type === "module" ? {} : { type: packageJson.type })
         };
+        
+        // remove the type field if it was "module"
+        if (packageJson.type === "module") {
+          delete packageJson.type;
+        }
         
         fs.writeFileSync(
           packageJsonPath,
@@ -104,6 +106,23 @@ function fixNanoidNonSecure(nonSecureDir) {
             fs.writeFileSync(path.join(nonSecureDir, 'index.js'), indexContent);
             fs.writeFileSync(path.join(nonSecureDir, 'index.cjs'), indexContent);
             console.log(`copied index.js from the main nanoid to ${nonSecureDir}`);
+            
+            // update package.json
+            packageJson = {
+              ...packageJson,
+              main: "index.js",
+              module: "index.js"
+            };
+            
+            if (packageJson.type === "module") {
+              delete packageJson.type;
+            }
+            
+            fs.writeFileSync(
+              packageJsonPath,
+              JSON.stringify(packageJson, null, 2)
+            );
+            
             return true;
           }
         }

@@ -1,5 +1,5 @@
 // 根据环境选择合适的 API URL
-let apiUrlBase = 'https://slugger-app-group6.onrender.com/api';
+let apiUrlBase = 'https://slugger-app-group6-qrpk.onrender.com/api';
 
 // 检测是否在 Web 环境中运行
 const isWeb = typeof document !== 'undefined';

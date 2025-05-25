@@ -54,7 +54,7 @@ export const getApiUrl = () => {
   }
   
   // Always prioritize the deployed URL
-  const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+  const deployedUrl = 'https://slugger-app-group6-qrpk.onrender.com/api';
   
   // Check if we're running in a web browser environment
   const isWebEnvironment = typeof document !== 'undefined';
@@ -148,7 +148,7 @@ export const testDirectConnection = async () => {
   ];
   
   // Try the deployed URL too
-  urls.push('https://slugger-app-group6.onrender.com/health');
+  urls.push('https://slugger-app-group6-qrpk.onrender.com/health');
   
   const results = {};
   let foundWorkingUrl = false;
@@ -306,7 +306,7 @@ export const checkServerConnection = async (apiUrls) => {
     }
     
     // Always try the deployed URL first on mobile
-    const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
+    const deployedUrl = 'https://slugger-app-group6-qrpk.onrender.com/api';
     try {
       // Try a ping to the deployed URL
       const pingResult = await pingServer(deployedUrl);
@@ -481,7 +481,7 @@ export const scanNetworkForServer = async () => {
     const isWebEnvironment = typeof document !== 'undefined';
     
     // First try the deployed URL
-    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const deployedUrl = 'https://slugger-app-group6-qrpk.onrender.com';
     try {
       const pingUrl = `${deployedUrl}/ping`;
       console.log(`Testing connection to deployed URL: ${pingUrl}`);
