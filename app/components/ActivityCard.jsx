@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, Linking, Image } from 'react-native';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import API_CONFIG from '../config/api';
+import { API_CONFIG } from '../config/api';
 
 // ActivityCard Component: Displays a single activity with social interactions
 const ActivityCard = ({ activity, onRefresh }) => {
@@ -11,36 +11,39 @@ const ActivityCard = ({ activity, onRefresh }) => {
   const [comment, setComment] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [comments, setComments] = useState(activity.comments || []);
-  const [isLiked, setIsLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(0);
+  
+  // Use authorInfo and like/comment counts directly from the activity prop
+  const [isLiked, setIsLiked] = useState(activity.isLikedByUser || false);
+  const [likesCount, setLikesCount] = useState(activity.likesCount || 0);
+  
   const [isLikeError, setIsLikeError] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [authorName, setAuthorName] = useState(activity.authorInfo?.name || 'Anonymous');
+  const [authorAvatar, setAuthorAvatar] = useState(activity.authorInfo?.avatarUrl || null);
 
-  // Check and update like status when component mounts or activity changes
   useEffect(() => {
-    const checkLikeStatus = async () => {
-      try {
-        const userId = await AsyncStorage.getItem('userId');
-        setCurrentUserId(userId);
-        const likes = Array.isArray(activity.likes) ? activity.likes : [];
-        setIsLiked(likes.includes(userId));
-        setLikesCount(likes.length);
-        setIsLikeError(false);
-      } catch (error) {
-        console.error('Error checking like status:', error);
-        setIsLikeError(true);
-      }
+    const loadCurrentUserId = async () => {
+      const userId = await AsyncStorage.getItem('userId');
+      setCurrentUserId(userId);
     };
-    checkLikeStatus();
-  }, [activity.likes]);
+    loadCurrentUserId();
+  }, []);
 
-  // Update comments when activity comments change
+  // Update local state if activity prop changes (e.g., after a feed refresh)
   useEffect(() => {
-    if (activity.comments) {
-      setComments(Array.isArray(activity.comments) ? activity.comments : []);
-    }
-  }, [activity.comments]);
+    // console.log('activity:', activity);
+    console.log('✅activity.authorInfo.name', activity.authorInfo.name);
+    console.log('activity.name', activity.name);
+    console.log('activity.isLikedByUser', activity.isLikedByUser);
+    console.log('activity.likesCount', activity.likesCount);
+    
+    setAuthorName(activity.authorInfo?.name || 'Anonymous');
+    setAuthorAvatar(activity.authorInfo?.avatarUrl || null);
+    setIsLiked(activity.isLikedByUser || false);
+    setLikesCount(activity.likesCount || 0);
+    setComments(activity.comments || []);
+  }, [activity]);
 
   // Helper functions for UI elements
   const getActivityIcon = (type) => {
@@ -57,7 +60,7 @@ const ActivityCard = ({ activity, onRefresh }) => {
   };
 
   const getAvatarText = () => {
-    return '?';  // Use question mark as avatar for anonymous users
+    return authorName?.[0] || '?';
   };
 
   // Handle like/unlike functionality
@@ -76,8 +79,9 @@ const ActivityCard = ({ activity, onRefresh }) => {
       setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
 
       // API call to update like status
-      console.log('Sending like request for activity:', activity.id);
-      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIKE.replace(':id', activity.id)}`, {
+      const activityId = activity.id || activity._id;
+      console.log('Sending like request for activity:', activityId);
+      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIKE.replace(':id', activityId)}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -120,8 +124,9 @@ const ActivityCard = ({ activity, onRefresh }) => {
       }
 
       // API call to add comment
-      console.log('Sending comment for activity:', activity.id);
-      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.COMMENT.replace(':id', activity.id)}`, {
+      const activityId = activity.id || activity._id;
+      console.log('Sending comment for activity:', activityId);
+      const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.COMMENT.replace(':id', activityId)}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -135,11 +140,13 @@ const ActivityCard = ({ activity, onRefresh }) => {
 
       if (response.ok) {
         // Update local state with new comment
+        console.log('✅加了data.comment', data.comment);
         const newComment = {
           id: data.comment.id,
           author: data.comment.author,
           content: data.comment.content,
-          createdAt: data.comment.createdAt
+          createdAt: data.comment.createdAt,
+          authorInfo: data.comment.authorInfo || { name: data.comment.author || 'Anonymous', avatarUrl: null }
         };
         
         setComments(prev => [...prev, newComment]);
@@ -179,10 +186,18 @@ const ActivityCard = ({ activity, onRefresh }) => {
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getAvatarText()}</Text>
+            {authorAvatar ? (
+              <Image 
+                source={{ uri: authorAvatar }} 
+                style={{ width: '100%', height: '100%', borderRadius: 20 }}
+                onError={() => setAuthorAvatar(null)}
+              />
+            ) : (
+              <Text style={styles.avatarText}>{getAvatarText()}</Text>
+            )}
           </View>
           <View style={styles.userDetails}>
-            <Text style={styles.username}>Anonymous</Text>
+            <Text style={styles.username}>{authorName}</Text>
             <Text style={styles.timestamp}>{format(new Date(activity.createdAt), 'dd/MM/yyyy')}</Text>
           </View>
         </View>
@@ -209,16 +224,26 @@ const ActivityCard = ({ activity, onRefresh }) => {
       {/* Comments Section */}
       {comments.length > 0 && (
         <View style={styles.commentsSection}>
-          {comments.map((comment, index) => (
-            <View key={index} style={styles.commentContainer}>
+          {comments.map((commentItem, index) => (
+            <View key={commentItem.id || commentItem._id || index} style={styles.commentContainer}>
               <View style={styles.commentHeader}>
                 <View style={styles.commentAvatar}>
-                  <Text style={styles.commentAvatarText}>
-                    {comment?.author?.[0] || 'A'}
-                  </Text>
+                  {commentItem.authorInfo?.avatarUrl ? (
+                    <Image 
+                      source={{ uri: commentItem.authorInfo.avatarUrl }} 
+                      style={{ width: '100%', height: '100%', borderRadius: 12 }}
+                      onError={(e) => { 
+                        // console.log("Error loading comment author avatar", e.nativeEvent.error);
+                      }}
+                    />
+                  ) : (
+                    <Text style={styles.commentAvatarText}>
+                      {commentItem.authorInfo?.name?.[0] || 'A'}
+                    </Text>
+                  )}
                 </View>
-                <Text style={styles.commentAuthor}>{comment?.author || 'Anonymous'}</Text>
-                <Text style={styles.commentContent}>{comment?.content || ''}</Text>
+                <Text style={styles.commentAuthor}>{commentItem.authorInfo?.name || 'Anonymous'}</Text>
+                <Text style={styles.commentContent}>{commentItem.content || ''}</Text>
               </View>
             </View>
           ))}
@@ -289,19 +314,21 @@ const ActivityCard = ({ activity, onRefresh }) => {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
-    marginVertical: 4,
-    marginHorizontal: 8,
+    marginVertical: 3,
+    marginHorizontal: 4,
     borderRadius: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    width: '97%',
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -335,33 +362,39 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   content: {
-    padding: 12,
+    padding: 10,
+    width: '100%',
   },
   activityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap', // Allow wrapping for smaller screens
   },
   icon: {
-    fontSize: 24,
-    marginRight: 12,
+    fontSize: 22, // Slightly smaller icon
+    marginRight: 10, // Slightly less margin
   },
   activityInfo: {
     flex: 1,
+    minWidth: 150, // Ensure it doesn't get too squished before wrapping
   },
   title: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller title
     fontWeight: '600',
     color: '#1a1a1a',
+    flexShrink: 1, // Allow title to shrink if needed
   },
   duration: {
-    fontSize: 14,
+    fontSize: 13, // Slightly smaller duration text
     color: '#666',
-    marginTop: 2,
+    marginTop: 1,
   },
   points: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller points text
     fontWeight: '600',
     color: '#4CAF50',
+    marginLeft: 'auto', // Push points to the right if space allows, helps with wrapping
+    paddingLeft: 8, // Add some padding if it's next to wrapped content
   },
   status: {
     marginTop: 8,
@@ -411,19 +444,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
-    padding: 8,
+    paddingVertical: 6, // Reduced vertical padding
+    paddingHorizontal: 4, // Reduced horizontal padding
+    justifyContent: 'space-around', // Better distribution
   },
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    padding: 8,
+    flexGrow: 1, // Allow buttons to grow but not necessarily take equal fixed space
+    flexBasis: 0, // Allow flexGrow to work effectively
+    paddingVertical: 6, // Reduced padding
+    paddingHorizontal: 4, // Reduced padding
+    minWidth: 70, // Ensure buttons have a minimum tap area
   },
   socialButtonText: {
-    marginLeft: 4,
+    marginLeft: 3, // Reduced margin
     color: '#666',
-    fontSize: 14,
+    fontSize: 13, // Slightly smaller text
   },
   likedText: {
     color: '#ff4b4b',
@@ -473,4 +511,4 @@ const styles = StyleSheet.create({
   }
 });
 
-export default ActivityCard; 
+export default ActivityCard;

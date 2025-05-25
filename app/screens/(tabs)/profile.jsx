@@ -1,10 +1,13 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator, Image, Alert } from 'react-native'
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator, Image, Alert, StatusBar } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/native'
 import { useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { userService, groupService } from '../../services/api' 
+import { userService, groupService } from '../../services/api'
+import { getApiUrl } from '../../utils'
+import { FontAwesome } from '@expo/vector-icons'
+import * as ImagePicker from 'expo-image-picker'
 
 // Physical activities library
 // Expanded Physical Activities
@@ -172,6 +175,7 @@ export default function Profile() {
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedAvatarBase64, setSelectedAvatarBase64] = useState(null);
   
   // Groups state
   const [groups, setGroups] = useState([])
@@ -190,50 +194,128 @@ export default function Profile() {
   const loadUserData = async () => {
     try {
       setLoading(true)
+      setError(null)
       
-      // Get user data from service or AsyncStorage
-      const user = await userService.getUserProfile()
+      // Check for userToken first
+      const token = await AsyncStorage.getItem('userToken')
+      if (!token) {
+        console.warn('No token found, attempting to refresh...')
+        
+        // Try to refresh token if possible
+        const refreshToken = await AsyncStorage.getItem('refreshToken')
+        if (refreshToken) {
+          try {
+            const apiUrl = await getApiUrl()
+            const refreshResponse = await fetch(`${apiUrl}/auth/refresh`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ refreshToken })
+            })
+            
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json()
+              if (refreshData.token) {
+                console.log('Token refreshed successfully')
+                await AsyncStorage.setItem('userToken', refreshData.token)
+              }
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing token:', refreshError)
+          }
+        }
+      }
+      
+      // Try to get user data from service
+      console.log('Attempting to load user profile data from service...');
+      const user = await userService.getUserProfile();
+      console.log('User profile data loaded:', user ? JSON.stringify({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        loadedFromLocalOnly: user.loadedFromLocalOnly
+      }) : 'null');
       
       if (!user) {
-        throw new Error('User data not found')
+        setError('Unable to load profile data. Please try again later.')
+        setUserData(null)
+        setLoading(false)
+        return
+      }
+
+      // Check if user data has a valid name
+      if (!user.name || user.name === 'User' || user.name === 'Anonymous') {
+        console.warn('Invalid user name detected:', user.name);
+        
+        // Try to get better user data from localStorage
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const localUser = JSON.parse(userJson);
+          if (localUser && localUser.name && localUser.name !== 'User' && localUser.name !== 'Anonymous') {
+            console.log('Found better user name in local storage:', localUser.name);
+            // Update the name
+            user.name = localUser.name;
+          }
+        }
       }
       
+      // Get user's selected activities
+      const physicalIds = user.activitySettings?.physicalActivities || []
+      const mentalIds = user.activitySettings?.mentalActivities || []
+      const bonusIds = user.activitySettings?.bonusActivities || []
+      
+      // Map IDs to full activity objects with names
+      const selectedPhysical = physicalActivities.filter(activity => 
+        physicalIds.includes(activity.id)
+      )
+      
+      const selectedMental = mentalActivities.filter(activity => 
+        mentalIds.includes(activity.id)
+      )
+      
+      const selectedBonus = bonusActivities.filter(activity => 
+        bonusIds.includes(activity.id)
+      )
+      
+      // Update state with user data
       setUserData(user)
+      setSelectedPhysicalActivities(selectedPhysical)
+      setSelectedMentalActivities(selectedMental)
+      setSelectedBonusActivities(selectedBonus)
       
-      // Load saved activity preferences
-      if (user.activitySettings) {
-        // Find the full activity objects based on saved IDs
-        if (user.activitySettings.physicalActivities) {
-          const savedPhysical = physicalActivities.filter(activity => 
-            user.activitySettings.physicalActivities.includes(activity.id)
+    } catch (error) {
+      console.error('Error loading user data:', error)
+      setError('Unable to load profile data. Please try again later.')
+      
+      // Try to use cached data if available
+      const userJson = await AsyncStorage.getItem('user')
+      if (userJson) {
+        try {
+          const cachedUser = JSON.parse(userJson)
+          setUserData(cachedUser)
+          
+          // Still try to set activities from cached data
+          const physicalIds = cachedUser.activitySettings?.physicalActivities || []
+          const mentalIds = cachedUser.activitySettings?.mentalActivities || []
+          const bonusIds = cachedUser.activitySettings?.bonusActivities || []
+          
+          setSelectedPhysicalActivities(
+            physicalActivities.filter(a => physicalIds.includes(a.id))
           )
-          setSelectedPhysicalActivities(savedPhysical)
-        }
-        
-        if (user.activitySettings.mentalActivities) {
-          const savedMental = mentalActivities.filter(activity => 
-            user.activitySettings.mentalActivities.includes(activity.id)
+          setSelectedMentalActivities(
+            mentalActivities.filter(a => mentalIds.includes(a.id))
           )
-          setSelectedMentalActivities(savedMental)
-        }
-        
-        if (user.activitySettings.bonusActivities) {
-          const savedBonus = bonusActivities.filter(activity => 
-            user.activitySettings.bonusActivities.includes(activity.id)
+          setSelectedBonusActivities(
+            bonusActivities.filter(a => bonusIds.includes(a.id))
           )
-          setSelectedBonusActivities(savedBonus)
+        } catch (parseError) {
+          console.error('Error parsing cached user data:', parseError)
+          setUserData(null)
         }
+      } else {
+        setUserData(null)
       }
-    } catch (err) {
-      console.error('Error loading user data:', err)
-      setError('Failed to load profile data')
-      
-      // Use default values if unable to get user data
-      setUserData({
-        name: "Guest User",
-        status: "Inactive",
-        createdAt: new Date().toISOString()
-      })
     } finally {
       setLoading(false)
     }
@@ -278,6 +360,34 @@ export default function Profile() {
     return userData.name.substring(0, 2).toUpperCase()
   }
   
+  // Get proper display name with fallbacks
+  const getDisplayName = () => {
+    // If no user data at all
+    if (!userData) return "Unknown User";
+    
+    // If user has a name that's not a placeholder
+    if (userData.name && 
+        userData.name !== "User" && 
+        userData.name !== "guest user" && 
+        userData.name !== "Anonymous" && 
+        userData.name !== "Unknown User") {
+      return userData.name;
+    }
+    
+    // Try using email
+    if (userData.email && userData.email.includes('@')) {
+      return userData.email.split('@')[0];
+    }
+    
+    // Try using username
+    if (userData.username) {
+      return userData.username;
+    }
+    
+    // Last resort, generate a name
+    return userData.name || "Slugger User";
+  }
+  
   // Format join date for display
   const getFormattedJoinDate = () => {
     if (!userData || !userData.createdAt) {
@@ -302,9 +412,13 @@ export default function Profile() {
         bonusActivities: selectedBonusActivities.map(a => a.id)
       }
       
-      // Update local user object
+      // Update local user object first to ensure we have the latest data
+      const userJson = await AsyncStorage.getItem('user');
+      const currentUser = userJson ? JSON.parse(userJson) : userData;
+      
+      // Merge with new activity settings
       const updatedUserData = {
-        ...userData,
+        ...currentUser,
         activitySettings,
         updatedAt: new Date().toISOString()
       }
@@ -314,27 +428,60 @@ export default function Profile() {
       
       // Then update user profile via API
       try {
-        // This would call the API service to save settings
-        await userService.updateUserProfile({
-          activitySettings
-        })
+        // Make sure we have a user ID
+        const userId = updatedUserData.id || updatedUserData._id;
         
-        // Update local state
-        setUserData(updatedUserData)
+        if (!userId) {
+          console.warn('No user ID found for API update, using local update only');
+          setUserData(updatedUserData);
+          Alert.alert('Success', 'Activity settings saved locally');
+          return;
+        }
         
-        Alert.alert('Success', 'Activity settings saved successfully!')
+        const profileUpdatePayload = {
+          id: userId,
+          activitySettings,
+          // Conditionally add avatarUrl if a new avatar has been selected
+          ...(selectedAvatarBase64 && { avatarUrl: selectedAvatarBase64 }),
+        };
+
+        // Include the user ID when calling updateUserProfile
+        const result = await userService.updateUserProfile(profileUpdatePayload);
+        
+        // Update local state with the result (which may be from API or local update)
+        // The result from userService should ideally be the complete updated user profile
+        setUserData(result); 
+        // Also update AsyncStorage with the potentially new user data (including new avatarUrl from CDN)
+        await AsyncStorage.setItem('user', JSON.stringify(result));
+
+        if (selectedAvatarBase64 && result.avatarUrl) {
+          // If a new avatar was uploaded and we got a new URL back, clear the base64 state
+          setSelectedAvatarBase64(null);
+        }
+        
+        if (result.fallbackOnly) {
+          Alert.alert(
+            'Settings Saved', 
+            'Settings saved locally. Changes will sync with the server when connection is restored.'
+          );
+        } else {
+          Alert.alert('Success', 'Activity settings saved successfully!');
+        }
       } catch (apiError) {
-        console.error('API error saving settings:', apiError)
+        console.error('API error saving settings:', apiError);
+        // We've already saved locally, so just inform the user
         Alert.alert(
-          'Warning', 
+          'Settings Saved', 
           'Settings saved locally but could not connect to server. Your changes will sync when connection is restored.'
-        )
+        );
+        // Still update the local state
+        setUserData(updatedUserData);
       }
     } catch (error) {
-      console.error('Error saving settings:', error)
-      Alert.alert('Error', 'Failed to save settings. Please try again.')
+      console.error('Error saving settings:', error);
+      Alert.alert('Error', 'Failed to save settings. Please try again.');
     } finally {
-      setSavingSettings(false)
+      setSavingSettings(false);
     }
   }
   
@@ -375,13 +522,19 @@ export default function Profile() {
         <View style={styles.headerContainer}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              {userData?.avatarUrl ? (
+              {selectedAvatarBase64 ? (
+                <Image 
+                  source={{ uri: selectedAvatarBase64 }} 
+                  style={{ width: '100%', height: '100%' }}
+                />
+              ) : userData?.avatarUrl ? (
                 <Image 
                   source={{ uri: userData.avatarUrl }} 
                   style={{ width: '100%', height: '100%' }}
                   onError={(e) => {
                     console.log('Avatar image error:', e.nativeEvent.error)
                     // Fall back to placeholder on error
+                    // Consider setting a flag to show placeholder if userData.avatarUrl fails
                   }}
                 />
               ) : (
@@ -391,7 +544,7 @@ export default function Profile() {
               )}
             </View>
             <View style={styles.userInfoContainer}>
-              <Text style={styles.userName}>{userData?.name || "Unknown User"}</Text>
+              <Text style={styles.userName}>{getDisplayName()}</Text>
               <Text style={styles.userStatus}>Status: {userData?.status || "Active"}</Text>
               <Text style={styles.userJoinDate}>Member since: {getFormattedJoinDate()}</Text>
             </View>
@@ -582,7 +735,7 @@ export default function Profile() {
           </View>
 
           {/* Developer Tools Section - For testing only */}
-          <View style={styles.devToolsSection}>
+          {/* <View style={styles.devToolsSection}>
             <Text style={styles.devToolsTitle}>Developer Tools</Text>
             <Text style={styles.devToolsDescription}>These tools are for development testing only</Text>
             
@@ -601,7 +754,7 @@ export default function Profile() {
             >
               <Text style={styles.resetButtonText}>Reset Welcome Flow</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
           
           {/* Save Button */}
           <TouchableOpacity 

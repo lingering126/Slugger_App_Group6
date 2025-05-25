@@ -66,7 +66,33 @@ const initServerConnection = async () => {
   console.log('Initializing server connection...');
   
   try {
-    // First try to use expo-constants to get server IP
+    // First try the deployed URL directly
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const deployedPingUrl = `${deployedUrl}/ping`;
+    
+    console.log(`Trying ping to deployed URL: ${deployedPingUrl}`);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(deployedPingUrl, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok && await response.text() === 'PONG') {
+        console.log('Ping successful to deployed URL!');
+        global.workingApiUrl = `${deployedUrl}/api`;
+        Utils.recordSuccessfulConnection(global.workingApiUrl);
+        return; // Connection successful, return directly
+      }
+    } catch (error) {
+      console.log(`Ping failed to deployed URL: ${error.message}`);
+    }
+    
+    // Then try to use expo-constants to get server IP
     const pingUrl = IPConfig.getPingUrl();
     if (pingUrl) {
       console.log(`Trying ping using Expo Constants: ${pingUrl}`);
@@ -94,7 +120,7 @@ const initServerConnection = async () => {
       }
     }
     
-    // If Expo Constants method fails, try scanning the network
+    // If both methods fail, try scanning the network
     console.log('Scanning network for server...');
     const scanResult = await Utils.scanNetworkForServer();
     
@@ -103,7 +129,7 @@ const initServerConnection = async () => {
       return; // We're already connected, no need to continue
     }
     
-    // If both methods fail, try a full connection check
+    // If all methods fail, try a full connection check
     console.log('Initial ping failed, trying full connection check...');
     
     // Find the best server URL

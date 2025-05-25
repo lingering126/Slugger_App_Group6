@@ -1,6 +1,7 @@
 // API Configuration
 const API_CONFIG = {
-  API_URL: 'https://slugger-app-group6.onrender.com/api',
+  API_URL: 'http://192.168.1.6:5001/api',
+  BASE_URL: 'http://192.168.1.6:5001',
   PORT: 5001,
   ENDPOINTS: {
     AUTH: {
@@ -24,8 +25,35 @@ const API_CONFIG = {
       PROFILE: '/users/profile',
       UPDATE_PROFILE: '/users/profile',
       RESET_WEEKLY_STATS: '/stats/user/reset-weekly'
+    },
+    POSTS: {
+      CREATE: '/posts',
+      LIST: '/posts',
+      DETAIL: '/posts/:id',
+      LIKE: '/posts/:id/like',
+      COMMENT: '/posts/:id/comments',
+      SHARE: '/posts/:id/share'
+    },
+    TEAMS: {
+      CREATE: '/teams',
+      LIST: '/teams',
+      DETAIL: '/teams/:id',
+      JOIN: '/teams/:id/join',
+      LEAVE: '/teams/:id/leave',
+      MEMBERS: '/teams/:id/members'
     }
   }
 };
 
-export default API_CONFIG; 
+// Log this to help debug
+console.log('API_CONFIG loaded from app/config/api.js', { 
+  API_URL: API_CONFIG.API_URL,
+  USER_STATS_ENDPOINT: API_CONFIG.ENDPOINTS.USER.STATS 
+});
+
+export { API_CONFIG };
+
+// Add default export for Expo Router
+export default function APIConfig() {
+  return null; // This is just a placeholder to satisfy Expo Router's default export requirement
+}

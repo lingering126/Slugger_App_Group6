@@ -1,6 +1,6 @@
 import { Platform, Alert } from 'react-native';
 import IPConfig from './config/ipConfig';
-import API_CONFIG from './config/api';
+import { API_CONFIG } from './config/api';
 // Try to import NetInfo, but don't fail if it's not available
 let NetInfo;
 try {
@@ -53,16 +53,16 @@ export const getApiUrl = () => {
     return [global.workingApiUrl];
   }
   
-  // Always prioritize the deployed URL when running on a mobile device
+  // Always prioritize the deployed URL
   const deployedUrl = 'https://slugger-app-group6.onrender.com/api';
   
   // Check if we're running in a web browser environment
   const isWebEnvironment = typeof document !== 'undefined';
   
-  // In web browser environment, use the API config URL
+  // In web browser environment, use the deployed URL first, then API config URL
   if (isWebEnvironment) {
-    console.log('Detected web environment, using API config URL');
-    return [API_CONFIG.API_URL];
+    console.log('Detected web environment, using deployed URL first, then API config URL');
+    return [deployedUrl, API_CONFIG.API_URL];
   }
   
   // For mobile devices, prioritize the deployed URL, then fallback to config
@@ -292,30 +292,11 @@ export const promptForServerIP = () => {
 // Helper function to check if the server is reachable
 export const checkServerConnection = async (apiUrls) => {
   try {
-    // Check if we're in a web environment
-    const isWebEnvironment = typeof document !== 'undefined';
-    
-    // For web environment, simplify and prioritize localhost
-    if (isWebEnvironment) {
-      console.log('Web environment detected, checking localhost first');
-      
-      const localhostUrl = `http://localhost:${API_CONFIG.PORT || 5001}/api`;
-      const pingResult = await pingServer(localhostUrl);
-      
-      if (pingResult) {
-        console.log('Successfully connected to localhost in web environment');
-        global.workingApiUrl = localhostUrl;
-        recordSuccessfulConnection(localhostUrl);
-        return {
-          status: 'online',
-          message: 'Server is reachable via localhost (web environment)',
-          url: localhostUrl
-        };
-      }
-    }
-    
-    // First check if the device has internet connection
-    const netInfo = await NetInfo.fetch();
+  // Check if we're in a web environment
+  const isWebEnvironment = typeof document !== 'undefined';
+  
+  // First check if the device has internet connection
+  const netInfo = await NetInfo.fetch();
     
     if (!netInfo.isConnected) {
       return {
@@ -499,9 +480,40 @@ export const scanNetworkForServer = async () => {
     // Check if we're in a web environment
     const isWebEnvironment = typeof document !== 'undefined';
     
-    // For web environment, simplify and just check localhost
+    // First try the deployed URL
+    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    try {
+      const pingUrl = `${deployedUrl}/ping`;
+      console.log(`Testing connection to deployed URL: ${pingUrl}`);
+      
+      const response = await fetch(pingUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.ok && await response.text() === 'PONG') {
+        console.log('Server found at deployed URL');
+        const apiUrl = `${deployedUrl}/api`;
+        
+        // Store as global server URL
+        global.workingApiUrl = apiUrl;
+        recordSuccessfulConnection(apiUrl);
+        
+        return {
+          status: 'online',
+          message: 'Connected to deployed server',
+          url: apiUrl
+        };
+      }
+    } catch (error) {
+      console.log('Failed to connect to deployed URL:', error.message);
+    }
+    
+    // For web environment, check localhost only if deployed URL failed
     if (isWebEnvironment) {
-      console.log('Web environment detected, checking localhost only');
+      console.log('Web environment detected, checking localhost');
       
       try {
         const pingUrl = `http://localhost:${API_CONFIG.PORT}/ping`;
@@ -536,9 +548,11 @@ export const scanNetworkForServer = async () => {
       
       return {
         status: 'not_found',
-        message: 'Server not found on localhost'
+        message: 'Server not found on localhost or deployed URL'
       };
     }
+    
+    // For mobile, continue with network scanning if deployed URL failed
     
     // Get the device's own network info
     const netInfo = await NetInfo.fetch();
@@ -670,31 +684,10 @@ const Utils = {
       // Check if we're in a web environment
       const isWebEnvironment = typeof document !== 'undefined';
       
-      // For web environment, prioritize localhost
-      if (isWebEnvironment) {
-        console.log('Web environment detected, trying localhost first');
-        
-        try {
-          const localhostUrl = `http://localhost:${API_CONFIG.PORT}/api`;
-          const pingResult = await pingServer(localhostUrl);
-          
-          if (pingResult) {
-            console.log('Successfully connected to localhost in web environment');
-            global.workingApiUrl = localhostUrl;
-            recordSuccessfulConnection(localhostUrl);
-            return {
-              status: 'online',
-              message: 'Server is reachable via localhost (web environment)',
-              url: localhostUrl
-            };
-          }
-        } catch (error) {
-          console.log('Failed to connect to localhost:', error.message);
-        }
-      }
-      
       // First try to scan network for server if we don't have a working API URL
-      if (!global.workingApiUrl) {
+      // For deployed web, we don't want to scan or try localhost by default here,
+      // getApiUrl() will provide the correct production URL.
+      if (!isWebEnvironment && !global.workingApiUrl) {
         console.log('No cached server connection, trying to scan network...');
         const scanResult = await scanNetworkForServer();
         
@@ -743,4 +736,4 @@ const Utils = {
 };
 
 // Export the Utils object as the default export
-export default Utils; 
+export default Utils;

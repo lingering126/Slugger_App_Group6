@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, SafeAreaView, ImageBackground, Image, TextInput, Alert, Linking, Animated, ActivityIndicator, Platform, RefreshControl } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { StatusBar } from 'expo-status-bar';
@@ -6,8 +6,64 @@ import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
-import API_CONFIG from '../../config/api';
+import { API_CONFIG } from '../../config/api';
+import { refreshAuthToken, getApiUrl } from '../../services/api';
 import ActivityCard from '../../components/ActivityCard';
+
+// Physical activities library
+// Expanded Physical Activities
+const physicalActivitiesList = [
+  { id: 1, name: 'Cricket', icon: '🏏' },
+  { id: 2, name: 'Soccer', icon: '⚽' },
+  { id: 3, name: 'Run', icon: '🏃' },
+  { id: 4, name: 'Walk', icon: '🚶' },
+  { id: 5, name: 'HIIT', icon: '🔥' },
+  { id: 6, name: 'Gym Workout', icon: '💪' },
+  { id: 7, name: 'Cycle', icon: '🚴' },
+  { id: 8, name: 'Swim', icon: '🏊' },
+  { id: 9, name: 'Home Workout', icon: '🏠' },
+  { id: 10, name: 'Physio', icon: '🧑‍⚕️' },
+  { id: 11, name: 'Yoga', icon: '🧘' },
+  { id: 12, name: 'Squash', icon: '🎾' },
+  { id: 13, name: 'Rugby', icon: '🏉' },
+  { id: 14, name: 'Touch Rugby', icon: '👐' },
+  { id: 15, name: 'Steps goal', icon: '👣' },
+  { id: 16, name: 'DIY', icon: '🔨' },
+  { id: 17, name: 'Gardening', icon: '🌱' },
+  { id: 18, name: 'Physical other', icon: '❓' },
+  { id: 19, name: 'Pilates', icon: '🧘‍♀️' },
+  { id: 20, name: 'Dance', icon: '💃' }
+];
+
+// Realistic Mental Activities List
+const mentalActivitiesList = [
+  { id: 1, name: 'Meditation', icon: '🧘' },
+  { id: 2, name: 'Reading', icon: '📚' },
+  { id: 3, name: 'Writing', icon: '✍️' },
+  { id: 4, name: 'Music Practice', icon: '🎵' },
+  { id: 5, name: 'Brain Training', icon: '🧠' },
+  { id: 6, name: 'Language Learning', icon: '🗣️' },
+  { id: 7, name: 'Journaling', icon: '📓' },
+  { id: 8, name: 'Breathing Exercise', icon: '💨' },
+  { id: 10, name: 'Puzzle Solving', icon: '🧩' },
+  { id: 11, name: 'Drawing/Sketching', icon: '🎨' },
+  { id: 12, name: 'Mindfulness', icon: '🪷' },
+  { id: 9, name: 'Mental other', icon: '❓' }
+];
+
+// Expanded Bonus Activities
+const bonusActivitiesList = [
+  { id: 1, name: 'Community Service', icon: '🤝' },
+  { id: 2, name: 'Family', icon: '👨‍👩‍👧‍👦' },
+  { id: 3, name: 'Personal Best', icon: '🏆' },
+  { id: 4, name: 'Personal Goal', icon: '🎯' },
+  { id: 5, name: 'Bonus other', icon: '✨' },
+  { id: 6, name: 'Environmental Action', icon: '🌳' },
+  { id: 7, name: 'Volunteering', icon: '🙌' },
+  { id: 8, name: 'Teaching Others', icon: '👨‍🏫' },
+  { id: 9, name: 'Religious/Spiritual Practice', icon: '🕊️' },
+  { id: 10, name: 'Self-Care', icon: '🧖' }
+];
 
 // Activity category data
 const activityData = {
@@ -15,15 +71,38 @@ const activityData = {
     "Cricket", "Soccer", "Run", "Walk", "HIIT", "Gym Workout", 
     "Cycle", "Swim", "Home Workout", "Physio", "Yoga", "Squash", 
     "Rugby", "Touch Rugby", "Steps goal", "DIY", "Gardening", 
-    "Physical other"
+    "Pilates", "Dance", "Rock Climbing", "Martial Arts", "Tennis",
+    "Basketball", "Hiking", "Skiing/Snowboarding", "Kayaking/Paddling",
+    "Golf", "Volleyball", "Badminton", "Table Tennis", "Boxing",
+    "Surfing", "Baseball", "Softball", "American Football", "Hockey",
+    "Skating", "Rowing", "Crossfit", "Bowling", "Archery", "Horse Riding",
+    "Jumping Rope", "Frisbee", "Bouldering", "Gymnastics", "Tai Chi",
+    "Kickboxing", "Weightlifting", "Stretching", "Sailing", "Scuba Diving",
+    "Snorkeling", "Fishing", "Canoeing", "Water Polo", "Ballet", "Parkour",
+    "Skateboarding", "Rollerblading", "Ice Hockey", "Handball", "Wrestling",
+    "Judo", "Karate", "Lawn Bowling", "Aerobics", "Zumba", "Spinning",
+    "Circuit Training", "Stair Climbing", "Functional Training", "Snowshoeing",
+    "Cross-country Skiing", "Mountain Biking", "BMX", "Wakeboarding", "Kitesurfing",
+    "Windsurfing", "Paragliding", "Hang Gliding", "Bungee Jumping", "Rafting",
+    "Canyoning", "Stand-up Paddleboarding", "Disc Golf", "Lacrosse", "Cricket nets",
+    "Ultimate Frisbee", "Trail Running", "Paintball", "Indoor Climbing", "Cheerleading",
+    "Dancing", "Pole Dancing", "Hula Hooping", "Physical other"
   ],
   Mental: [
-    "Meditation", "Reading", "Writing", "Music Practice", 
-    "Mental Gym", "Duolingo", "Language Training", "Cold shower", 
-    "Mental other", "Journal", "Breathing exercise"
+    "Meditation", "Reading", "Writing", "Music Practice", "Brain Training",
+    "Language Learning", "Journaling", "Breathing Exercise", "Mental other",
+    "Puzzle Solving", "Drawing/Sketching", "Mindfulness", "Online Course", 
+    "Podcast", "Audiobook", "Chess", "Sudoku", "Crossword", "Educational Video",
+    "Gratitude Practice", "Digital Detox", "Planning/Organizing", "Self-reflection",
+    "Cooking New Recipe", "DIY Project", "Gardening", "Knowledge Sharing", 
+    "Therapy Session", "Skill Practice", "Documentary", "Board Game", "Reading News",
+    "Learning Instrument", "Photography", "Creative Writing", "Goal Setting", 
+    "Public Speaking", "Deep Conversation", "Hobby Time", "Nature Observation"
   ],
   Bonus: [
-    "Community Service", "Family", "Personal Best", "Personal Goal", "Bonus other"
+    "Community Service", "Family", "Personal Best", "Personal Goal", 
+    "Bonus other", "Environmental Action", "Volunteering", "Teaching Others", 
+    "Religious/Spiritual Practice", "Self-Care"
   ]
 };
 
@@ -159,25 +238,205 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [loading, setLoading] = useState(false);
   const [userTeam, setUserTeam] = useState(null);
-  const activities = category ? activityData[category] || [] : [];
+  const [userActivities, setUserActivities] = useState([]);
+  const [loadingUserActivities, setLoadingUserActivities] = useState(false);
+  
+  // Get activities based on category and user preferences
+  const activities = useMemo(() => {
+    if (!category) return [];
+    
+    // If user has selected activities in their profile, use those
+    if (userActivities.length > 0) {
+      console.log(`Using ${userActivities.length} user-selected ${category} activities`);
+      return userActivities;
+    }
+    
+    // Fallback to default activities if no user preferences are found
+    console.log(`Using default ${category} activities list`);
+    return activityData[category] || [];
+  }, [category, userActivities]);
 
-  // Fetch user's team on component mount
+  // Fetch user's team and activity preferences on component mount
   useEffect(() => {
-    const fetchUserTeam = async () => {
+    const fetchUserData = async () => {
       try {
+        setLoadingUserActivities(true);
+        
+        // Fetch team data
         const teamData = await AsyncStorage.getItem('userTeam');
         if (teamData) {
           setUserTeam(JSON.parse(teamData));
         }
+        
+        // Fetch user profile data to get activity preferences
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const user = JSON.parse(userData);
+          console.log('Fetched user data:', user?.name);
+          
+          // Debug: Print out activity settings
+          if (user.activitySettings) {
+            console.log('ACTIVITY SETTINGS:', JSON.stringify(user.activitySettings, null, 2));
+            console.log('Physical Activities:', user.activitySettings.physicalActivities);
+            console.log('Mental Activities:', user.activitySettings.mentalActivities);
+            console.log('Bonus Activities:', user.activitySettings.bonusActivities);
+            
+            // Debug: Print out activity lists
+            console.log('Physical Activities List Length:', physicalActivitiesList.length);
+            console.log('Mental Activities List Length:', mentalActivitiesList.length);
+            console.log('Bonus Activities List Length:', bonusActivitiesList.length);
+          }
+          
+          if (user.activitySettings && category) {
+            console.log('User has activity settings');
+            
+            // Map activity IDs to activity names based on category
+            if (category === 'Physical' && Array.isArray(user.activitySettings.physicalActivities)) {
+              console.log(`User has ${user.activitySettings.physicalActivities.length} physical activities`);
+              
+              // Debug: Print out the IDs to match
+              console.log('Physical Activity IDs to match:', user.activitySettings.physicalActivities);
+              
+              // Check if any activity IDs match
+              if (user.activitySettings.physicalActivities.length > 0) {
+                // Get physical activities from profile
+                const matchingActivities = physicalActivitiesList.filter(
+                  activity => user.activitySettings.physicalActivities.some(
+                    id => id === activity.id || id === activity.id.toString() || parseInt(id) === activity.id
+                  )
+                );
+                
+                // Debug: Print out the matching activities
+                console.log('Matching Physical Activities:', matchingActivities.map(a => `${a.id}:${a.name}`));
+                
+                const selectedActivities = matchingActivities.map(activity => activity.name);
+                
+                console.log(`Found ${selectedActivities.length} matching physical activities`);
+                
+                if (selectedActivities.length > 0) {
+                  setUserActivities(selectedActivities);
+                } else {
+                  // If no matches found, use default activities
+                  console.log('No matching physical activities found, using defaults');
+                  setUserActivities(activityData[category] || []);
+                }
+              } else {
+                // If no activities selected, use default activities
+                console.log('No physical activities selected, using defaults');
+                setUserActivities(activityData[category] || []);
+              }
+            } 
+            else if (category === 'Mental' && Array.isArray(user.activitySettings.mentalActivities)) {
+              console.log(`User has ${user.activitySettings.mentalActivities.length} mental activities`);
+              
+              // Debug: Print out the IDs to match
+              console.log('Mental Activity IDs to match:', user.activitySettings.mentalActivities);
+              
+              // Check if any activity IDs match
+              if (user.activitySettings.mentalActivities.length > 0) {
+                // Get mental activities from profile
+                const matchingActivities = mentalActivitiesList.filter(
+                  activity => user.activitySettings.mentalActivities.some(
+                    id => id === activity.id || id === activity.id.toString() || parseInt(id) === activity.id
+                  )
+                );
+                
+                // Debug: Print out the matching activities
+                console.log('Matching Mental Activities:', matchingActivities.map(a => `${a.id}:${a.name}`));
+                
+                const selectedActivities = matchingActivities.map(activity => activity.name);
+                
+                console.log(`Found ${selectedActivities.length} matching mental activities`);
+                
+                if (selectedActivities.length > 0) {
+                  setUserActivities(selectedActivities);
+                } else {
+                  // If no matches found, use default activities
+                  console.log('No matching mental activities found, using defaults');
+                  setUserActivities(activityData[category] || []);
+                }
+              } else {
+                // If no activities selected, use default activities
+                console.log('No mental activities selected, using defaults');
+                setUserActivities(activityData[category] || []);
+              }
+            }
+            else if (category === 'Bonus' && Array.isArray(user.activitySettings.bonusActivities)) {
+              console.log(`User has ${user.activitySettings.bonusActivities.length} bonus activities`);
+              
+              // Debug: Print out the IDs to match
+              console.log('Bonus Activity IDs to match:', user.activitySettings.bonusActivities);
+              
+              // Check if any activity IDs match
+              if (user.activitySettings.bonusActivities.length > 0) {
+                // Get bonus activities from profile
+                const matchingActivities = bonusActivitiesList.filter(
+                  activity => user.activitySettings.bonusActivities.some(
+                    id => id === activity.id || id === activity.id.toString() || parseInt(id) === activity.id
+                  )
+                );
+                
+                // Debug: Print out the matching activities
+                console.log('Matching Bonus Activities:', matchingActivities.map(a => `${a.id}:${a.name}`));
+                
+                const selectedActivities = matchingActivities.map(activity => activity.name);
+                
+                console.log(`Found ${selectedActivities.length} matching bonus activities`);
+                
+                if (selectedActivities.length > 0) {
+                  setUserActivities(selectedActivities);
+                } else {
+                  // If no matches found, use default activities
+                  console.log('No matching bonus activities found, using defaults');
+                  setUserActivities(activityData[category] || []);
+                }
+              } else {
+                // If no activities selected, use default activities
+                console.log('No bonus activities selected, using defaults');
+                setUserActivities(activityData[category] || []);
+              }
+            } else {
+              // If no category-specific settings, use default activities
+              console.log(`No ${category} activities settings found, using defaults`);
+              setUserActivities(activityData[category] || []);
+            }
+          } else {
+            console.log('User has no activity settings or no category selected, using defaults');
+            if (category) {
+              setUserActivities(activityData[category] || []);
+            } else {
+              setUserActivities([]);
+            }
+          }
+        } else {
+          console.log('No user data found, using defaults');
+          if (category) {
+            setUserActivities(activityData[category] || []);
+          } else {
+            setUserActivities([]);
+          }
+        }
       } catch (error) {
-        console.error('Error fetching user team:', error);
+        console.error('Error fetching user data:', error);
+        // On error, fall back to default activities
+        if (category) {
+          setUserActivities(activityData[category] || []);
+        } else {
+          setUserActivities([]);
+        }
+      } finally {
+        setLoadingUserActivities(false);
       }
     };
 
-    if (visible) {
-      fetchUserTeam();
+    if (visible && category) {
+      fetchUserData();
+    } else {
+      // Reset when modal is closed
+      setSelectedActivity(null);
+      setUserActivities([]);
     }
-  }, [visible]);
+  }, [visible, category]);
 
   const getActivityIcon = (type, name) => {
     switch (type) {
@@ -255,6 +514,18 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             return '🏆';
           case 'Personal Goal':
             return '🎯';
+          case 'Environmental Action':
+            return '🌳';
+          case 'Volunteering':
+            return '🙌';
+          case 'Teaching Others':
+            return '👨‍🏫';
+          case 'Religious/Spiritual Practice':
+            return '🕊️';
+          case 'Self-Care':
+            return '🧖';
+          case 'Bonus other':
+            return '✨';
           default:
             return '⭐';
         }
@@ -272,16 +543,28 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
+      const userData = await AsyncStorage.getItem('user');
+      let userName = 'Anonymous';
+      let userId = 'anonymous';
+      let userAvatar = null;
+      
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        userName = parsedUser.name || parsedUser.email?.split('@')[0] || 'Anonymous';
+        userId = parsedUser.id || 'anonymous';
+        userAvatar = parsedUser.avatarUrl || null;
+      }
+      
       // Convert time value to minutes
       // Format: "0.25" = 15 mins, "0.5" = 30 mins, "0.75" = 45 mins, "1" = 1 hour, etc.
       const durationInMinutes = parseFloat(selectedTime) * 60;
       
       // Create request body
       const requestBody = {
-        type: category,
+        type: category || 'Unknown',
         name: selectedActivity,
         duration: durationInMinutes,
-        icon: getActivityIcon(category, selectedActivity)
+        icon: getActivityIcon(category || 'Unknown', selectedActivity)
       };
       
       // Add teamId to the request if the user is in a team
@@ -304,16 +587,18 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
         const data = await response.json();
         console.log('Activity created:', data);
 
-        // Build complete activity data with Anonymous as default username
+        // Build complete activity data with user name and avatar
         const activityData = {
           ...data.data,
-          type: category,
+          type: category || 'Unknown',
           name: selectedActivity,
           duration: durationInMinutes,
-          icon: getActivityIcon(category, selectedActivity),
+          icon: getActivityIcon(category || 'Unknown', selectedActivity),
           createdAt: new Date().toISOString(),
-          author: 'Anonymous',  // Use Anonymous as default username
-          userId: 'anonymous'   // Use lowercase anonymous as default userID
+          author: userName,
+          userName: userName,
+          userId: userId,
+          avatarUrl: userAvatar
         };
 
         // Call parent component callback function
@@ -348,100 +633,128 @@ const ActivityModal = ({ visible, category, onClose, onActivityCreated }) => {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.modalLabel}>Select Duration (Hours)</Text>
-          <View style={styles.pickerContainer}>
-          <Picker 
-            selectedValue={selectedTime} 
-            style={styles.picker} 
-              onValueChange={(itemValue) => {
-                setSelectedTime(itemValue);
-                console.log('Selected time:', itemValue);
-              }}
-          >
-            <Picker.Item key="0.25" label="15 minutes" value="0.25" />
-            <Picker.Item key="0.5" label="30 minutes" value="0.5" />
-            <Picker.Item key="0.75" label="45 minutes" value="0.75" />
-            {[...Array(8).keys()].map((num) => (
-              <Picker.Item key={num + 1} label={`${num + 1} hour${num > 0 ? 's' : ''}`} value={`${num + 1}`} />
-            ))}
-          </Picker>
-          </View>
-
-          <Text style={styles.modalLabel}>Select Activity</Text>
-          <ScrollView style={styles.activityList}>
-            <View style={styles.activityGrid}>
-            {activities.map((activity, index) => (
-              <TouchableOpacity 
-                key={index}
-                style={[
-                    styles.activityGridItem,
-                  selectedActivity === activity && styles.selectedActivity
-                ]}
-                  onPress={() => {
-                    setSelectedActivity(activity);
-                    console.log('Selected activity:', activity);
+          <View style={styles.modalBody}>
+            <View style={styles.timeSection}>
+              <Text style={styles.modalLabel}>Select Duration (Hours)</Text>
+              <View style={styles.pickerContainer}>
+                <Picker 
+                  selectedValue={selectedTime} 
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                  onValueChange={(itemValue) => {
+                    setSelectedTime(itemValue);
+                    console.log('Selected time:', itemValue);
                   }}
-              >
-                <Text style={[
-                    styles.activityGridText,
-                  selectedActivity === activity && styles.selectedActivityText
-                ]}>
-                  {activity}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                >
+                  <Picker.Item key="0.25" label="15 minutes" value="0.25" color="#333" />
+                  <Picker.Item key="0.5" label="30 minutes" value="0.5" color="#333" />
+                  <Picker.Item key="0.75" label="45 minutes" value="0.75" color="#333" />
+                  {[...Array(8).keys()].map((num) => (
+                    <Picker.Item key={num + 1} label={`${num + 1} hour${num > 0 ? 's' : ''}`} value={`${num + 1}`} color="#333" />
+                  ))}
+                </Picker>
+              </View>
             </View>
-          </ScrollView>
+
+            <View style={styles.activitySection}>
+              <Text style={styles.modalLabel}>Select Activity</Text>
+              <ScrollView style={styles.activityList}>
+                <View style={styles.activityGrid}>
+                {loadingUserActivities ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#3A8891" />
+                    <Text style={styles.loadingText}>Loading your activities...</Text>
+                  </View>
+                ) : activities.length === 0 ? (
+                  <View style={styles.emptyActivitiesContainer}>
+                    <Text style={styles.emptyActivitiesText}>
+                      No {category ? category.toLowerCase() : ''} activities found. Please set up your preferences in the Profile tab.
+                    </Text>
+                  </View>
+                ) : (
+                  activities.map((activity, index) => (
+                    <TouchableOpacity 
+                      key={index}
+                      style={[
+                        styles.activityGridItem,
+                        selectedActivity === activity && styles.selectedActivity
+                      ]}
+                      onPress={() => {
+                        setSelectedActivity(activity);
+                        console.log('Selected activity:', activity);
+                      }}
+                    >
+                      <Text style={[
+                        styles.activityGridText,
+                        selectedActivity === activity && styles.selectedActivityText
+                      ]}>
+                        {activity}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+                </View>
+              </ScrollView>
+            </View>
 
             <TouchableOpacity
-            style={[
-              styles.confirmButton,
-              (!selectedActivity || loading) && styles.disabledButton
-            ]}
+              style={[
+                styles.confirmButton,
+                (!selectedActivity || loading) && styles.disabledButton
+              ]}
               onPress={handleConfirm}
-            disabled={!selectedActivity || loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.confirmButtonText}>Confirm</Text>
-            )}
+              disabled={!selectedActivity || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              )}
             </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
   );
 };
 
-const PostCard = ({ post }) => {
+const PostCard = ({ post, onPostUpdated }) => {
   const [comment, setComment] = useState('');
   const [localComments, setLocalComments] = useState(post?.comments || []);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [isLiked, setIsLiked] = useState(post?.isLikedByUser || false);
   const [likesCount, setLikesCount] = useState(post?.likesCount || 0);
+  const [authorName, setAuthorName] = useState(post?.authorInfo?.name || 'Anonymous');
+  const [authorAvatar, setAuthorAvatar] = useState(post?.authorInfo?.avatarUrl || null);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  // 检查点赞状态
   useEffect(() => {
-    if (!post) return;
-
-    console.log('Initializing post like status:', {
-      postId: post._id,
-      likesCount: post.likesCount,
-      isLikedByUser: post.isLikedByUser
-    });
-    
-    // 直接使用帖子的点赞状态
-    setIsLiked(post.isLikedByUser || false);
-    setLikesCount(post.likesCount || 0);
-  }, [post?._id, post?.likesCount, post?.isLikedByUser]);
+    const loadCurrentUserId = async () => {
+      const userId = await AsyncStorage.getItem('userId');
+      setCurrentUserId(userId);
+    };
+    loadCurrentUserId();
+  }, []);
+  
+  useEffect(() => {
+    console.log('✅post.authorInfo.name', post.authorInfo.name);
+    console.log('post.content', post.content);
+    console.log('post.isLikedByUser', post.isLikedByUser);
+    console.log('post.likesCount', post.likesCount);
+    setAuthorName(post?.authorInfo?.name || 'Anonymous');
+    setAuthorAvatar(post?.authorInfo?.avatarUrl || null);
+    setIsLiked(post?.isLikedByUser || false);
+    setLikesCount(post?.likesCount || 0);
+    setLocalComments(post?.comments || []);
+  }, [post]);
 
   const handleLike = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       const userId = await AsyncStorage.getItem('userId');
       if (!token || !userId) {
-        console.error('No token or userId found');
+        console.error('No token or userId found for like action');
         return;
       }
 
@@ -483,18 +796,23 @@ const PostCard = ({ post }) => {
 
         setIsLiked(serverLikeStatus);
         setLikesCount(serverLikesCount);
+        
+        if (onPostUpdated) {
+          onPostUpdated({ ...post, isLikedByUser: serverLikeStatus, likesCount: serverLikesCount });
+        }
       } else {
         // If request fails, restore previous state
         console.error('Failed to update like status:', data);
         setIsLiked(prevIsLiked);
         setLikesCount(prevLikesCount);
-        Alert.alert('Error', 'Failed to update like status');
+        Alert.alert('Error', data.message || 'Failed to update like status');
       }
     } catch (error) {
       // Restore previous state in case of error
       console.error('Error updating like status:', error);
-      setIsLiked(prevIsLiked);
-      setLikesCount(prevLikesCount);
+      setIsLiked(isLiked);
+      setLikesCount(likesCount);
+      console.error('Error updating like status:', error);
       Alert.alert('Error', 'Failed to update like status');
     }
   };
@@ -532,6 +850,10 @@ const PostCard = ({ post }) => {
     
     try {
       const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert("Error", "You need to be logged in to comment.");
+        return;
+      }
       const response = await fetch(`${API_CONFIG.API_URL}/posts/${post?._id}/comments`, {
         method: 'POST',
         headers: {
@@ -542,17 +864,28 @@ const PostCard = ({ post }) => {
       });
 
       if (response.ok) {
-        const newComment = await response.json();
-        setLocalComments(prevComments => [...prevComments, {
-          id: newComment.id,
-          author: newComment.author || 'Anonymous',
-          content: comment
-        }]);
+        const newCommentData = await response.json();
+        
+        const formattedNewComment = {
+          ...(newCommentData.comment || newCommentData),
+          authorInfo: newCommentData.comment?.authorInfo || 
+                      (newCommentData.authorInfo || 
+                       { name: newCommentData.comment?.author || newCommentData.author || 'Anonymous', avatarUrl: null })
+        };
+
+        setLocalComments(prevComments => [...prevComments, formattedNewComment]);
         setComment('');
         setShowCommentInput(false);
+        if (onPostUpdated) {
+          onPostUpdated({ ...post, comments: [...localComments, formattedNewComment]});
+        }
+      } else {
+        const errorData = await response.json();
+        Alert.alert('Error', errorData.message || 'Failed to add comment');
       }
     } catch (error) {
       console.error('Error adding comment:', error);
+      Alert.alert('Error', 'Failed to add comment');
     }
   };
 
@@ -605,10 +938,18 @@ const PostCard = ({ post }) => {
       <View style={styles.postHeader}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{post.author?.[0] || '?'}</Text>
+            {authorAvatar ? (
+              <Image 
+                source={{ uri: authorAvatar }} 
+                style={{ width: '100%', height: '100%', borderRadius: 18 }}
+                onError={() => setAuthorAvatar(null)}
+              />
+            ) : (
+              <Text style={styles.avatarText}>{authorName?.[0] || '?'}</Text>
+            )}
           </View>
           <View style={styles.userInfoText}>
-            <Text style={styles.username}>{post.author?.name || 'Anonymous'}</Text>
+            <Text style={styles.username}>{authorName}</Text>
             <Text style={styles.postTime}>
               {new Date(post.createdAt).toLocaleDateString('en-US', {
                 year: 'numeric',
@@ -617,30 +958,36 @@ const PostCard = ({ post }) => {
               })}
             </Text>
           </View>
-          </View>
         </View>
+      </View>
       {renderContent()}
       
-      {/* 评论列表 */}
       {localComments.length > 0 && (
         <View style={styles.commentsSection}>
-          {localComments.map((comment, index) => (
-            <View key={index} style={styles.commentContainer}>
+          {localComments.map((commentItem, index) => (
+            <View key={commentItem.id || commentItem._id || index} style={styles.commentContainer}>
               <View style={styles.commentHeader}>
                 <View style={styles.commentAvatar}>
-                  <Text style={styles.commentAvatarText}>
-                    {comment?.author?.[0] || '?'}
-                  </Text>
-          </View>
-                <Text style={styles.commentAuthor}>{comment?.author || 'Anonymous'}</Text>
-                <Text style={styles.commentContent}>{comment?.content || ''}</Text>
-          </View>
-        </View>
+                  {commentItem.authorInfo?.avatarUrl ? (
+                    <Image 
+                      source={{ uri: commentItem.authorInfo.avatarUrl }} 
+                      style={{ width: '100%', height: '100%', borderRadius: 11 }}
+                      onError={(e) => { /* console.log("Error loading comment author avatar", e.nativeEvent.error); */ }}
+                    />
+                  ) : (
+                    <Text style={styles.commentAvatarText}>
+                      {commentItem.authorInfo?.name?.[0] || 'A'}
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.commentAuthor}>{commentItem.authorInfo?.name || 'Anonymous'}</Text>
+                <Text style={styles.commentContent}>{commentItem.content || ''}</Text>
+              </View>
+            </View>
           ))}
-      </View>
+        </View>
       )}
 
-      {/* 评论按钮和输入框 */}
       <View style={styles.socialButtonsContainer}>
         <TouchableOpacity 
           style={styles.socialButton} 
@@ -671,9 +1018,8 @@ const PostCard = ({ post }) => {
         >
           <Ionicons name="share-social-outline" size={24} color="#666" />
         </TouchableOpacity>
-        </View>
+      </View>
 
-      {/* 分享选项弹窗 */}
       <Modal
         visible={showShareOptions}
         transparent={true}
@@ -697,7 +1043,6 @@ const PostCard = ({ post }) => {
         </TouchableOpacity>
       </Modal>
 
-      {/* 点击评论按钮后显示的输入框 */}
       {showCommentInput && (
         <View style={styles.commentInputContainer}>
           <TextInput
@@ -713,9 +1058,9 @@ const PostCard = ({ post }) => {
           >
             <Ionicons name="send" size={24} color="#4A90E2" />
           </TouchableOpacity>
-            </View>
+        </View>
       )}
-      </View>
+    </View>
   );
 };
 
@@ -777,7 +1122,7 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
       setError('');
 
       const token = await AsyncStorage.getItem('userToken');
-      console.log('Retrieved token:', token);
+      // console.log('Retrieved token:', token); // Sensitive: Token printed
       
       if (!token) {
         console.error('No token found in AsyncStorage');
@@ -858,6 +1203,7 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
             <TextInput
               style={styles.contentInput}
               placeholder="What's on your mind?"
+              placeholderTextColor="#888"
               multiline
               value={content}
               onChangeText={setContent}
@@ -893,6 +1239,7 @@ const AddContentModal = ({ visible, onClose, onPostCreated }) => {
 const HomeScreen = () => {
   const [selectedFeed, setSelectedFeed] = useState('all');
   const [userStats, setUserStats] = useState(null);
+  const [feedItems, setFeedItems] = useState([]);
   const [activities, setActivities] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -909,6 +1256,11 @@ const HomeScreen = () => {
   const flatListRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const PAGE_LIMIT = 10;
 
   // Calculate UTC week cycle (starts on Monday 00:00 UTC)
   const calculateWeekCycle = () => {
@@ -967,21 +1319,31 @@ const HomeScreen = () => {
       const lastResetTime = new Date(lastResetTimeStr);
       
       // Check if we're in a new UTC week cycle since the last reset
-      // UTC week starts on Monday 00:00
+      // UTC week starts on Sunday 00:00 (day 0)
       const lastResetDay = lastResetTime.getUTCDay();
-      const lastResetDateNum = lastResetTime.getUTCDate();
-      
       const currentDay = now.getUTCDay();
-      const currentDateNum = now.getUTCDate();
       
-      // Determine if we've crossed a Monday 00:00 UTC boundary since last reset
-      const isNewWeekCycle = 
-        // If current day is Monday (1) or later in the week, and last reset was before this week's Monday
-        (currentDay >= 1 && lastResetDay >= currentDay && lastResetDateNum < currentDateNum) ||
-        // If current day is early in the week, and last reset was in previous week
-        (currentDay < lastResetDay) ||
-        // If it's been more than 7 days since last reset
-        (now.getTime() - lastResetTime.getTime() > 7 * 24 * 60 * 60 * 1000);
+      // Calculate start of current week (Sunday 00:00 UTC)
+      const startOfCurrentWeek = new Date(now);
+      startOfCurrentWeek.setUTCDate(now.getUTCDate() - currentDay);
+      startOfCurrentWeek.setUTCHours(0, 0, 0, 0);
+      
+      // Calculate start of last reset week
+      const lastResetDayOffset = lastResetTime.getUTCDay();
+      const startOfLastResetWeek = new Date(lastResetTime);
+      startOfLastResetWeek.setUTCDate(lastResetTime.getUTCDate() - lastResetDayOffset);
+      startOfLastResetWeek.setUTCHours(0, 0, 0, 0);
+      
+      // Check if we've crossed into a new week
+      const isNewWeekCycle = startOfCurrentWeek.getTime() > startOfLastResetWeek.getTime();
+      
+      console.log('Weekly reset check:', {
+        lastResetTime: lastResetTime.toISOString(),
+        currentTime: now.toISOString(),
+        startOfCurrentWeek: startOfCurrentWeek.toISOString(),
+        startOfLastResetWeek: startOfLastResetWeek.toISOString(),
+        isNewWeekCycle
+      });
       
       if (isNewWeekCycle) {
         console.log("New week cycle detected, resetting stats...");
@@ -1192,58 +1554,121 @@ const HomeScreen = () => {
 
   const handleActivityCreated = async (newActivity) => {
     try {
-      await fetchActivities();
+      // Only update stats, not fetchActivities to avoid overwriting weekly stats
+      await fetchUserStats();
       
       // Show a success message
       Alert.alert('Success', `Logged ${newActivity.type} activity: ${newActivity.name}`);
     } catch (error) {
-      console.error('Error refreshing activities after creation:', error);
+      console.error('Error refreshing data after activity creation:', error);
     }
   };
 
   const getSortedFeed = () => {
-    const currentActivities = Array.isArray(activities) ? activities : [];
-    const currentPosts = Array.isArray(posts) ? posts : [];
-
-    const allItems = [
-      ...currentActivities.map(activity => ({ ...activity, itemType: 'activity', createdAt: new Date(activity.createdAt) })),
-      ...currentPosts.map(post => ({ ...post, itemType: 'post', createdAt: new Date(post.createdAt) }))
-    ];
-    return allItems.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return feedItems;
   };
 
+  // focus update info
   useFocusEffect(
     useCallback(() => {
-      const loadDataForCurrentUser = async () => {
-        setLoading(true);
+      const loadInitialFeed = async (isRefreshing = false) => {
+        if (!isRefreshing) setLoading(true);
+        else setRefreshing(true);
+
         console.log("HomeScreen focused, reloading data for current user...");
         try {
           const token = await AsyncStorage.getItem('userToken');
           if (!token) {
             console.log("No token found on focus, user might be logged out.");
+            setFeedItems([]); // Clear feed if no token
             setActivities([]);
             setPosts([]);
             setUserStats(null);
-            setLoading(false);
+            if (!isRefreshing) setLoading(false);
+            else setRefreshing(false);
             return;
           }
-          await Promise.all([fetchActivities(), fetchPosts(), fetchUserStats()]);
-          // Check weekly limits after data is loaded
-          checkWeeklyLimits();
+          
+          await ensureCompleteUserData();
+          await fetchFeedItems(1, isRefreshing); // Fetch first page of combined feed
+          await fetchUserStats(); // Keep fetching user stats separately if needed
+          // checkWeeklyLimits(); // Keep if still relevant
         } catch (error) {
-          console.error('Error loading data on focus:', error);
-        } finally {
-          setLoading(false);
+          console.error('Error loading data on focus/refresh:', error);
+          if (isRefreshing) setRefreshing(false);
+          else setLoading(false);
         }
       };
 
-      loadDataForCurrentUser();
+      loadInitialFeed(false); // Initial load
 
       return () => {
         console.log("HomeScreen out of focus");
       };
     }, [])
   );
+  
+  // Function to ensure user data is complete and valid
+  const ensureCompleteUserData = async () => {
+    try {
+      const userJson = await AsyncStorage.getItem('user');
+      if (!userJson) {
+        console.log('No user data found, fetching from API...');
+        // Try to fetch from API using the userService
+        const { userService } = require('../../services/api');
+        const userData = await userService.getUserProfile();
+        if (userData) {
+          console.log('Successfully fetched user data from API');
+          return;
+        }
+        return;
+      }
+      
+      const userData = JSON.parse(userJson);
+      
+      // Check if the name is a placeholder like "guest user"
+      const isPlaceholderName = !userData.name || 
+                               userData.name === 'User' || 
+                               userData.name === 'guest user' || 
+                               userData.name === 'Anonymous' || 
+                               userData.name.toLowerCase() === 'unknown user';
+      
+      if (isPlaceholderName) {
+        console.log('User has placeholder name, trying to update it...');
+        
+        // Try to find a better name
+        let betterName = null;
+        
+        if (userData.email && userData.email.includes('@')) {
+          betterName = userData.email.split('@')[0];
+        } else if (userData.username) {
+          betterName = userData.username;
+        }
+        
+        if (betterName) {
+          console.log(`Updating user name from "${userData.name}" to "${betterName}"`);
+          userData.name = betterName;
+          
+          // Save updated user data
+          await AsyncStorage.setItem('user', JSON.stringify(userData));
+          
+          // Try to update on the server as well
+          try {
+            const { userService } = require('../../services/api');
+            await userService.updateUserProfile({
+              id: userData.id || userData._id,
+              name: betterName
+            });
+            console.log('Successfully updated name on server');
+          } catch (serverError) {
+            console.warn('Failed to update name on server:', serverError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring complete user data:', error);
+    }
+  };
 
   const fetchPosts = async () => {
     try {
@@ -1283,16 +1708,39 @@ const HomeScreen = () => {
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.USER.STATS}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await response.json();
-      if (response.ok) {
-        setUserStats(prevStats => ({ ...prevStats, totalPoints: data.totalPoints || 0, totalActivities: data.totalActivities || 0, currentStreak: data.currentStreak || 0, monthlyProgress: data.monthlyProgress || 0 }));
-      } else {
-        console.error('Failed to fetch user stats:', data);
-        setUserStats(null);
+      
+      if (!response.ok) {
+        console.error('Failed to fetch user stats:', response.status);
+        // Fallback to default values if the API call fails
+        setUserStats(prevStats => ({ 
+          ...prevStats, 
+          totalPoints: 0, 
+          totalActivities: 0, 
+          currentStreak: 0, 
+          monthlyProgress: 0 
+        }));
+        return;
       }
+      
+      const data = await response.json();
+      console.log('data', data);
+      console.log('Updated userStats', data.totalPoints, data.totalActivities, data.currentStreak, data.monthlyProgress);
+      setUserStats(prevStats => ({ 
+        ...prevStats, 
+        totalPoints: data.totalPoints || 0, 
+        totalActivities: data.totalActivities || 0, 
+        currentStreak: data.currentStreak || 0, 
+        monthlyProgress: data.monthlyProgress || 0 
+      }));
     } catch (error) {
-      console.error('Error fetching user stats:', error);
-      setUserStats(null);
+      console.error('Failed to fetch user stats:', error);
+      setUserStats(prevStats => ({ 
+        ...prevStats, 
+        totalPoints: 0, 
+        totalActivities: 0, 
+        currentStreak: 0, 
+        monthlyProgress: 0 
+      }));
     }
   };
 
@@ -1303,34 +1751,178 @@ const HomeScreen = () => {
         console.log('No token found for fetchActivities');
         setActivities([]);
         setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        
+        // Try to handle the missing token - check if we have a user object that might help
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          if (user && user.id) {
+            console.log('Found user data but no token, attempting to restore session...');
+            
+            // Try to refresh login session using available data
+            const refreshToken = await AsyncStorage.getItem('refreshToken');
+            if (refreshToken) {
+              try {
+                const apiUrl = API_CONFIG.API_URL;
+                const refreshResponse = await fetch(`${apiUrl}/auth/refresh`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ refreshToken })
+                });
+                
+                if (refreshResponse.ok) {
+                  const refreshData = await refreshResponse.json();
+                  if (refreshData.token) {
+                    console.log('Successfully refreshed token');
+                    await AsyncStorage.setItem('userToken', refreshData.token);
+                    // Retry fetching activities with new token
+                    fetchActivities();
+                    return;
+                  }
+                }
+              } catch (refreshError) {
+                console.error('Error refreshing token:', refreshError);
+              }
+            }
+          }
+        }
+        
         return;
       }
+      
       console.log('Fetching activities with token...');
       const response = await fetch(`${API_CONFIG.API_URL}${API_CONFIG.ENDPOINTS.ACTIVITIES.LIST}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      // Check for auth errors
+      if (response.status === 401 || response.status === 403) {
+        console.warn('Authentication error in fetchActivities, attempting to refresh token...');
+        
+        // Try to refresh the token
+        const refreshed = await refreshAuthToken();
+        if (refreshed) {
+          console.log('Token refreshed, retrying activities fetch');
+          // Retry with fresh token
+          setTimeout(() => fetchActivities(), 500);
+          return;
+        }
+        
+        console.error('Unable to refresh authentication token');
+        setActivities([]);
+        // setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        // Remove setting userStats, avoid overwriting this week's stats
+        return;
+      }
+      
       const data = await response.json();
       if (response.ok && data.success) {
         setActivities(data.data?.activities || []);
-        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: data.data?.stats?.totalPoints || 0, totalActivities: data.data?.pagination?.total || 0 }));
+        // Remove setting userStats, avoid overwriting this week's stats
+        // setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: data.data?.stats?.totalPoints || 0, totalActivities: data.
+        // data?.pagination?.total || 0 }));
       } else {
         console.error('Failed to fetch activities:', data.message || 'Unknown error');
         setActivities([]);
-        setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+        // Remove setting userStats, avoid overwriting this week's stats
+        // setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
       }
     } catch (error) {
       console.error('Error fetching activities:', error);
       setActivities([]);
-      setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+      // Remove setting userStats, avoid overwriting this week's stats
+      // setUserStats(prevStats => ({ ...(prevStats || {}), totalPoints: 0, totalActivities: 0 }));
+    }
+  };
+
+    // ADDED: fetchFeedItems function
+  const fetchFeedItems = async (page, isRefreshing = false) => {
+    if (loadingMore && !isRefreshing) return; // Prevent multiple loads
+    if (!hasMoreItems && !isRefreshing && page > 1) return; // No more items to load
+
+    // console.log(`Fetching feed: page ${page}, refreshing: ${isRefreshing}`);
+
+    if (isRefreshing) {
+      // console.log('Refreshing feed, setting page to 1');
+      setCurrentPage(1);
+      setHasMoreItems(true); // Reset hasMore on refresh
+      // setLoading(true); // setLoading(true) is handled by loadInitialFeed or onRefresh itself
+    } else if (page > 1) {
+      // console.log('Loading more feed items');
+      setLoadingMore(true);
+    } else { // Initial load for page 1 (not a refresh action)
+      // console.log('Initial feed load (page 1)');
+      if (!refreshing) setLoading(true); // Main loading for initial fetch if not already refreshing
+    }
+
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setFeedItems([]);
+        setHasMoreItems(false);
+        // if (isRefreshing) setRefreshing(false); else if (page === 1) setLoading(false);
+        // setLoadingMore(false);
+        return;
+      }
+
+      const apiUrl = await getApiUrl(); // Assuming getApiUrl correctly points to your base (e.g. http://localhost:5001)
+      const response = await fetch(`${apiUrl}/feed?page=${page}&limit=${PAGE_LIMIT}`, { // Use /feed endpoint
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        console.warn('Authentication error in fetchFeedItems, attempting to refresh token...');
+        const refreshed = await refreshAuthToken(); // Ensure refreshAuthToken is available
+        if (refreshed) {
+          fetchFeedItems(page, isRefreshing); // Retry with the same page
+          return;
+        }
+        console.error('Unable to refresh authentication token for feed');
+        setFeedItems(isRefreshing ? [] : []);
+        setHasMoreItems(false);
+        return;
+      }
+
+      const responseData = await response.json();
+
+      if (response.ok && responseData.success) {
+        const fetchedItems = responseData.data?.feed || [];
+        const pagination = responseData.data?.pagination;
+        const newHasMore = pagination?.hasNextPage || false;
+
+        // console.log(`Fetched ${fetchedItems.length} items. HasMore: ${newHasMore}`);
+
+        setFeedItems(prevItems =>
+          (page === 1 || isRefreshing) ? fetchedItems : [...prevItems, ...fetchedItems]
+        );
+        setHasMoreItems(newHasMore);
+        if (pagination?.page) setCurrentPage(pagination.page);
+      } else {
+        console.error('Failed to fetch feed items:', responseData.message || await response.text());
+        if (isRefreshing || page === 1) setFeedItems([]);
+        setHasMoreItems(false);
+      }
+    } catch (error) {
+      console.error('Error fetching feed items:', error);
+      if (isRefreshing || page === 1) setFeedItems([]); // Clear on error for initial or refresh
+      setHasMoreItems(false);
+    } finally {
+      if (isRefreshing) setRefreshing(false);
+      if (page === 1 && !isRefreshing) setLoading(false); // Turn off main loading for initial non-refresh
+      setLoadingMore(false);
     }
   };
 
   const handlePostCreated = async () => {
     try {
-      await Promise.all([
-        fetchActivities(),
-        fetchPosts()
-      ]);
+      // await Promise.all([
+      //   fetchActivities(),
+      //   fetchPosts()
+      // ]);
+      // only refresh feed and posts, not fetchActivities to avoid overwriting this week's stats
+      await fetchFeedItems(1, true);
     } catch (error) {
       console.error('Error refreshing data after post creation:', error);
     }
@@ -1343,8 +1935,8 @@ const HomeScreen = () => {
     return (
       <View style={styles.actionButtonsContainer}>
         <View style={styles.utcTimeContainer}>
-          <Text style={styles.utcTimeText}>Week cycle ends: {weekCycleEndTime}</Text>
-          <Text style={styles.resetCountdownText}>Time until reset: {timeUntilReset}</Text>
+          {/* <Text style={styles.utcTimeText}>Current UTC Time: {currentUtcTime}</Text> */}
+          <Text style={styles.resetCountdownText}>Week starts every Sunday 00:00 UTC</Text>
         </View>
         
         <View style={styles.actionButtons}>
@@ -1385,6 +1977,15 @@ const HomeScreen = () => {
           >
             <FontAwesome5 name="star" size={24} color="white" />
             <Text style={styles.actionButtonText}>Bonus</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.postButton]}
+            onPress={() => setShowContentModal(true)}
+            disabled={checkingCategoryLimit !== null}
+          >
+            <FontAwesome5 name="edit" size={24} color="white" />
+            <Text style={styles.actionButtonText}>Post</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1441,69 +2042,70 @@ const HomeScreen = () => {
                   <Text style={styles.statLabel}>Streak</Text>
                 </View>
               </View>
-
-              {/* Monthly Progress */}
-              <View style={styles.progressSection}>
-                <Text style={styles.progressTitle}>Weekly Progress</Text>
-                <View style={styles.progressRow}>
-                  <Text style={styles.progressLabel}>Team</Text>
-                  <View style={styles.progressBar}>
-                    <View 
-                      style={[
-                        styles.progressFill,
-                        { width: `${userStats?.monthlyProgress || 0}%` }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.progressText}>{userStats?.monthlyProgress || 0}%</Text>
-                </View>
-                <View style={styles.progressRow}>
-                  <Text style={styles.progressLabel}>Personal</Text>
-                  <View style={styles.progressBar}>
-                    <View 
-                      style={[
-                        styles.progressFill,
-                        { 
-                          width: `${userStats?.monthlyProgress || 0}%`,
-                          backgroundColor: '#ff9800'
-                        }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.progressText}>{userStats?.monthlyProgress || 0}%</Text>
-                </View>
-              </View>
             </View>
 
             {/* Combined Feed */}
             <ScrollView 
               style={styles.feed}
+              contentContainerStyle={{ flexGrow: 1, width: '100%' }} 
+              onScroll={({ nativeEvent }) => {
+                const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+                const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 200;
+                if (isCloseToBottom && hasMoreItems && !loadingMore && !refreshing && !loading) {
+                  // console.log("Scrolled near bottom, attempting to load more feed items...");
+                  fetchFeedItems(currentPage + 1);
+                }
+              }}
+              scrollEventThrottle={400}
               refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={async () => {
-                  setRefreshing(true);
-                  await Promise.all([fetchActivities(), fetchPosts(), fetchUserStats()]);
-                  setRefreshing(false);
-                }} />
+                <RefreshControl 
+                  refreshing={refreshing} 
+                  onRefresh={() => {
+                    // console.log("Pull to refresh triggered for feed");
+                    fetchFeedItems(1, true); // Fetch page 1 and mark as refreshing
+                  }} 
+                />
               }
             >
-              {loading && activities.length === 0 && posts.length === 0 ? (
+              {(loading && feedItems.length === 0 && !refreshing) ? ( // Show main loader only on initial load
                 <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
               ) : getSortedFeed().length === 0 ? (
-                <Text style={styles.emptyFeedText}>No activities or posts yet. Start logging or post something!</Text>
+                <View style={styles.emptyFeedContainer}>
+                  <Text style={styles.emptyFeedText}>No activities or posts yet. Start logging or post something!</Text>
+                </View>
               ) : (
-                getSortedFeed().map((item) => (
-                  item.itemType === 'activity' ? (
-                    <ActivityCard
-                      key={`activity-${item.id || item._id}`}
-                      activity={item}
-                    />
-                  ) : (
-                    <PostCard 
-                      key={`post-${item._id}`}
-                      post={item}
-                    />
-                  )
-                ))
+                console.log('loading', loading),
+                console.log('feedItems.length', feedItems.length),
+                console.log('refreshing', refreshing),
+                getSortedFeed().map((item) => {
+                  if (!item || (!item.id && !item._id)) { // Add a check for valid item
+                    console.warn("Encountered an item without id or _id:", item);
+                    return null; 
+                  }
+                  const key = `${item.itemType}-${item.id || item._id}-${item.createdAt}`; // More unique key
+                  if (item.itemType === 'activity') {
+                    return (
+                      <ActivityCard
+                        key={key}
+                        activity={item}
+                        onRefresh={() => fetchFeedItems(1, true)} // Pass refresh if ActivityCard needs it
+                      />
+                    );
+                  } else if (item.itemType === 'post') {
+                    return (
+                      <PostCard 
+                        key={key}
+                        post={item}
+                        onPostUpdated={() => fetchFeedItems(1, true)} // If PostCard modifies data
+                      />
+                    );
+                  }
+                  return null; // Should not happen
+                })
+              )}
+              {/* Loading more indicator at the bottom */}
+              {loadingMore && (
+                <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 20 }} />
               )}
             </ScrollView>
 
@@ -1522,7 +2124,6 @@ const HomeScreen = () => {
               onPostCreated={handlePostCreated}
             />
 
-            {/* Bottom action buttons with UTC time */}
             {renderActionButtons()} 
           </View>
         </LinearGradient>
@@ -1534,7 +2135,8 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#E8F0F2', 
+    backgroundColor: '#E8F0F2',
+    paddingHorizontal: 0,
   },
   backgroundImage: {
     flex: 1,
@@ -1551,6 +2153,7 @@ const styles = StyleSheet.create({
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: 'rgba(248, 250, 252, 0.95)',
+    paddingHorizontal: 0,
   },
   header: {
     flexDirection: 'row', 
@@ -1567,388 +2170,194 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statsSection: {
-    padding: 10,
+    padding: 6,
+    paddingVertical: 4,
     backgroundColor: '#fff',
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between', 
-    marginBottom: 10,
+    justifyContent: 'space-around', 
+    flexWrap: 'wrap', 
+    marginBottom: 5,
   },
   statCard: {
-    flex: 1, 
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
     marginHorizontal: 4,
+    minWidth: 70, 
+    flexGrow: 1, 
+    flexBasis: '25%', 
+    marginBottom: 4, 
   },
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a1a1a',
-    marginVertical: 2,
+    marginVertical: 0,
   },
   statLabel: {
     fontSize: 12,
     color: '#666',
   },
-  progressSection: {
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  progressTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 10,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  progressLabel: {
-    width: 60,
-    fontSize: 12,
-    color: '#666',
-  },
-  progressBar: { 
-    flex: 1,
-    height: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 3,
-    marginHorizontal: 8,
-  },
-  progressFill: {
-    height: '100%', 
-    backgroundColor: '#4CAF50',
-    borderRadius: 3,
-  },
-  progressText: {
-    width: 35,
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'right',
-  },
   feed: {
-    flex: 1, 
-    marginBottom: 60,
+    flex: 1,
+    width: '100%',
+  },
+  emptyFeedContainer: { 
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   postCard: {
     backgroundColor: '#fff', 
-    padding: 15,
+    paddingHorizontal: 8, 
+    paddingVertical: 8, 
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    marginVertical: 3,
+    marginHorizontal: 4,
+    width: '97%',
+    alignSelf: 'center',
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8, 
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1, 
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#6c63ff',
+    width: 36, 
+    height: 36, 
+    borderRadius: 18, 
+    backgroundColor: '#0E5E6F',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 8, 
   },
   avatarText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14, 
     fontWeight: 'bold',
   },
   username: {
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 15, 
   },
   postContent: {
-    fontSize: 16,
-    lineHeight: 24,
-    marginBottom: 10,
+    fontSize: 15, 
+    lineHeight: 22, 
+    marginBottom: 8,
+    width: '100%',
   },
   postImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 10,
-    marginBottom: 10,
+    height: 180, 
+    borderRadius: 8, 
+    marginBottom: 8, 
   },
-  activityCard: {
+  activityCard: { 
     backgroundColor: '#f8f9fa',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
+    borderRadius: 8,
+    padding: 10, 
+    marginBottom: 8,
+    width: '100%',
   },
-  activityHeader: {
+  activityHeader: { 
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    alignItems: 'center', 
+    marginBottom: 8,
+    flexWrap: 'wrap', 
   },
-  activityTitle: {
-    fontSize: 16,
+  activityTitle: { 
+    fontSize: 15, 
     fontWeight: 'bold',
+    flexShrink: 1, 
   },
-  activityPoints: {
+  activityPoints: { 
     color: '#4CAF50',
     fontWeight: 'bold',
+    fontSize: 15, 
+    marginLeft: 8, 
   },
-  activityDetails: {
-    marginBottom: 5,
+  activityDetails: { 
+    marginBottom: 4,
   },
-  activityText: {
-    fontSize: 14,
+  activityText: { 
+    fontSize: 13, 
     color: '#666',
-    marginBottom: 5,
+    marginBottom: 3,
     textAlign: 'left',
   },
-  progressBarContainer: {
-    marginTop: 5,
-    paddingRight: 15,
+  progressBarContainer: { 
+    marginTop: 4,
+    paddingRight: 10, 
   },
-  progressBarBackground: {
-    height: 8,
+  progressBarBackground: { 
+    height: 6, 
     backgroundColor: '#f0f0f0',
-    borderRadius: 4,
+    borderRadius: 3,
     flex: 1,
   },
-  progressBarFill: {
+  progressBarFill: { 
     height: '100%',
     backgroundColor: '#4CAF50',
-    borderRadius: 4,
-  },
-  progressDescription: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-    textAlign: 'right',
+    borderRadius: 3,
   },
   commentsSection: {
-    marginTop: 10,
-    marginBottom: 10,
-    paddingTop: 10,
-    paddingLeft: 15,
+    marginTop: 8, 
+    marginBottom: 8, 
+    paddingTop: 8, 
+    paddingHorizontal: 12, 
     borderTopWidth: 1,
     borderTopColor: '#eee',
     backgroundColor: '#f8f9fa',
   },
   commentContainer: {
-    marginBottom: 6,
+    marginBottom: 5, 
   },
   commentHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    alignItems: 'flex-start', 
+    flexWrap: 'nowrap', 
   },
   commentAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#6c63ff',
+    width: 22, 
+    height: 22, 
+    borderRadius: 11, 
+    backgroundColor: '#0E5E6F',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 6, 
+    marginTop: 2, 
   },
   commentAvatarText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11, 
     fontWeight: 'bold',
   },
   commentAuthor: {
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13, 
     color: '#1a1a1a',
-    marginRight: 8,
+    marginRight: 6, 
   },
   commentContent: {
-    flex: 1,
-    fontSize: 14,
+    flex: 1, 
+    fontSize: 13, 
     color: '#4a4a4a',
-  },
-  bottomContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  activityButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  activityButton: {
-    backgroundColor: '#4A90E2',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  activityButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  addButton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 70,
-    backgroundColor: '#fff',
-    borderRadius: 25,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  commentInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  commentInput: {
-    flex: 1,
-    height: 36,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 18,
-    paddingHorizontal: 15,
-    marginRight: 10,
-  },
-  sendButton: {
-    padding: 5,
-  },
-  postInput: {
-    height: 120,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 15,
-    marginVertical: 15,
-    textAlignVertical: 'top',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  typeSelection: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  typeOption: {
-    flex: 1,
-    padding: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 5,
-  },
-  teamSelection: {
-    marginBottom: 15,
-  },
-  teamOption: {
-    padding: 10,
-    borderRadius: 8,
-    backgroundColor: '#f5f5f0',
-    marginBottom: 5,
-  },
-  contentTypeSelection: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  contentTypeOption: {
-    flex: 1,
-    padding: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 5,
-  },
-  selectedOption: {
-    backgroundColor: '#4A90E2',
-  },
-  optionText: {
-    color: '#666',
-  },
-  selectedOptionText: {
-    color: '#fff',
-  },
-  teamOptionText: {
-    color: '#666',
-  },
-  selectedTeam: {
-    backgroundColor: '#4A90E2',
-  },
-  selectedTeamText: {
-    color: '#fff',
-  },
-  contentInput: {
-    height: 120,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    textAlignVertical: 'top',
-  },
-  activityFields: {
-    marginBottom: 15,
-  },
-  activityInput: {
-    height: 40,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 10,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    marginHorizontal: 5,
-    alignItems: 'center',
-  },
-  confirmButton: {
-    backgroundColor: '#4A90E2',
-  },
-  cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    lineHeight: 18, 
   },
   socialButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around', 
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
+    paddingVertical: 8, 
+    paddingHorizontal: 10, 
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
@@ -1956,12 +2365,273 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
+    flexGrow: 1, 
+    flexBasis: 0, 
+    paddingVertical: 6, 
   },
   socialButtonText: {
-    marginLeft: 5,
+    marginLeft: 4, 
     color: '#666',
+    fontSize: 13, 
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10, 
+    paddingVertical: 6, 
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0', 
+  },
+  commentInput: {
+    flex: 1,
+    height: 34, 
+    backgroundColor: '#f5f5f5',
+    borderRadius: 17, 
+    paddingHorizontal: 12, 
+    marginRight: 8, 
+    fontSize: 13, 
+  },
+  sendButton: {
+    padding: 4, 
+  },
+  actionButtonsContainer: {
+    paddingHorizontal: 8, 
+    paddingVertical: 6, 
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0', 
+  },
+  utcTimeContainer: {
+    paddingVertical: 4, 
+    paddingHorizontal: 8, 
+    backgroundColor: 'rgba(240, 240, 240, 0.85)', 
+    borderRadius: 6, 
+    marginBottom: 6, 
+    alignItems: 'center',
+  },
+  utcTimeText: {
+    fontSize: 11, 
+    color: '#333',
+    fontWeight: '500',
+    marginBottom: 1, 
+  },
+  resetCountdownText: {
+    fontSize: 11, 
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    flexWrap: 'wrap', 
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6, 
+    paddingHorizontal: 8, 
+    borderRadius: 16, 
+    minWidth: 80, 
+    marginVertical: 3, 
+    flexGrow: 1, 
+    marginHorizontal: 3, 
+  },
+  physicalButton: {
+    backgroundColor: '#4A90E2',
+  },
+  mentalButton: {
+    backgroundColor: '#9C27B0',
+  },
+  bonusButton: {
+    backgroundColor: '#FF9800',
+  },
+  postButton: {
+    backgroundColor: '#34c759c6',
+  },
+  actionButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  disabledButtonVisual: {
+    backgroundColor: '#cccccc',
+  },
+  emptyFeedText: {
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 20, 
+  },
+  notificationBanner: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    marginBottom: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  notificationText: {
+    color: '#fff',
+    marginLeft: 8,
     fontSize: 14,
+    flex: 1,
+    fontWeight: '500',
+  },
+  modalOverlay: { 
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: { 
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+    width: '90%',
+    maxHeight: '85%',
+    minHeight: '70%',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalHeader: { 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    flexShrink: 0,
+  },
+  modalBody: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  timeSection: {
+    flexShrink: 0,
+    marginBottom: 5,
+  },
+  activitySection: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  },
+  closeButton: { 
+    padding: 5,
+  },
+  pickerContainer: { 
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    marginBottom: 6,
+    minHeight: 110,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  picker: { 
+    height: 110,
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+  modalTitle: { 
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalLabel: { 
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 10,
+    color: '#333',
+  },
+  activityList: { 
+    flex: 1,
+    minHeight: 150,
+  },
+  activityGrid: { 
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 5,
+  },
+  activityGridItem: { 
+    width: '48%',
+    backgroundColor: '#f5f5f5',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityGridText: { 
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+  },
+  selectedActivity: { 
+    backgroundColor: '#4A90E2',
+  },
+  selectedActivityText: { 
+    color: '#fff',
+  },
+  confirmButton: { 
+    backgroundColor: '#4A90E2',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 15,
+    flexShrink: 0,
+  },
+  confirmButtonText: { 
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  disabledButton: { 
+    backgroundColor: '#ccc',
+  },
+  userInfoText: { 
+    flex: 1,
+  },
+  postTime: { 
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  errorText: { 
+    color: '#ff4b4b',
+    marginBottom: 10,
+  },
+  contentInput: { 
+    height: 120,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 15,
+    textAlignVertical: 'top',
+  },
+  modalButtons: { 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: { 
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  cancelButton: { 
+    backgroundColor: '#f0f0f0',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 15,
+    flexShrink: 0,
+  },
+  modalButtonText: { 
+    color: '#fff', 
+    fontWeight: 'bold',
   },
   shareModalOverlay: {
     flex: 1,
@@ -1988,167 +2658,82 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  likedText: {
+  typeSelection: { 
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  typeOption: { 
+    flex: 1,
+    padding: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 5,
+  },
+  selectedOption: { 
+    backgroundColor: '#4A90E2',
+  },
+  optionText: { 
+    color: '#666',
+  },
+  selectedOptionText: { 
+    color: '#fff',
+  },
+  teamSelection: { 
+    marginBottom: 15,
+  },
+  teamOption: { 
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#f5f50',
+    marginBottom: 5,
+  },
+  selectedTeam: { 
+    backgroundColor: '#4A90E2',
+  },
+  selectedTeamText: { 
+    color: '#fff',
+  },
+  activityFields: { 
+    marginBottom: 15,
+  },
+  activityInput: { 
+    height: 40,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    padding: 10,
+  },
+  likedText: { 
     color: '#ff4b4b'
   },
-  errorText: {
-    color: '#ff4b4b',
-    marginBottom: 10,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  closeButton: {
-    padding: 5,
-  },
-  pickerContainer: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  picker: {
-    height: 50,
-  },
-  modalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
-    color: '#333',
-  },
-  activityList: {
-    maxHeight: '50%',
-  },
-  activityGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 5,
-  },
-  activityGridItem: {
-    width: '48%',
-    backgroundColor: '#f5f5f5',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
+  loadingContainer: {
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
   },
-  activityGridText: {
-    fontSize: 14,
-    color: '#333',
-    textAlign: 'center',
-  },
-  selectedActivity: {
-    backgroundColor: '#4A90E2',
-  },
-  selectedActivityText: {
-    color: '#fff',
-  },
-  confirmButton: {
-    backgroundColor: '#4A90E2',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  userInfoText: {
-    flex: 1,
-  },
-  postTime: {
-    fontSize: 12,
+  loadingText: {
+    marginTop: 10,
     color: '#666',
-    marginTop: 2,
-  },
-  actionButtonsContainer: {
-    padding: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  utcTimeContainer: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 8,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-  utcTimeText: {
     fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-    marginBottom: 4,
   },
-  resetCountdownText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  actionButton: {
-    flexDirection: 'row',
+  emptyActivitiesContainer: {
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 20,
-    minWidth: 100,
+    width: '100%',
   },
-  physicalButton: {
-    backgroundColor: '#4A90E2',
-  },
-  mentalButton: {
-    backgroundColor: '#9C27B0',
-  },
-  bonusButton: {
-    backgroundColor: '#FF9800',
-  },
-  actionButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  disabledButtonVisual: {
-    backgroundColor: '#cccccc',
-  },
-  emptyFeedText: {
+  emptyActivitiesText: {
     color: '#666',
     textAlign: 'center',
-    marginTop: 20,
-  },
-  notificationBanner: {
-    backgroundColor: '#4CAF50',
-    padding: 12,
-    marginBottom: 10,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 10,
-  },
-  notificationText: {
-    color: '#fff',
-    marginLeft: 8,
     fontSize: 14,
-    flex: 1,
-    fontWeight: '500',
+    lineHeight: 20,
+  },
+  pickerItem: {
+    color: '#333',
+    fontSize: 16,
+    textAlign: 'center',
+    height: 110,
   },
 });
 

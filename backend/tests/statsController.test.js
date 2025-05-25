@@ -36,7 +36,9 @@ jest.mock('../middleware/auth', () => (req, res, next) => {
 
 // Import and configure API routes
 const routes = require('../homepage/routes/index');
-app.use('/api', routes);
+const mockedAuth = require('../middleware/auth'); // Get the mocked auth
+
+app.use('/api', mockedAuth, routes); // Apply mocked auth before routes
 
 let server;
 
@@ -64,10 +66,10 @@ describe('Stats Controller Tests', () => {
     authToken = mockData.token;
   });
 
-  describe('GET /api/stats/user', () => {
+  describe('GET /api/user', () => {
     it('should return user stats', async () => {
       const response = await request(app)
-        .get('/api/stats/user')
+        .get('/api/user')
         .set('Authorization', `Bearer ${mockUser._id}`);
 
       expect(response.status).toBe(200);
@@ -78,14 +80,14 @@ describe('Stats Controller Tests', () => {
     }, 60000);
   });
 
-  describe('PUT /api/stats/user/target', () => {
+  describe('PUT /api/user/target', () => {
     it('should update user target', async () => {
       const targetData = {
         targetPoints: 100
       };
 
       const response = await request(app)
-        .put('/api/stats/user/target')
+        .put('/api/user/target')
         .set('Authorization', `Bearer ${mockUser._id}`)
         .send(targetData);
 

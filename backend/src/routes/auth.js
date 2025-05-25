@@ -294,7 +294,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
     if (name) user.name = name;
     if (bio !== undefined) user.bio = bio;
     if (longTermGoal !== undefined) user.longTermGoal = longTermGoal;
-    if (avatarUrl) user.avatarUrl = avatarUrl;
+    if (avatarUrl) user.avatar = avatarUrl;
     if (activitySettings) user.activitySettings = activitySettings;
     
     // Save updated user
@@ -308,7 +308,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
       username: user.username,
       bio: user.bio,
       longTermGoal: user.longTermGoal,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: user.avatar,
       status: user.status,
       activitySettings: user.activitySettings,
       createdAt: user.createdAt,

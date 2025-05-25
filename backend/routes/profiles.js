@@ -3,6 +3,26 @@ const router = express.Router();
 const Profile = require('../src/models/profile');
 const User = require('../src/models/user');
 // Removed internal authMiddleware import, will rely on router-level auth
+const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
+
+async function uploadAvatarToCDN(base64Data, contentType) {
+  const filename = `${uuidv4()}.${contentType.split('/')[1] || 'jpg'}`;
+  const buffer = Buffer.from(base64Data, 'base64');
+  const url = `https://avatar-worker.slugger4health-avatar.workers.dev/${filename}`;
+
+  const res = await axios.post(url, buffer, {
+    headers: {
+      'Content-Type': contentType
+    }
+  });
+
+  if (res.status === 200 && res.data && res.data.url) {
+    return res.data.url;
+  } else {
+    throw new Error('Failed to upload avatar to CDN');
+  }
+}
 
 /**
  * @route GET /api/profiles/me
@@ -133,11 +153,83 @@ router.put('/', async (req, res) => {
     if (name) profileFields.name = name;
     if (bio !== undefined) profileFields.bio = bio;
     if (longTermGoal !== undefined) profileFields.longTermGoal = longTermGoal;
-    if (avatarUrl) {
-      // Only log a partial sample of the avatar data to keep logs manageable
-      console.log(`Avatar data provided: ${typeof avatarUrl === 'string' ? 'String data of length ' + avatarUrl.length : 'No avatar data'}`);
-      profileFields.avatarUrl = avatarUrl;
+    if (avatarUrl && avatarUrl.startsWith('data:')) {
+      try {
+        const matches = avatarUrl.match(/^data:(.+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) {
+          throw new Error('Invalid base64 image format');
+        }
+    
+        const contentType = matches[1];
+        const base64Data = matches[2];
+    
+        // Check image type
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+        if (!allowedTypes.includes(contentType)) {
+          return res.status(400).json({
+            message: `Invalid image type. Only PNG, JPEG, and WebP are allowed. Received: ${contentType}`
+          });
+        }
+    
+        // Check image size
+        const MAX_SIZE = 3 * 1024 * 1024;
+        const byteSize = Buffer.byteLength(base64Data, 'base64');
+        if (byteSize > MAX_SIZE) {
+          return res.status(400).json({
+            message: `Image too large. Max allowed size is 3MB. Your image is ${(byteSize / 1024).toFixed(2)}KB`
+          });
+        }
+    
+        // Check if avatar content actually changed
+        const existingProfile = await Profile.findOne({ user: userId });
+        const oldAvatarUrl = existingProfile?.avatarUrl;
+    
+        let isNewAvatar = true;
+        if (oldAvatarUrl && oldAvatarUrl.startsWith('https://avatar-worker.slugger4health-avatar.workers.dev/')) {
+          const oldFileName = oldAvatarUrl.split('/').pop();
+          const newHashStub = require('crypto').createHash('md5').update(base64Data).digest('hex').slice(0, 8);
+    
+          if (oldFileName && oldFileName.startsWith(newHashStub)) {
+            console.log('Uploaded avatar is the same as existing one, skipping update.');
+            isNewAvatar = false;
+          }
+        }
+    
+        if (isNewAvatar) {
+          // Delete old avatar
+          if (oldAvatarUrl && oldAvatarUrl.includes('.workers.dev/')) {
+            try {
+              const fileName = oldAvatarUrl.split('/').pop();
+              const deleteUrl = `https://avatar-worker.slugger4health-avatar.workers.dev/${fileName}`;
+              await axios.delete(deleteUrl);
+              console.log(`Old avatar deleted from CDN: ${fileName}`);
+            } catch (deleteError) {
+              console.warn(`Failed to delete old avatar from CDN: ${oldAvatarUrl}`, deleteError.message);
+            }
+          }
+    
+          // Upload new avatar
+          const cdnUrl = await uploadAvatarToCDN(base64Data, contentType);
+          profileFields.avatarUrl = cdnUrl;
+          console.log(`New avatar uploaded to CDN: ${cdnUrl}`);
+        } else {
+          // No changes needed
+          console.log('No avatar change detected, skipping CDN update.');
+        }
+    
+      } catch (err) {
+        console.error('Failed to upload avatar to CDN:', err);
+        return res.status(500).json({ message: 'Failed to upload avatar', error: err.message });
+      }
+    } else if (avatarUrl && avatarUrl.startsWith('file://')) {
+      // From local path, do not process
+      console.log('Skipping avatar update because avatarUrl is a local file path.');
+      // Do NOT set profileFields.avatarUrl = avatarUrl
+    } else if (avatarUrl === null) {
+      // Explicitly request clearing avatar
+      profileFields.avatarUrl = null;
     }
+    
     if (activitySettings) profileFields.activitySettings = activitySettings;
     if (status) profileFields.status = status;
     
@@ -185,26 +277,45 @@ router.put('/', async (req, res) => {
     }
 
     // Also update the User model's name and username for consistency
-    if (name) {
-      try {
-        const userToUpdate = await User.findById(userId);
-        if (userToUpdate) {
-          console.log(`Found user ${userId} to update. Current name: ${userToUpdate.name}, username: ${userToUpdate.username}. New name from profile: ${name}`);
-          userToUpdate.name = name;
-          userToUpdate.username = name; // Sync username with the profile name
-          await userToUpdate.save();
-          console.log(`User model for ${userId} successfully updated. New name: ${userToUpdate.name}, username: ${userToUpdate.username}`);
-        } else {
-          console.warn(`User ${userId} not found in User collection during profile update.`);
-        }
-      } catch (userUpdateError) {
-        console.error(`Error updating User model for ${userId} during profile save:`, userUpdateError);
-        // This error IS critical for name consistency.
-        // If User model update fails, we should inform the client.
-        // Throw an error to be caught by the main catch block, or return a specific error response.
-        // For now, let's make it part of the main error handling.
-        throw new Error(`Profile saved, but failed to sync name to User record: ${userUpdateError.message}`);
+    // And sync avatarUrl from profile to user.avatar
+    const userToUpdate = await User.findById(userId);
+
+    if (userToUpdate) {
+      console.log(`Found user ${userId} to update. Current name: ${userToUpdate.name}, username: ${userToUpdate.username}. New name from profile: ${name}`);
+      let userNeedsSave = false;
+      if (name) {
+        console.log(`Syncing name for user ${userId}. Old: ${userToUpdate.name}, New: ${name}`);
+        userToUpdate.name = name;
+        userToUpdate.username = name; // Sync username with the profile name
+        userNeedsSave = true;
       }
+
+      // Sync avatarUrl from profile to user.avatar
+      if (profileFields.avatarUrl) {
+        console.log(`Syncing avatar for user ${userId}.`);
+        userToUpdate.avatar = profileFields.avatarUrl;
+        userNeedsSave = true;
+      } else if (avatarUrl === null && profileFields.hasOwnProperty('avatarUrl')) {
+        // If avatarUrl was explicitly set to null in the request, also set user.avatar to null
+        console.log(`Syncing avatar for user ${userId} to null.`);
+        userToUpdate.avatar = null;
+        userNeedsSave = true;
+      }
+
+      if (userNeedsSave) {
+        try {
+          await userToUpdate.save();
+          console.log(`User model for ${userId} successfully updated with name and/or avatar.`);
+        } catch (userUpdateError) {
+          console.error(`Error updating User model (name/avatar) for ${userId}:`, userUpdateError);
+          // Decide if this is a critical error. For now, we'll log and continue,
+          // as the profile itself was saved.
+          // Consider if you want to throw an error to make the entire PUT fail.
+          throw new Error(`Profile saved, but failed to sync name/avatar to User record: ${userUpdateError.message}`);
+        }
+      }
+    } else {
+      console.warn(`User ${userId} not found in User collection during profile field synchronization.`);
     }
     
     // Re-fetch profile to ensure populated user reflects any changes if User model was updated

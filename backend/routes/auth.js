@@ -58,8 +58,7 @@ router.post('/login', async (req, res, next) => {
       user: {
         id: user._id,
         email: user.email,
-        name: user.name,
-        avatar: user.avatar
+        name: user.name
       }
     });
   } catch (error) {
@@ -71,6 +70,14 @@ router.post('/login', async (req, res, next) => {
 router.post('/signup', async (req, res, next) => {
   try {
     const { name, password, email } = req.body; // Changed username to name to match frontend
+
+    // Validate input: ensure name is not empty or just whitespace
+    if (!name || name.trim() === '') {
+      throw new AppError('Name is required and cannot be empty.', 400);
+    }
+    if (!email || !password) { // Existing check for email/password
+        throw new AppError('Email and password are required', 400);
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });

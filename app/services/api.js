@@ -7,7 +7,7 @@ const API_BASE_URL = 'https://slugger-app-group6.onrender.com/api';
 const FALLBACK_API_URL = 'http://localhost:5001/api';
 
 // Function to determine which API URL to use
-const getApiUrl = async () => {
+export const getApiUrl = async () => {
   try {
     // Try to get a stored custom API URL
     const customUrl = await AsyncStorage.getItem('apiBaseUrl');
@@ -22,13 +22,13 @@ const getApiUrl = async () => {
 };
 
 // Utility function to refresh token
-const refreshAuthToken = async () => {
+export const refreshAuthToken = async () => {
   try {
     const refreshToken = await AsyncStorage.getItem('refreshToken');
     const currentToken = await AsyncStorage.getItem('userToken');
     
     if (!refreshToken || !currentToken) {
-      console.warn('Cannot refresh token: missing refresh token or current token');
+      console.log('Cannot refresh token: missing refresh token or current token');
       // If we have a token but no refresh token, we should still allow 
       // the request to proceed with the current token
       return !!currentToken;
@@ -82,6 +82,15 @@ const refreshAuthToken = async () => {
         console.log('Auth token refreshed successfully');
         return true;
       }
+    } else {
+      console.warn('Server rejected token refresh: ', response.status);
+      // Check if we still have the current token
+      const tokenStillExists = await AsyncStorage.getItem('userToken');
+      if (!tokenStillExists && currentToken) {
+        // If token disappeared during the refresh attempt, restore it
+        console.warn('Token was lost during refresh attempt, restoring original token');
+        await AsyncStorage.setItem('userToken', currentToken);
+      }
     }
     
     console.warn('Token refresh failed, but continuing with existing token');
@@ -95,21 +104,68 @@ const refreshAuthToken = async () => {
   }
 };
 
+// Utility function to check if name is a placeholder/default value
+const isPlaceholderName = (name) => {
+  if (!name) return true;
+  
+  const lowerName = name.toLowerCase();
+  return lowerName === 'user' || 
+         lowerName === 'guest user' || 
+         lowerName === 'anonymous' || 
+         lowerName === 'unknown user' || 
+         lowerName === 'guest';
+};
+
 const userService = {
   // Get user information from local storage (cached)
   async getUserProfile() {
     try {
+      console.log('getUserProfile: Starting to fetch user profile...');
+      
       // Check authentication token
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
-        console.warn('No authentication token found - user may need to login');
+        console.warn('getUserProfile: No authentication token found - user may need to login');
+        // Try to load from local storage before giving up
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          console.log('getUserProfile: Found user data in local storage, returning cached version');
+          const userData = JSON.parse(userJson);
+          console.log('getUserProfile: Local user data:', {
+            id: userData.id,
+            name: userData.name,
+            email: userData.email
+          });
+          
+          // Make sure the user has a valid name
+          if (isPlaceholderName(userData.name)) {
+            console.warn('getUserProfile: Local user has invalid name:', userData.name);
+            
+            // Try to use email as name
+            if (userData.email && userData.email.includes('@')) {
+              userData.name = userData.email.split('@')[0];
+              console.log('getUserProfile: Using email username as name:', userData.name);
+              
+              // Save the updated user data
+              await AsyncStorage.setItem('user', JSON.stringify(userData));
+            }
+          }
+          
+          return userData;
+        }
         return null;
       }
       
+      // Save the original token in case it gets lost during API operations
+      const originalToken = token;
+      console.log('getUserProfile: Authenticated with token, fetching from API...');
+      
       const apiUrl = await getApiUrl();
+      console.log('getUserProfile: Using API URL:', apiUrl);
       
       try {
         // First try to get the profile from the profiles endpoint
+        console.log('getUserProfile: Fetching from profiles/me endpoint...');
         const response = await fetch(`${apiUrl}/profiles/me`, {
           method: 'GET',
           headers: {
@@ -118,8 +174,37 @@ const userService = {
           }
         });
         
+        console.log('getUserProfile: profiles/me response status:', response.status);
+        
+        // If auth error, check if token was somehow lost and restore it
+        if (response.status === 401 || response.status === 403) {
+          const currentToken = await AsyncStorage.getItem('userToken');
+          if (!currentToken && originalToken) {
+            console.warn('getUserProfile: Token was lost during profile fetch, restoring it');
+            await AsyncStorage.setItem('userToken', originalToken);
+          }
+          
+          // Try to refresh the token
+          console.log('getUserProfile: Attempting to refresh token...');
+          const refreshed = await refreshAuthToken();
+          if (refreshed) {
+            // If token was refreshed, try again with the new token
+            console.log('getUserProfile: Token refreshed, retrying...');
+            return await this.getUserProfile();
+          }
+        }
+        
         if (response.ok) {
           const profileData = await response.json();
+          console.log('getUserProfile: Successfully fetched profile data:', profileData ? {
+            id: profileData._id,
+            name: profileData.name,
+            user: profileData.user ? 
+              (typeof profileData.user === 'string' ? 
+                profileData.user : 
+                (profileData.user.name || profileData.user.username || 'Object User')
+              ) : 'None'
+          } : 'null');
           
           // Combine user and profile data
           // Ensure 'id' is the string ID from the populated 'user' object or the user ID itself.
@@ -132,9 +217,10 @@ const userService = {
               userIdStr = profileData.user.id || (profileData.user._id ? profileData.user._id.toString() : null);
             }
           }
+          
           const userData = {
-            id: userIdStr,
-            name: profileData.name,
+            id: userIdStr || profileData._id?.toString(),
+            name: profileData.name || 'Unknown User',
             email: profileData.user?.email || '',
             username: profileData.user?.username || '',
             bio: profileData.bio || '',
@@ -150,13 +236,72 @@ const userService = {
             updatedAt: profileData.updatedAt
           };
           
+          // Make sure user data has a proper name - never use "User" or undefined
+          if (isPlaceholderName(userData.name)) {
+            console.warn('getUserProfile: Profile data has invalid name:', userData.name);
+            
+            // Check if we have a better name in the user profile object
+            if (profileData.user && typeof profileData.user === 'object') {
+              if (profileData.user.name && !isPlaceholderName(profileData.user.name)) {
+                console.log('getUserProfile: Using name from user object:', profileData.user.name);
+                userData.name = profileData.user.name;
+              } else if (profileData.user.username) {
+                console.log('getUserProfile: Using username as name:', profileData.user.username);
+                userData.name = profileData.user.username;
+              } else if (profileData.user.email && profileData.user.email.includes('@')) {
+                userData.name = profileData.user.email.split('@')[0];
+                console.log('getUserProfile: Using email username as name:', userData.name);
+              }
+            }
+            
+            // If still no valid name, try to get from local storage
+            if (isPlaceholderName(userData.name)) {
+              const userJson = await AsyncStorage.getItem('user');
+              if (userJson) {
+                const localUser = JSON.parse(userJson);
+                if (localUser.name && !isPlaceholderName(localUser.name)) {
+                  console.log('getUserProfile: Using name from local storage:', localUser.name);
+                  userData.name = localUser.name;
+                } else if (localUser.email && localUser.email.includes('@')) {
+                  userData.name = localUser.email.split('@')[0];
+                  console.log('getUserProfile: Using email username from local storage as name:', userData.name);
+                }
+              }
+            }
+            
+            // If still a placeholder name, generate something better
+            if (isPlaceholderName(userData.name)) {
+              if (userData.email && userData.email.includes('@')) {
+                userData.name = userData.email.split('@')[0];
+                console.log('getUserProfile: Using email username as fallback name:', userData.name);
+              } else {
+                // Generate a better display name if all else fails
+                userData.name = `User_${Math.floor(Math.random() * 10000)}`;
+                console.log('getUserProfile: Generated random name:', userData.name);
+              }
+            }
+          }
+          
           // Update local storage with fresh data
+          console.log('getUserProfile: Saving user data to local storage:', {
+            id: userData.id,
+            name: userData.name,
+            email: userData.email
+          });
           await AsyncStorage.setItem('user', JSON.stringify(userData));
+          
+          // Make sure token is still in place after all operations
+          const tokenAfterOps = await AsyncStorage.getItem('userToken');
+          if (!tokenAfterOps && originalToken) {
+            console.warn('getUserProfile: Token was lost during profile data processing, restoring it');
+            await AsyncStorage.setItem('userToken', originalToken);
+          }
+          
           return userData;
         }
         
         // Fallback to legacy endpoint if profile API fails
-        console.warn('Profile API failed, falling back to user API');
+        console.warn('getUserProfile: Profile API failed, falling back to user API');
         
         const userResponse = await fetch(`${apiUrl}/auth/me`, {
           method: 'GET',
@@ -166,15 +311,47 @@ const userService = {
           }
         });
         
+        console.log('getUserProfile: Auth/me response status:', userResponse.status);
+        
         if (userResponse.ok) {
           const userData = await userResponse.json();
+          console.log('getUserProfile: Auth/me response data:', {
+            id: userData.id || userData._id,
+            name: userData.name,
+            email: userData.email
+          });
+          
+          // Make sure user data has a proper name
+          if (isPlaceholderName(userData.name)) {
+            console.warn('getUserProfile: Auth data has invalid name:', userData.name);
+            
+            // Try to get from local storage
+            const userJson = await AsyncStorage.getItem('user');
+            if (userJson) {
+              const localUser = JSON.parse(userJson);
+              if (localUser.name && !isPlaceholderName(localUser.name)) {
+                console.log('getUserProfile: Using name from local storage:', localUser.name);
+                userData.name = localUser.name;
+              } else if (localUser.email && localUser.email.includes('@')) {
+                userData.name = localUser.email.split('@')[0];
+                console.log('getUserProfile: Using email username as name:', userData.name);
+              }
+            }
+            
+            // If still a placeholder name, use email if available
+            if (isPlaceholderName(userData.name) && userData.email && userData.email.includes('@')) {
+              userData.name = userData.email.split('@')[0];
+              console.log('getUserProfile: Using email username as name:', userData.name);
+            }
+          }
+          
           await AsyncStorage.setItem('user', JSON.stringify(userData));
           return userData;
         }
         
-        console.warn('Failed to fetch user profile from any endpoint, falling back to local data');
+        console.warn('getUserProfile: Failed to fetch user profile from any endpoint, falling back to local data');
       } catch (serverError) {
-        console.warn('Error fetching from server, falling back to local data:', serverError);
+        console.warn('getUserProfile: Error fetching from server, falling back to local data:', serverError);
       }
       
       // If server request fails, try to get from local storage
@@ -204,7 +381,7 @@ const userService = {
                 return userData;
               }
             } catch (apiError) {
-              console.error('Error fetching user data from API:', apiError);
+              console.error('getUserProfile: Error fetching user data from API:', apiError);
             }
             
             // Build a basic user object from available data
@@ -221,19 +398,26 @@ const userService = {
             return basicUser;
           }
         } catch (buildError) {
-          console.error('Error building user from pieces:', buildError);
+          console.error('getUserProfile: Error building user from pieces:', buildError);
         }
         
-        console.error('Error loading user data - User data not found');
+        console.error('getUserProfile: Error loading user data - User data not found');
         return null;
       }
       
       const parsedUser = JSON.parse(userJson);
       // Add flag to indicate this was loaded from local storage
       parsedUser.loadedFromLocalOnly = true;
+      
+      console.log('getUserProfile: Returning data from local storage:', {
+        id: parsedUser.id,
+        name: parsedUser.name,
+        email: parsedUser.email
+      });
+      
       return parsedUser;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('getUserProfile: Error fetching user profile:', error);
       throw error;
     }
   },
@@ -248,7 +432,8 @@ const userService = {
       // Validate token exists
       if (!token) {
         console.warn('No authentication token found - user may need to login');
-        throw new Error('Authentication required');
+        // Instead of failing, proceed with local update only
+        return this.updateProfileLocally(userData);
       }
       
       // Validate input
@@ -261,14 +446,20 @@ const userService = {
         throw new Error('User ID is required for profile update');
       }
       
-      // Attempt to refresh token if needed
-      const refreshResult = await refreshAuthToken();
-      console.log('Token refresh attempt result:', refreshResult);
+      // Attempt to refresh token if needed - but don't fail if refresh fails
+      try {
+        const refreshResult = await refreshAuthToken();
+        console.log('Token refresh attempt result:', refreshResult);
+      } catch (refreshError) {
+        console.warn('Token refresh failed but continuing with existing token:', refreshError);
+        // Continue with existing token
+      }
       
       // Re-get the token in case it was refreshed
       const currentToken = await AsyncStorage.getItem('userToken');
       if (!currentToken) {
-        throw new Error('Authentication token is missing after refresh attempt');
+        console.warn('Authentication token is missing after refresh attempt, falling back to local update');
+        return this.updateProfileLocally(userData);
       }
       
       // Ensure userData has proper ID format
@@ -351,10 +542,7 @@ const userService = {
           if (response.status === 401 || response.status === 403) {
             console.warn('Authentication error from server, will fall back to local update');
             // Don't throw yet - try fallback first
-            throw { 
-              message: responseData?.message || 'Authentication error',
-              fallbackToLocal: true
-            };
+            return this.updateProfileLocally(userData);
           }
           
           // If the primary /api/profiles endpoint fails, parse the error and throw it.
@@ -367,49 +555,48 @@ const userService = {
             : 'No detailed error information available';
             
           console.error('Failed to update profile via /api/profiles:', errorMessage, errorDetail);
-          throw new Error(errorMessage);
+          // Instead of throwing, fall back to local update
+          return this.updateProfileLocally(userData);
         }
       } catch (profileUpdateAttemptError) {
-        // If explicitly marked for fallback, throw to outer catch
-        if (profileUpdateAttemptError.fallbackToLocal) {
-          throw profileUpdateAttemptError;
-        }
-        
         // This catch handles errors from the fetch call itself (network error) 
         // or from parsing the JSON if the primary call failed.
         console.error('Error during primary profile update attempt (/api/profiles):', profileUpdateAttemptError);
-        throw profileUpdateAttemptError; 
+        return this.updateProfileLocally(userData);
       }
     } catch (error) { // This is the outermost catch for userService.updateUserProfile
       console.error('Overall error in updateUserProfile:', error);
+      return this.updateProfileLocally(userData);
+    }
+  },
+  
+  // Helper method for local profile updates
+  async updateProfileLocally(userData) {
+    console.warn('Falling back to local storage update');
+    try {
+      // Get current user data first
+      const userJson = await AsyncStorage.getItem('user');
+      const currentUser = userJson ? JSON.parse(userJson) : {};
       
-      // Handle fallback to local storage
-      console.warn('Falling back to local storage update');
-      try {
-        // Get current user data first
-        const userJson = await AsyncStorage.getItem('user');
-        const currentUser = userJson ? JSON.parse(userJson) : {};
-        
-        // Merge with new data and add updatedAt timestamp
-        const updatedUserData = {
-          ...currentUser,
-          ...userData,
-          updatedAt: new Date().toISOString()
-        };
-        
-        // Save to AsyncStorage
-        await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
-        
-        console.log('===== END updateUserProfile - FALLBACK SUCCESS =====');
-        
-        // Add flag to indicate this was a local-only update
-        updatedUserData.fallbackOnly = true;
-        return updatedUserData;
-      } catch (fallbackError) {
-        console.error('Fallback error:', fallbackError);
-        console.log('===== END updateUserProfile - COMPLETE FAILURE =====');
-        throw error; // Throw original error if fallback fails
-      }
+      // Merge with new data and add updatedAt timestamp
+      const updatedUserData = {
+        ...currentUser,
+        ...userData,
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
+      
+      console.log('===== END updateUserProfile - FALLBACK SUCCESS =====');
+      
+      // Add flag to indicate this was a local-only update
+      updatedUserData.fallbackOnly = true;
+      return updatedUserData;
+    } catch (fallbackError) {
+      console.error('Fallback error:', fallbackError);
+      console.log('===== END updateUserProfile - COMPLETE FAILURE =====');
+      throw new Error('Failed to update profile locally: ' + fallbackError.message);
     }
   },
   
@@ -425,6 +612,21 @@ const userService = {
         throw new Error('Authentication required');
       }
       
+      // Get current user data to include ID
+      const userJson = await AsyncStorage.getItem('user');
+      const user = userJson ? JSON.parse(userJson) : null;
+      
+      if (!user || (!user.id && !user._id)) {
+        console.error('No user ID found in stored user data');
+        throw new Error('User ID is required for activity update');
+      }
+      
+      // Include user ID in the data to send
+      const dataToSend = {
+        ...activitySettings,
+        id: user.id || user._id
+      };
+      
       // Try profile activities endpoint
       try {
         const apiUrl = await getApiUrl();
@@ -434,15 +636,11 @@ const userService = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(activitySettings)
+          body: JSON.stringify(dataToSend)
         });
         
         if (response.ok) {
           const updatedProfile = await response.json();
-          
-          // Get current user data
-          const userJson = await AsyncStorage.getItem('user');
-          const user = userJson ? JSON.parse(userJson) : {};
           
           // Update with new activity settings
           const updatedUser = {
@@ -476,7 +674,7 @@ const userService = {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify(activitySettings)
+            body: JSON.stringify(dataToSend)
           });
           
           if (response.ok) {
@@ -731,4 +929,9 @@ const profileService = {
   }
 };
 
-export { userService, groupService, profileService, refreshAuthToken };
+export { userService, groupService, profileService };
+
+// Add default export for Expo Router
+export default function APIServices() {
+  return null; // This is just a placeholder to satisfy Expo Router's default export requirement
+}

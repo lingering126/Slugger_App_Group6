@@ -27,17 +27,57 @@ exports.getUserStats = async (req, res) => {
       });
     }
 
-    // Calculate statistics for each activity type
-    console.log('Calculating activity statistics...');
+    // Calculate statistics for each activity type (only for current week)
+    console.log('Calculating weekly activity statistics...');
+    
+    // Calculate the start of current week (Sunday 00:00 UTC)
+    const now = new Date();
+    const currentDay = now.getUTCDay(); // 0 = Sunday, 1 = Monday, etc.
+    const startOfWeek = new Date(now);
+    startOfWeek.setUTCDate(now.getUTCDate() - currentDay);
+    startOfWeek.setUTCHours(0, 0, 0, 0);
+    
+    console.log('Current week starts at:', startOfWeek.toISOString());
+    console.log('Current time:', now.toISOString());
+    
     const activityStats = await Activity.aggregate([
-      { $match: { userId } },
+      { 
+        $match: { 
+          userId,
+          createdAt: { $gte: startOfWeek } // Only activities from this week
+        }
+      },
       { $group: {
         _id: '$type',
         totalPoints: { $sum: '$points' },
         count: { $sum: 1 }
       }}
     ]);
-    console.log('Activity stats calculated:', activityStats);
+    console.log('Weekly activity stats calculated:', activityStats);
+
+    let totalPoints = 0;
+    let activitiesCompleted = 0;
+    const pointsByType = {};
+
+    activityStats.forEach(stat => {
+      totalPoints += stat.totalPoints || 0;
+      activitiesCompleted += stat.count || 0;
+      pointsByType[stat._id] = stat.totalPoints;
+    });
+
+    console.log('Weekly totals calculated:', {
+      totalPoints,
+      activitiesCompleted,
+      pointsByType
+    });
+
+    // Update userStats with this week's data
+    userStats.totalPoints = totalPoints;
+    userStats.activitiesCompleted = activitiesCompleted;
+    userStats.pointsByType = pointsByType;
+
+    await userStats.save();
+    console.log('UserStats updated with weekly data');
 
     // Format statistics data
     const stats = {
@@ -61,8 +101,15 @@ exports.getUserStats = async (req, res) => {
     console.log('Stats prepared successfully');
     console.log('=== User Stats Fetch Complete ===\n');
 
+    // Return data in the format expected by the frontend
+
+    console.log('userStats', userStats);
     res.json({
       success: true,
+      totalPoints: userStats.totalPoints || 0,
+      totalActivities: userStats.activitiesCompleted || 0,
+      currentStreak: userStats.streak || 0,
+      monthlyProgress: userStats.calculateProgress() || 0,
       data: stats
     });
   } catch (error) {

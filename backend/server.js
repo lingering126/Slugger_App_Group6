@@ -18,12 +18,13 @@ const teamRoutes = require('./routes/team');
 const profileRoutes = require('./routes/profiles');
 const userTeamTargetRoutes = require('./routes/userTeamTarget');
 const { analyticsRouter } = require('./routes/analytics'); // Import the analytics router
+const feedRoutes = require('./homepage/routes/feed'); // Import the new feed router
 
 
 // Function to get all server IP addresses
 const getServerIPs = () => {
   // Always include the deployed URL first for verification links
-  const deployedUrl = 'https://slugger-app-group6.onrender.com';
+  const deployedUrl = process.env.DEPLOYED_URL || 'http://localhost:5001';
   const networkInterfaces = os.networkInterfaces();
   const serverIPs = [];
   
@@ -223,6 +224,7 @@ app.use('/api/stats', authMiddleware, statsRoutes);
 app.use('/api/profiles', authMiddleware, profileRoutes);
 app.use('/api/user-team-targets', authMiddleware, userTeamTargetRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRouter); // Mount the analytics router, ensure authMiddleware if all routes under it are protected
+app.use('/api/feed', feedRoutes); // Mount the new feed router
 
 // Add web route handler for email verification that redirects to the app
 app.get('/verify-email', async (req, res) => {
@@ -671,7 +673,7 @@ app.post('/api/auth/signup', async (req, res) => {
     const serverIPs = getServerIPs();
     
     // Always use the deployed URL as the primary verification link
-    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const deployedUrl = process.env.DEPLOYED_URL || 'http://localhost:5001';
     const verificationLink = `${deployedUrl}/verify-email?token=${verificationToken}`;
     
     console.log('=== Signup Email Link Details ===');
@@ -1015,7 +1017,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     const serverIPs = getServerIPs();
     
     // Always use the deployed URL as the primary verification link
-    const deployedUrl = 'https://slugger-app-group6.onrender.com';
+    const deployedUrl = process.env.DEPLOYED_URL || 'http://localhost:5001';
     const verificationLink = `${deployedUrl}/verify-email?token=${user.verificationToken}`;
     
     console.log('=== Resend Email Link Details ===');
