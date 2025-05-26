@@ -2432,7 +2432,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6, 
-    paddingHorizontal: 8, 
+    paddingHorizontal: 6, 
     borderRadius: 16, 
     minWidth: 80, 
     marginVertical: 3, 
