@@ -951,11 +951,14 @@ const PostCard = ({ post, onPostUpdated }) => {
           <View style={styles.userInfoText}>
             <Text style={styles.username}>{authorName}</Text>
             <Text style={styles.postTime}>
-              {new Date(post.createdAt).toLocaleDateString('en-US', {
+              {new Date(post.createdAt).toLocaleString('en-GB', {
                 year: 'numeric',
                 month: '2-digit',
-                day: '2-digit'
-              })}
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              }).replace(',', '')}
             </Text>
           </View>
         </View>
