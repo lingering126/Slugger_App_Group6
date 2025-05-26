@@ -198,7 +198,16 @@ const ActivityCard = ({ activity, onRefresh }) => {
           </View>
           <View style={styles.userDetails}>
             <Text style={styles.username}>{authorName}</Text>
-            <Text style={styles.timestamp}>{format(new Date(activity.createdAt), 'dd/MM/yyyy')}</Text>
+            <Text style={styles.timestamp}>
+              {new Date(activity.createdAt).toLocaleString('en-GB', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false
+                }).replace(',', '')}
+            </Text>
           </View>
         </View>
       </View>
