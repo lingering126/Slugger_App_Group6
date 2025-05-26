@@ -1978,15 +1978,6 @@ const HomeScreen = () => {
             <FontAwesome5 name="star" size={18} color="white" />
             <Text style={styles.actionButtonText}>Bonus</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.postButton]}
-            onPress={() => setShowContentModal(true)}
-            disabled={checkingCategoryLimit !== null}
-          >
-            <FontAwesome5 name="edit" size={18} color="white" />
-            <Text style={styles.actionButtonText}>Post</Text>
-          </TouchableOpacity>
         </View>
       </View>
     );
@@ -2045,69 +2036,80 @@ const HomeScreen = () => {
             </View>
 
             {/* Combined Feed */}
-            <ScrollView 
-              style={styles.feed}
-              contentContainerStyle={{ flexGrow: 1, width: '100%' }} 
-              onScroll={({ nativeEvent }) => {
-                const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-                const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 200;
-                if (isCloseToBottom && hasMoreItems && !loadingMore && !refreshing && !loading) {
-                  // console.log("Scrolled near bottom, attempting to load more feed items...");
-                  fetchFeedItems(currentPage + 1);
+            <View style={styles.feedContainer}>
+              <ScrollView 
+                style={styles.feed}
+                contentContainerStyle={{ flexGrow: 1, width: '100%' }} 
+                onScroll={({ nativeEvent }) => {
+                  const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+                  const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 200;
+                  if (isCloseToBottom && hasMoreItems && !loadingMore && !refreshing && !loading) {
+                    // console.log("Scrolled near bottom, attempting to load more feed items...");
+                    fetchFeedItems(currentPage + 1);
+                  }
+                }}
+                scrollEventThrottle={400}
+                refreshControl={
+                  <RefreshControl 
+                    refreshing={refreshing} 
+                    onRefresh={() => {
+                      // console.log("Pull to refresh triggered for feed");
+                      fetchFeedItems(1, true); // Fetch page 1 and mark as refreshing
+                    }} 
+                  />
                 }
-              }}
-              scrollEventThrottle={400}
-              refreshControl={
-                <RefreshControl 
-                  refreshing={refreshing} 
-                  onRefresh={() => {
-                    // console.log("Pull to refresh triggered for feed");
-                    fetchFeedItems(1, true); // Fetch page 1 and mark as refreshing
-                  }} 
-                />
-              }
-            >
-              {(loading && feedItems.length === 0 && !refreshing) ? ( // Show main loader only on initial load
-                <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
-              ) : getSortedFeed().length === 0 ? (
-                <View style={styles.emptyFeedContainer}>
-                  <Text style={styles.emptyFeedText}>No activities or posts yet. Start logging or post something!</Text>
-                </View>
-              ) : (
-                console.log('loading', loading),
-                console.log('feedItems.length', feedItems.length),
-                console.log('refreshing', refreshing),
-                getSortedFeed().map((item) => {
-                  if (!item || (!item.id && !item._id)) { // Add a check for valid item
-                    console.warn("Encountered an item without id or _id:", item);
-                    return null; 
-                  }
-                  const key = `${item.itemType}-${item.id || item._id}-${item.createdAt}`; // More unique key
-                  if (item.itemType === 'activity') {
-                    return (
-                      <ActivityCard
-                        key={key}
-                        activity={item}
-                        onRefresh={() => fetchFeedItems(1, true)} // Pass refresh if ActivityCard needs it
-                      />
-                    );
-                  } else if (item.itemType === 'post') {
-                    return (
-                      <PostCard 
-                        key={key}
-                        post={item}
-                        onPostUpdated={() => fetchFeedItems(1, true)} // If PostCard modifies data
-                      />
-                    );
-                  }
-                  return null; // Should not happen
-                })
-              )}
-              {/* Loading more indicator at the bottom */}
-              {loadingMore && (
-                <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 20 }} />
-              )}
-            </ScrollView>
+              >
+                {(loading && feedItems.length === 0 && !refreshing) ? ( // Show main loader only on initial load
+                  <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
+                ) : getSortedFeed().length === 0 ? (
+                  <View style={styles.emptyFeedContainer}>
+                    <Text style={styles.emptyFeedText}>No activities or posts yet. Start logging or post something!</Text>
+                  </View>
+                ) : (
+                  console.log('loading', loading),
+                  console.log('feedItems.length', feedItems.length),
+                  console.log('refreshing', refreshing),
+                  getSortedFeed().map((item) => {
+                    if (!item || (!item.id && !item._id)) { // Add a check for valid item
+                      console.warn("Encountered an item without id or _id:", item);
+                      return null; 
+                    }
+                    const key = `${item.itemType}-${item.id || item._id}-${item.createdAt}`; // More unique key
+                    if (item.itemType === 'activity') {
+                      return (
+                        <ActivityCard
+                          key={key}
+                          activity={item}
+                          onRefresh={() => fetchFeedItems(1, true)} // Pass refresh if ActivityCard needs it
+                        />
+                      );
+                    } else if (item.itemType === 'post') {
+                      return (
+                        <PostCard 
+                          key={key}
+                          post={item}
+                          onPostUpdated={() => fetchFeedItems(1, true)} // If PostCard modifies data
+                        />
+                      );
+                    }
+                    return null; // Should not happen
+                  })
+                )}
+                {/* Loading more indicator at the bottom */}
+                {loadingMore && (
+                  <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 20 }} />
+                )}
+              </ScrollView>
+
+              {/* Floating Post Button */}
+              <TouchableOpacity 
+                style={styles.floatingPostButton}
+                onPress={() => setShowContentModal(true)}
+                disabled={checkingCategoryLimit !== null}
+              >
+                <FontAwesome5 name="edit" size={20} color="white" />
+              </TouchableOpacity>
+            </View>
 
             <ActivityModal
               visible={showActivityModal}
@@ -2446,9 +2448,6 @@ const styles = StyleSheet.create({
   bonusButton: {
     backgroundColor: '#FF9800',
   },
-  postButton: {
-    backgroundColor: '#34c759c6',
-  },
   actionButtonText: {
     color: 'white',
     fontWeight: 'bold',
@@ -2735,6 +2734,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     height: 50,
+  },
+  feedContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  floatingPostButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#34c759',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1000,
   },
 });
 
